@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DiscoveredToken } from "../server/providers/near-intents-discovery.ts";
+import type {
+  DiscoveredToken,
+  TokenCapability,
+} from "../server/providers/near-intents-discovery.ts";
 import { AssetAvatar, ChainBadge, NearIntentsBadge } from "./icons.tsx";
 
 export interface UnifiedAssetSelectorModalProps {
@@ -10,13 +13,8 @@ export interface UnifiedAssetSelectorModalProps {
   onSelectToken: (token: DiscoveredToken) => void;
   title?: string;
   subtitle?: string;
-  targetAmount?: string;
-  targetSymbol?: string;
-  filterCapability?:
-    | "CAN_DIRECT_DEPOSIT"
-    | "CAN_PAY_FROM"
-    | "CAN_RECEIVE_TO"
-    | "CAN_HOLD_IN_FLOW";
+  filterCapability?: TokenCapability;
+  selectableIds?: readonly string[];
   darkTheme?: boolean;
 }
 
@@ -26,9 +24,8 @@ export function UnifiedAssetSelectorModal({
   onSelectToken,
   title = "Pay with any token",
   subtitle,
-  targetAmount,
-  targetSymbol = "USDC",
   filterCapability,
+  selectableIds,
   darkTheme = false,
 }: UnifiedAssetSelectorModalProps) {
   const [tokens, setTokens] = useState<DiscoveredToken[]>([]);
@@ -71,6 +68,7 @@ export function UnifiedAssetSelectorModal({
   if (!isOpen) return null;
 
   const filtered = tokens.filter((t) => {
+    if (selectableIds && !selectableIds.includes(t.id)) return false;
     // Search filter
     const q = search.trim().toLowerCase();
     if (q) {
@@ -234,7 +232,7 @@ export function UnifiedAssetSelectorModal({
           <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
             {loading ? (
               <div className="py-16 text-center text-xs text-neutral-400 animate-pulse">
-                Discovering tokens across 35+ chains via NEAR Intents...
+                Loading assets and networks…
               </div>
             ) : filtered.length === 0 ? (
               <div className="py-16 text-center text-xs text-neutral-400">
@@ -290,45 +288,7 @@ export function UnifiedAssetSelectorModal({
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    {targetAmount && token.priceUsd ? (
-                      <div>
-                        <p className="text-xs font-semibold font-mono text-neutral-950 dark:text-white">
-                          ≈{" "}
-                          {(
-                            Number(targetAmount) / Number(token.priceUsd)
-                          ).toFixed(
-                            Number(token.priceUsd) > 100
-                              ? 6
-                              : Number(token.priceUsd) > 1
-                                ? 4
-                                : 2,
-                          )}{" "}
-                          {token.symbol}
-                        </p>
-                        <p className="text-[10px] text-neutral-500 font-mono">
-                          ≈ {targetAmount} {targetSymbol}
-                        </p>
-                      </div>
-                    ) : token.priceUsd ? (
-                      <div>
-                        <p className="text-xs font-semibold font-mono">
-                          ${Number(token.priceUsd).toFixed(2)}
-                        </p>
-                        <span
-                          className={`text-[9px] uppercase tracking-wider font-semibold ${
-                            token.capabilities.includes("CAN_HOLD_IN_FLOW")
-                              ? "text-emerald-500"
-                              : "text-neutral-400"
-                          }`}
-                        >
-                          {token.capabilities.includes("CAN_HOLD_IN_FLOW")
-                            ? "Hold in Flow"
-                            : "Cross-chain swap"}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
+                  <div className="text-right"></div>
                 </button>
               ))
             )}

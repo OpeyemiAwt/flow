@@ -1,11 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  EligibleSourceRoute,
-  PublicPaymentRequest,
-} from "../../../domain/payment-requests.ts";
+import { useEffect, useMemo, useState } from "react";
+import type { PublicPaymentRequest } from "../../../domain/payment-requests.ts";
 import type {
   IndicativeQuote,
   PaymentDepositInstructions,
@@ -17,13 +14,24 @@ import {
   ChainBadge,
   IconAlertTriangle,
   IconCheck,
-  IconChevronDown,
   IconCopy,
   IconExternalLink,
   IconWallet,
 } from "../../../components/icons.tsx";
 import { UnifiedAssetSelectorModal } from "../../../components/unified-asset-selector-modal.tsx";
 import type { DiscoveredToken } from "../../../server/providers/near-intents-discovery.ts";
+import { CombinedAssetNetworkPicker } from "../../../components/combined-asset-network-picker.tsx";
+import { useQuotePreview } from "../../../components/use-quote-preview.ts";
+import { parseDisplayToAtomic } from "../../../domain/atomic-amounts.ts";
+import {
+  supportsQuoteAddress,
+  validateQuoteAddress,
+} from "../../../domain/quote-addresses.ts";
+import {
+  MAINNET_SUPPORTED_DEPLOYMENTS,
+  isSamePaymentDeployment,
+  type CatalogTokenDeployment,
+} from "../../../domain/supported-assets-catalog.ts";
 
 interface CheckoutViewProps {
   request: PublicPaymentRequest;
@@ -31,52 +39,58 @@ interface CheckoutViewProps {
 
 type PayerMode = "WALLET" | "EXCHANGE";
 
+type SourceAssetSelection = CatalogTokenDeployment | DiscoveredToken;
+
 export function CheckoutView({ request }: CheckoutViewProps) {
+  const stableChoices = useMemo(
+    () =>
+      MAINNET_SUPPORTED_DEPLOYMENTS.filter(
+        (deployment) =>
+          deployment.kind === "STABLECOIN" &&
+          request.eligibleSourceRoutes.some(
+            (route) => route.id === deployment.id,
+          ),
+      ),
+    [request.eligibleSourceRoutes],
+  );
+  const initialStable =
+    stableChoices.find((route) => route.id === request.destinationAssetId) ??
+    stableChoices[0];
+  const [selectedSource, setSelectedSource] =
+    useState<SourceAssetSelection | null>(initialStable ?? null);
   const [payerMode, setPayerMode] = useState<PayerMode>("WALLET");
   const [payTab, setPayTab] = useState<"STABLES" | "ANY_TOKEN">("STABLES");
-  const [selectedEcosystem, setSelectedEcosystem] = useState<
-    "evm" | "solana" | "near"
-  >("evm");
-  const [selectedRouteId, setSelectedRouteId] = useState<string>("");
-  const [customAmount, setCustomAmount] = useState<string>(
-    request.displayAmount ?? "10",
-  );
-  const [refundAddress, setRefundAddress] = useState<string>("");
+  const selectedEcosystem = selectedSource?.ecosystem;
+  const [customAmount, setCustomAmount] = useState("");
+  const [refundAddress, setRefundAddress] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
   const [isAnyTokenModalOpen, setIsAnyTokenModalOpen] = useState(false);
-  const [isPayWithDropdownOpen, setIsPayWithDropdownOpen] = useState(true);
-  const payWithDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Indicative Quote State
-  const [quote, setQuote] = useState<IndicativeQuote | null>(null);
-  const [loadingQuote, setLoadingQuote] = useState<boolean>(false);
-  const [quoteError, setQuoteError] = useState<string | null>(null);
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(60);
+  const [deadlinePassed, setDeadlinePassed] = useState(false);
+  const isExpired =
+    request.status === "EXPIRED" || request.isExpired || deadlinePassed;
+  const isReadOnly =
+    isExpired || request.status !== "ACTIVE" || !request.recipientAddress;
+  useEffect(() => {
+    if (!request.expiresAt) return;
+    const deadline = Date.parse(request.expiresAt);
+    if (!Number.isFinite(deadline)) return;
+    let timer: number;
+    const check = () => {
+      const delay = deadline - Date.now();
+      if (delay <= 0) setDeadlinePassed(true);
+      else timer = window.setTimeout(check, Math.min(delay, 2_147_483_647));
+    };
+    timer = window.setTimeout(check, 0);
+    return () => window.clearTimeout(timer);
+  }, [request.expiresAt]);
 
   // Deposit Instructions & Settlement Lifecycle State
   const [instructions, setInstructions] =
     useState<PaymentDepositInstructions | null>(request.activeAttempt ?? null);
-  const [committing, setCommitting] = useState<boolean>(false);
-  const [commitError, setCommitError] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState<boolean>(false);
   const [copiedMemo, setCopiedMemo] = useState<boolean>(false);
   const [depositSecondsRemaining, setDepositSecondsRemaining] =
     useState<number>(900);
-
-  // Group eligible routes by ecosystem
-  const ecosystemRoutes = useMemo(() => {
-    return request.eligibleSourceRoutes.filter(
-      (r) => r.ecosystem === selectedEcosystem,
-    );
-  }, [request.eligibleSourceRoutes, selectedEcosystem]);
-
-  // Selected route object
-  const activeRoute: EligibleSourceRoute | undefined = useMemo(() => {
-    if (selectedRouteId) {
-      return request.eligibleSourceRoutes.find((r) => r.id === selectedRouteId);
-    }
-    return ecosystemRoutes[0];
-  }, [ecosystemRoutes, request.eligibleSourceRoutes, selectedRouteId]);
 
   // Copy Feedback State
   const [copiedRecipientAddress, setCopiedRecipientAddress] = useState(false);
@@ -105,10 +119,12 @@ export function CheckoutView({ request }: CheckoutViewProps) {
   };
 
   const handleCopyAmount = () => {
-    const amt =
-      instructions?.requiredDisplayAmount ??
-      quote?.sourceDisplayAmount ??
-      request.displayAmount;
+    if (
+      !canShowDeposit ||
+      Date.parse(instructions?.depositDeadline ?? "") <= Date.now()
+    )
+      return;
+    const amt = instructions?.requiredDisplayAmount;
     if (amt && typeof navigator !== "undefined" && navigator.clipboard) {
       void navigator.clipboard.writeText(amt);
       setCopiedAmount(true);
@@ -116,31 +132,15 @@ export function CheckoutView({ request }: CheckoutViewProps) {
     }
   };
 
-  const handleSelectEcosystem = (eco: "evm" | "solana" | "near") => {
-    if (eco === selectedEcosystem) return;
-    setSelectedEcosystem(eco);
-    setSelectedRouteId("");
-    setIsPayWithDropdownOpen(true);
-    setQuote(null);
-    setQuoteError(null);
-
-    if (refundAddress.trim()) {
-      const trimmed = refundAddress.trim();
-      let validForNew = false;
-      if (eco === "evm" && /^0x[0-9a-fA-F]{40}$/.test(trimmed))
-        validForNew = true;
-      if (eco === "solana" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed))
-        validForNew = true;
-      if (
-        eco === "near" &&
-        (/^[0-9a-f]{64}$/.test(trimmed) ||
-          /^(?=.{2,64}$)[a-z0-9_-]+(\.[a-z0-9_-]+)+$/.test(trimmed))
-      )
-        validForNew = true;
-      if (!validForNew) {
-        setRefundAddress("");
-      }
-    }
+  const selectSource = (source: SourceAssetSelection | null) => {
+    if (source?.networkKey !== selectedSource?.networkKey) setRefundAddress("");
+    setSelectedSource(source);
+  };
+  const handleSelectEcosystem = (ecosystem: "evm" | "solana" | "near") => {
+    const first = stableChoices.find(
+      (source) => source.ecosystem === ecosystem,
+    );
+    if (first && selectedSource?.ecosystem !== ecosystem) selectSource(first);
   };
 
   const isFundedOrProcessing =
@@ -168,10 +168,23 @@ export function CheckoutView({ request }: CheckoutViewProps) {
     !isUnderReview &&
     !isRefundRequiredState &&
     !isFailedState &&
-    (depositSecondsRemaining <= 0 || instructions.status === "EXPIRED");
+    Boolean(
+      instructions.depositDeadline || instructions.status === "EXPIRED",
+    ) &&
+    (isReadOnly ||
+      depositSecondsRemaining <= 0 ||
+      instructions.status === "EXPIRED");
+
+  const canShowDeposit =
+    instructions?.status === "DEPOSIT_COMMITTED" &&
+    Boolean(instructions.depositAddress && instructions.depositDeadline) &&
+    !isFundedOrProcessing &&
+    !isDepositExpired &&
+    !isReadOnly;
 
   // Stage B Navigation: Return safely to Payment Selection
   const handleBackToPaymentSelection = () => {
+    if (isReadOnly) return;
     if (isFundedOrProcessing) {
       if (
         typeof window !== "undefined" &&
@@ -214,7 +227,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
 
   // Stage B Regeneration: Recheck state and generate fresh quote
   const handleGenerateNewQuote = async () => {
-    if (!instructions) return;
+    if (!instructions || isReadOnly) return;
     if (isFundedOrProcessing || isUnderReview) return;
     try {
       const res = await fetch(
@@ -238,155 +251,181 @@ export function CheckoutView({ request }: CheckoutViewProps) {
       // Network failure, safe to fall back to resetting
     }
     setInstructions(null);
-    setQuote(null);
     setRefreshTrigger((n) => n + 1);
   };
 
-  const isExpired = request.status === "EXPIRED" || request.isExpired;
-  const isCrossChain = activeRoute
-    ? activeRoute.networkKey !== request.destinationNetwork
-    : false;
+  const destination = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+    (asset) =>
+      asset.id === request.destinationAssetId &&
+      asset.networkKey === request.destinationNetwork &&
+      asset.decimals === request.destinationDecimals,
+  );
+  const isDirect = Boolean(
+    selectedSource &&
+    destination &&
+    isSamePaymentDeployment(selectedSource, destination),
+  );
+  const isCrossChain = Boolean(selectedSource && !isDirect);
+  const sourceAddressSupported = Boolean(
+    selectedSource && supportsQuoteAddress(selectedSource),
+  );
   const isRefundRequired = payerMode === "EXCHANGE" || isCrossChain;
-
-  // Validate refund address in Exchange mode or for cross-chain settlements
-  const refundValidationMessage = useMemo(() => {
-    if (!isRefundRequired) return null;
-    const trimmed = refundAddress.trim();
-    if (!trimmed) {
-      return payerMode === "EXCHANGE"
-        ? "A valid self-custody refund address is required for exchange withdrawals."
-        : `A payer-controlled ${selectedEcosystem.toUpperCase()} refund address is required for cross-chain settlement.`;
-    }
-
-    // Inbound/Outbound address separation invariant (Task 2 & 3)
+  const trimmedRefund = refundAddress.trim();
+  const refundValidationMessage = (() => {
+    if (!selectedSource || (!isRefundRequired && !trimmedRefund)) return null;
     if (
-      (request.recipientAddress &&
-        trimmed.toLowerCase() === request.recipientAddress.toLowerCase()) ||
-      trimmed === "GvTihjQRfzPtuk4iptiDnsWLojCFX1QBSDgzgi8JAgAS" ||
-      trimmed ===
-        "8dd1fb6f9ca1f542d1faa6a8526f3ca0c68fab6d2081d52aa86bb10a73349628"
-    ) {
-      return "The recipient's Flow custody wallet cannot be used as the refund address. Please enter a genuine payer-controlled self-custody wallet.";
-    }
-
-    if (selectedEcosystem === "evm" && !/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
-      return "Ethereum & Base refund address must be a valid 42-character 0x address.";
-    }
-    if (
-      selectedEcosystem === "solana" &&
-      !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)
-    ) {
-      return "Solana refund address must be a valid Base58 public key.";
-    }
-    if (
-      selectedEcosystem === "near" &&
-      !/^[0-9a-f]{64}$/.test(trimmed) &&
-      !/^(?=.{2,64}$)[a-z0-9_-]+(\.[a-z0-9_-]+)+$/.test(trimmed)
-    ) {
-      return "NEAR refund address must be a valid named account (e.g. alice.near) or 64-char hex.";
-    }
-    return null;
-  }, [
-    isRefundRequired,
-    payerMode,
-    refundAddress,
-    selectedEcosystem,
-    request.recipientAddress,
-  ]);
-
+      request.recipientAddress &&
+      (request.recipientAddress === trimmedRefund ||
+        (trimmedRefund.startsWith("0x") &&
+          request.recipientAddress.toLowerCase() ===
+            trimmedRefund.toLowerCase()))
+    )
+      return "Enter a payer-controlled address distinct from the recipient.";
+    return validateQuoteAddress(selectedSource, trimmedRefund).reason ?? null;
+  })();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Trigger quote discovery when route, mode, or amount changes
-  useEffect(() => {
-    if (instructions || !activeRoute || isExpired) return;
-
-    if (payerMode === "EXCHANGE" && refundValidationMessage) {
-      return;
+  let amountAtomic = request.requestedAtomicAmount;
+  if (request.amountMode === "OPTIONAL") {
+    try {
+      amountAtomic = selectedSource
+        ? parseDisplayToAtomic(customAmount, selectedSource.decimals).toString()
+        : null;
+    } catch {
+      amountAtomic = null;
     }
-
-    let active = true;
-    if (
-      request.amountMode === "OPTIONAL" &&
-      (!customAmount || customAmount.trim().length === 0)
-    ) {
-      Promise.resolve().then(() => {
-        if (active) {
-          setQuote(null);
-          setLoadingQuote(false);
-        }
-      });
-      return;
-    }
-
-    Promise.resolve().then(() => {
-      if (active) {
-        setLoadingQuote(true);
-        setQuoteError(null);
-      }
+  }
+  const quoteBody =
+    selectedSource &&
+    JSON.stringify({
+      sourceDeploymentId: selectedSource.id,
+      payerMode,
+      refundAddress: trimmedRefund || undefined,
+      customSourceDisplayAmount:
+        request.amountMode === "OPTIONAL" ? customAmount : undefined,
     });
-
-    fetch(`/api/pay/${request.publicId}/quote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sourceDeploymentId: activeRoute.id,
-        payerMode,
-        refundAddress: refundAddress.trim() || undefined,
-        customSourceDisplayAmount:
-          request.amountMode === "OPTIONAL" ? customAmount : undefined,
-      }),
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!active) return;
-        if (!res.ok) {
-          setQuoteError(data.error?.message ?? "Failed to retrieve quote");
-          setQuote(null);
-        } else {
-          setQuote(data);
-          setSecondsRemaining(60);
+  const quoteKey =
+    !instructions &&
+    !isReadOnly &&
+    isCrossChain &&
+    !refundValidationMessage &&
+    amountAtomic &&
+    amountAtomic !== "0" &&
+    quoteBody
+      ? JSON.stringify([
+          request.publicId,
+          request.destinationAssetId,
+          request.destinationNetwork,
+          request.recipientAddress,
+          amountAtomic,
+          quoteBody,
+          refreshTrigger,
+        ])
+      : null;
+  const {
+    quote,
+    error: quoteError,
+    loading: loadingQuote,
+    load,
+  } = useQuotePreview<IndicativeQuote>(quoteKey);
+  useEffect(() => {
+    if (!quoteKey || !quoteBody) return;
+    const timer = window.setTimeout(() => {
+      void load(async (signal) => {
+        const requestVersion = crypto.randomUUID();
+        const response = await fetch(
+          "/api/pay/" + request.publicId + "/quote",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...JSON.parse(quoteBody), requestVersion }),
+            signal,
+            cache: "no-store",
+          },
+        );
+        const data = (await response.json()) as IndicativeQuote & {
+          error?: string;
+        };
+        if (!response.ok || data.routeStatus !== "SUPPORTED_AND_QUOTABLE") {
+          throw new Error(
+            data.statusMessage ??
+              data.error ??
+              "The selected route could not be quoted.",
+          );
         }
-      })
-      .catch(() => {
-        if (!active) return;
-        setQuoteError("Network error while discovering quote");
-        setQuote(null);
-      })
-      .finally(() => {
-        if (active) setLoadingQuote(false);
+        if (
+          data.requestVersion !== requestVersion ||
+          data.payerMode !== payerMode ||
+          data.isExecutionDisabled !== true ||
+          data.identity?.operationId !== request.publicId ||
+          data.identity.sourceNetwork !== selectedSource?.networkKey ||
+          data.identity.destinationNetwork !== request.destinationNetwork ||
+          data.identity.swapType !==
+            (request.amountMode === "FIXED" ? "EXACT_OUTPUT" : "EXACT_INPUT") ||
+          (selectedSource &&
+            "assetId" in selectedSource &&
+            data.identity.originAsset !== selectedSource.assetId) ||
+          data.identity.recipient !== request.recipientAddress ||
+          data.identity.refundTo !== trimmedRefund ||
+          data.identity.amountAtomic !== amountAtomic ||
+          data.destinationAssetId !== request.destinationAssetId ||
+          data.sourceAssetId !== selectedSource?.id
+        )
+          throw new Error("The quote did not match the selected route.");
+        return { quote: data, expiresAt: data.identity.expiresAt };
       });
-
-    return () => {
-      active = false;
-    };
+    }, 300);
+    return () => window.clearTimeout(timer);
   }, [
-    activeRoute,
-    customAmount,
-    instructions,
-    isExpired,
-    isRefundRequired,
+    amountAtomic,
+    load,
     payerMode,
-    refundAddress,
-    refundValidationMessage,
-    refreshTrigger,
+    quoteBody,
+    quoteKey,
     request.amountMode,
+    request.destinationAssetId,
+    request.destinationNetwork,
     request.publicId,
+    request.recipientAddress,
+    selectedSource,
+    trimmedRefund,
   ]);
 
-  // Countdown timer for quote expiry
+  const [quoteSecondsRemaining, setQuoteSecondsRemaining] = useState(0);
+  const quoteDeadline = quote?.identity?.expiresAt;
   useEffect(() => {
-    if (!quote) return;
-    const interval = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [quote]);
+    if (!quoteDeadline) return;
+    const deadline = Date.parse(quoteDeadline);
+    const update = () =>
+      setQuoteSecondsRemaining(
+        Math.max(0, Math.ceil((deadline - Date.now()) / 1000)),
+      );
+    const initial = window.setTimeout(update, 0);
+    const interval = window.setInterval(update, 1000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
+  }, [quoteDeadline]);
+
+  const directDisplay =
+    isDirect && payerMode === "WALLET" && amountAtomic && amountAtomic !== "0"
+      ? request.amountMode === "FIXED"
+        ? request.displayAmount
+        : customAmount
+      : null;
+  const quotedSendAmount = quote?.sourceDisplayAmount ?? directDisplay;
+  const displaySource =
+    quotedSendAmount && selectedSource
+      ? quotedSendAmount + " " + selectedSource.symbol
+      : "—";
+  const flowFee = quote?.fees.appFeeBps === 0 ? "0" : "Unavailable";
+  const routeUnavailable = Boolean(
+    selectedSource &&
+    (!sourceAddressSupported ||
+      quoteError === "Route unavailable" ||
+      (isDirect && payerMode === "EXCHANGE")),
+  );
 
   // Countdown timer for deposit deadline
   useEffect(() => {
@@ -433,41 +472,11 @@ export function CheckoutView({ request }: CheckoutViewProps) {
     return () => clearInterval(interval);
   }, [instructions, request.publicId]);
 
-  const handleProceedToPayment = async () => {
-    if (!quote || quote.routeStatus !== "SUPPORTED_AND_QUOTABLE") return;
-    if (isRefundRequired && refundValidationMessage) {
-      setCommitError(refundValidationMessage);
-      return;
-    }
-    setCommitting(true);
-    setCommitError(null);
-    try {
-      const res = await fetch(`/api/pay/${request.publicId}/commit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          attemptPublicId: quote.attemptPublicId,
-          payerRefundAddress: refundAddress.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setCommitError(
-          data.error?.message ?? "Failed to commit payment attempt",
-        );
-      } else {
-        setInstructions(data as PaymentDepositInstructions);
-      }
-    } catch {
-      setCommitError("Network error while generating deposit instructions");
-    } finally {
-      setCommitting(false);
-    }
-  };
-
   const handleCopyDepositAddress = () => {
     if (
+      canShowDeposit &&
       instructions &&
+      Date.parse(instructions.depositDeadline) > Date.now() &&
       typeof navigator !== "undefined" &&
       navigator.clipboard
     ) {
@@ -479,7 +488,9 @@ export function CheckoutView({ request }: CheckoutViewProps) {
 
   const handleCopyMemo = () => {
     if (
+      canShowDeposit &&
       instructions?.depositMemo &&
+      Date.parse(instructions.depositDeadline) > Date.now() &&
       typeof navigator !== "undefined" &&
       navigator.clipboard
     ) {
@@ -490,7 +501,8 @@ export function CheckoutView({ request }: CheckoutViewProps) {
   };
 
   const isCompletedReceipt =
-    request.status === "COMPLETED" || instructions?.status === "SETTLED";
+    instructions?.status === "SETTLED" &&
+    Boolean(instructions.destinationTxHash);
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-neutral-950 relative overflow-hidden">
@@ -559,6 +571,8 @@ export function CheckoutView({ request }: CheckoutViewProps) {
           <h1 className="mt-1 font-serif text-3xl sm:text-[44px] font-normal tracking-[-0.02em] text-neutral-950 leading-[1.08]">
             {isCompletedReceipt ? (
               "Payment Successful"
+            ) : isReadOnly ? (
+              request.title
             ) : (
               <>
                 Complete your{" "}
@@ -583,7 +597,9 @@ export function CheckoutView({ request }: CheckoutViewProps) {
           <p className="mt-2 text-sm text-neutral-600">
             {isCompletedReceipt
               ? "Your payment has been verified on-chain and settled to the recipient."
-              : "Choose how you want to pay — Flow routes and settles your payment automatically."}
+              : isReadOnly
+                ? "Review the payment request and any existing settlement."
+                : "Choose a source asset to check the available payment route."}
           </p>
         </div>
 
@@ -755,6 +771,20 @@ export function CheckoutView({ request }: CheckoutViewProps) {
               </Link>
             </div>
           </div>
+        ) : isReadOnly && !instructions ? (
+          <div className="rounded-[28px] border border-neutral-200 bg-white p-6 text-sm text-neutral-700">
+            {isExpired
+              ? "This invoice is available for reference."
+              : "Quote unavailable. This payment request cannot accept payments."}
+            {request.displayAmount && (
+              <p className="mt-3 font-semibold">
+                {request.displayAmount} {request.destinationAssetSymbol}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-neutral-600">
+              {request.destinationNetwork}
+            </p>
+          </div>
         ) : (
           /* ===================================================================
               MAIN 2-COLUMN CHECKOUT (Matches Flow Crypto Payment Checkout.png & Flow Mobile Crypto Payment Screen-8.png)
@@ -783,6 +813,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                       <button
                         type="button"
                         onClick={handleGenerateNewQuote}
+                        disabled={isReadOnly}
                         className="mt-4 rounded-full bg-[#FF1A1A] px-6 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-[#E01515] transition-all cursor-pointer"
                       >
                         Generate New Quote
@@ -795,6 +826,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                     <button
                       type="button"
                       onClick={handleBackToPaymentSelection}
+                      disabled={isReadOnly}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-600 hover:text-neutral-950 transition-colors"
                     >
                       <span aria-hidden="true">←</span>
@@ -866,19 +898,21 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                   </div>
 
                   {/* 4. Payment Instructions Heading */}
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF1A1A]">
-                      PAYMENT INSTRUCTIONS
-                    </span>
-                    <h2 className="font-serif text-2xl text-neutral-950 mt-0.5">
-                      Send Exact Amount to Deposit Address
-                    </h2>
-                    <p className="text-xs text-neutral-600 mt-1">
-                      Deposit the exact amount below from any wallet or
-                      exchange. Flow automatically converts and settles to the
-                      recipient.
-                    </p>
-                  </div>
+                  {canShowDeposit && (
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF1A1A]">
+                        PAYMENT INSTRUCTIONS
+                      </span>
+                      <h2 className="font-serif text-2xl text-neutral-950 mt-0.5">
+                        Send Exact Amount to Deposit Address
+                      </h2>
+                      <p className="text-xs text-neutral-600 mt-1">
+                        Deposit the exact amount below from any wallet or
+                        exchange. Flow automatically converts and settles to the
+                        recipient.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Exception Refund Required Banner */}
                   {instructions.status === "EXCEPTION_REFUND_REQUIRED" && (
@@ -886,97 +920,102 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                       <strong>
                         Refund Required — Do Not Send Additional Funds:
                       </strong>{" "}
-                      Deposit was received outside the valid quote window or
-                      could not be routed. Funds are queued for refund to the
-                      configured refund address.
+                      This attempt requires refund reconciliation. Check the
+                      payment status for a confirmed refund.
                     </div>
                   )}
 
                   {/* 5-10. Deposit Instructions Card: QR, Amount, Network, Address, Memo, Countdown */}
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center rounded-[20px] border border-neutral-200 bg-neutral-50/70 p-5">
-                    <div className="sm:col-span-5 flex flex-col items-center justify-center">
-                      <div className="rounded-[16px] bg-white p-3 shadow-2xs border border-neutral-200/80">
-                        <QrCode
-                          value={
-                            instructions.qrData || instructions.depositAddress
-                          }
-                          size={148}
-                        />
-                      </div>
-                      <span className="mt-2 text-[10px] text-neutral-400">
-                        Scan with any wallet
-                      </span>
-                    </div>
-
-                    <div className="sm:col-span-7 space-y-3.5 text-xs">
-                      <div>
-                        <span className="text-[11px] text-neutral-500 block">
-                          Exact Amount to Send
-                        </span>
-                        <div className="flex items-center justify-between gap-2 mt-0.5">
-                          <span className="font-display text-2xl font-bold text-neutral-950">
-                            {instructions.requiredDisplayAmount}{" "}
-                            <span className="text-[#FF1A1A]">
-                              {instructions.sourceAssetSymbol}
-                            </span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleCopyAmount}
-                            disabled={isDepositExpired}
-                            className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-800 hover:bg-neutral-100 disabled:opacity-40"
-                          >
-                            {copiedAmount ? "Copied" : "Copy Amount"}
-                          </button>
-                        </div>
-                        <p className="text-[11px] text-neutral-500 mt-0.5">
-                          Source Network:{" "}
-                          <strong className="text-neutral-900">
-                            {instructions.sourceNetwork}
-                          </strong>
-                        </p>
-                      </div>
-
-                      <div>
-                        <span className="text-[11px] text-neutral-500 block mb-1">
-                          Deposit Address
-                        </span>
-                        <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-white px-3 py-2 font-mono text-[11px]">
-                          <span className="truncate select-all text-neutral-900">
-                            {instructions.depositAddress}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleCopyDepositAddress}
-                            disabled={isDepositExpired}
-                            className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
-                          >
-                            {copiedAddress ? "Copied" : "Copy"}
-                          </button>
-                        </div>
-                      </div>
-
-                      {instructions.depositMemo && (
-                        <div>
-                          <span className="text-[11px] font-semibold text-amber-800 block mb-1">
-                            Required Memo / Tag
-                          </span>
-                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2 font-mono text-[11px]">
-                            <span className="truncate select-all text-amber-950">
-                              {instructions.depositMemo}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleCopyMemo}
-                              disabled={isDepositExpired}
-                              className="shrink-0 font-sans font-semibold text-amber-900 hover:underline disabled:opacity-40"
-                            >
-                              {copiedMemo ? "Copied" : "Copy"}
-                            </button>
+                    {canShowDeposit && (
+                      <>
+                        <div className="sm:col-span-5 flex flex-col items-center justify-center">
+                          <div className="rounded-[16px] bg-white p-3 shadow-2xs border border-neutral-200/80">
+                            <QrCode
+                              value={
+                                instructions.qrData ||
+                                instructions.depositAddress
+                              }
+                              size={148}
+                            />
                           </div>
+                          <span className="mt-2 text-[10px] text-neutral-400">
+                            Scan with any wallet
+                          </span>
                         </div>
-                      )}
 
+                        <div className="sm:col-span-7 space-y-3.5 text-xs">
+                          <div>
+                            <span className="text-[11px] text-neutral-500 block">
+                              Exact Amount to Send
+                            </span>
+                            <div className="flex items-center justify-between gap-2 mt-0.5">
+                              <span className="font-display text-2xl font-bold text-neutral-950">
+                                {instructions.requiredDisplayAmount}{" "}
+                                <span className="text-[#FF1A1A]">
+                                  {instructions.sourceAssetSymbol}
+                                </span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleCopyAmount}
+                                disabled={isDepositExpired}
+                                className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-800 hover:bg-neutral-100 disabled:opacity-40"
+                              >
+                                {copiedAmount ? "Copied" : "Copy Amount"}
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-neutral-500 mt-0.5">
+                              Source Network:{" "}
+                              <strong className="text-neutral-900">
+                                {instructions.sourceNetwork}
+                              </strong>
+                            </p>
+                          </div>
+
+                          <div>
+                            <span className="text-[11px] text-neutral-500 block mb-1">
+                              Deposit Address
+                            </span>
+                            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-white px-3 py-2 font-mono text-[11px]">
+                              <span className="truncate select-all text-neutral-900">
+                                {instructions.depositAddress}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleCopyDepositAddress}
+                                disabled={isDepositExpired}
+                                className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
+                              >
+                                {copiedAddress ? "Copied" : "Copy"}
+                              </button>
+                            </div>
+                          </div>
+
+                          {instructions.depositMemo && (
+                            <div>
+                              <span className="text-[11px] font-semibold text-amber-800 block mb-1">
+                                Required Memo / Tag
+                              </span>
+                              <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2 font-mono text-[11px]">
+                                <span className="truncate select-all text-amber-950">
+                                  {instructions.depositMemo}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={handleCopyMemo}
+                                  disabled={isDepositExpired}
+                                  className="shrink-0 font-sans font-semibold text-amber-900 hover:underline disabled:opacity-40"
+                                >
+                                  {copiedMemo ? "Copied" : "Copy"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    <div className="sm:col-span-12 space-y-3.5 text-xs">
                       {isFundedOrProcessing ? (
                         <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 text-[11px]">
                           <span className="text-neutral-500">
@@ -998,7 +1037,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                             Payment Under Review
                           </span>
                         </div>
-                      ) : (
+                      ) : canShowDeposit ? (
                         <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 text-[11px]">
                           <span className="text-neutral-500">
                             Deposit Deadline:
@@ -1017,7 +1056,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                             remaining
                           </span>
                         </div>
-                      )}
+                      ) : null}
 
                       {instructions.sourceTxHash && (
                         <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 text-[11px]">
@@ -1089,7 +1128,15 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                     <div className="flex flex-wrap items-center gap-2.5">
                       <button
                         type="button"
-                        onClick={() => setPayTab("STABLES")}
+                        onClick={() => {
+                          setPayTab("STABLES");
+                          if (
+                            !stableChoices.some(
+                              (choice) => choice.id === selectedSource?.id,
+                            )
+                          )
+                            selectSource(initialStable ?? null);
+                        }}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                           payTab === "STABLES"
                             ? "bg-neutral-950 text-white shadow-xs"
@@ -1115,7 +1162,6 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                       <button
                         type="button"
                         onClick={() => {
-                          setPayTab("ANY_TOKEN");
                           setIsAnyTokenModalOpen(true);
                         }}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
@@ -1130,148 +1176,135 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                     </div>
                   </div>
 
-                  {/* Multi-ecosystem buttons for tests & fast switching */}
-                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-neutral-100">
-                    <span className="text-[11px] font-semibold text-neutral-500">
-                      Paying from:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectEcosystem("evm")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                        selectedEcosystem === "evm"
-                          ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
-                          : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
-                      }`}
-                    >
-                      <ChainBadge chainKey="ethereum-mainnet" size={14} />
-                      <span>Ethereum &amp; Base</span>
-                    </button>
+                  {payTab === "STABLES" && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-neutral-100">
+                      <span className="text-[11px] font-semibold text-neutral-500">
+                        Paying from:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectEcosystem("evm")}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                          selectedEcosystem === "evm"
+                            ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
+                            : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                        }`}
+                      >
+                        <ChainBadge chainKey="ethereum-mainnet" size={14} />
+                        <span>Ethereum &amp; Base</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => handleSelectEcosystem("solana")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                        selectedEcosystem === "solana"
-                          ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
-                          : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
-                      }`}
-                    >
-                      <ChainBadge chainKey="solana-mainnet" size={14} />
-                      <span>Solana</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectEcosystem("solana")}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                          selectedEcosystem === "solana"
+                            ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
+                            : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                        }`}
+                      >
+                        <ChainBadge chainKey="solana-mainnet" size={14} />
+                        <span>Solana</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => handleSelectEcosystem("near")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                        selectedEcosystem === "near"
-                          ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
-                          : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
-                      }`}
-                    >
-                      <ChainBadge chainKey="near-mainnet" size={14} />
-                      <span>NEAR Protocol</span>
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectEcosystem("near")}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                          selectedEcosystem === "near"
+                            ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
+                            : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                        }`}
+                      >
+                        <ChainBadge chainKey="near-mainnet" size={14} />
+                        <span>NEAR Protocol</span>
+                      </button>
+                    </div>
+                  )}
 
-                  {/* Two fields side by side: "You pay with" & "You send (estimated)" */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* You pay with dropdown */}
-                    <div>
-                      <label className="block text-xs font-semibold text-neutral-800 mb-1.5">
-                        You pay with
-                      </label>
-                      <div className="relative" ref={payWithDropdownRef}>
+                    {payTab === "STABLES" ? (
+                      <CombinedAssetNetworkPicker
+                        options={stableChoices.filter(
+                          (option) => option.ecosystem === selectedEcosystem,
+                        )}
+                        selectedId={selectedSource?.id ?? ""}
+                        onSelect={selectSource}
+                        label="You pay with"
+                        inline
+                      />
+                    ) : (
+                      <div className="min-w-0">
+                        <span className="block text-xs font-semibold text-neutral-800 mb-1.5">
+                          You pay with
+                        </span>
                         <button
                           type="button"
-                          onClick={() =>
-                            setIsPayWithDropdownOpen((prev) => !prev)
-                          }
-                          className="w-full flex items-center justify-between p-3 rounded-2xl border border-neutral-200 bg-white hover:border-neutral-400 transition-all text-left shadow-2xs cursor-pointer"
+                          aria-label="Choose token and network"
+                          onClick={() => setIsAnyTokenModalOpen(true)}
+                          className="flex w-full items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-3 text-left text-xs font-bold hover:bg-neutral-50"
                         >
-                          <div className="flex items-center gap-2.5">
-                            <AssetAvatar
-                              symbol={activeRoute?.assetSymbol ?? "USDC"}
-                              size={28}
-                            />
-                            <div>
-                              <p className="font-bold text-xs text-neutral-950">
-                                {activeRoute?.assetSymbol ?? "USDC"}
-                              </p>
-                              <p className="text-[11px] text-neutral-500">
-                                on {activeRoute?.networkName ?? "Base"}
-                              </p>
-                            </div>
-                          </div>
-                          <IconChevronDown
-                            size={14}
-                            className={`text-neutral-400 transition-transform ${isPayWithDropdownOpen ? "rotate-180" : ""}`}
-                          />
+                          {selectedSource && (
+                            <span className="relative shrink-0">
+                              <AssetAvatar
+                                symbol={selectedSource.symbol}
+                                size={31}
+                              />
+                              <span className="absolute -right-1 -bottom-1 rounded-full bg-white p-0.5">
+                                <ChainBadge
+                                  chainKey={selectedSource.networkKey}
+                                  size={12}
+                                />
+                              </span>
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1">
+                            {selectedSource?.symbol ??
+                              "Choose token and network"}
+                            {selectedSource && (
+                              <span className="block truncate mt-0.5 font-normal text-neutral-500">
+                                on {selectedSource.networkName}
+                              </span>
+                            )}
+                          </span>
+                          <span aria-hidden="true" className="text-neutral-500">
+                            ⌄
+                          </span>
                         </button>
-
-                        {/* Dropdown Menu matching screenshot */}
-                        {isPayWithDropdownOpen && (
-                          <div className="mt-2 w-full rounded-2xl border border-neutral-200 bg-white shadow-sm p-1.5 space-y-1 max-h-72 overflow-y-auto animate-in fade-in">
-                            {ecosystemRoutes.map((route) => {
-                              const isSelected = activeRoute?.id === route.id;
-                              return (
-                                <button
-                                  key={route.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedRouteId(route.id);
-                                  }}
-                                  className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all cursor-pointer ${
-                                    isSelected
-                                      ? "bg-red-50 text-neutral-950 font-bold"
-                                      : "hover:bg-neutral-50 text-neutral-700"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5">
-                                    <AssetAvatar
-                                      symbol={route.assetSymbol}
-                                      size={24}
-                                    />
-                                    <div>
-                                      <p className="text-xs font-semibold">
-                                        {route.assetSymbol}
-                                      </p>
-                                      <p className="text-[10px] text-neutral-500">
-                                        on {route.networkName}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  {isSelected && (
-                                    <IconCheck
-                                      size={14}
-                                      className="text-[#FF1A1A]"
-                                    />
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
                       </div>
-                    </div>
-
-                    {/* You send (estimated) */}
+                    )}
                     <div>
-                      <label className="block text-xs font-semibold text-neutral-800 mb-1.5">
-                        You send (estimated)
+                      <label
+                        htmlFor="checkout-amount"
+                        className="block text-xs font-semibold text-neutral-800 mb-1.5"
+                      >
+                        {request.amountMode === "FIXED"
+                          ? "You send (estimated)"
+                          : "Amount to send"}
                       </label>
                       <div className="flex items-center justify-between p-3 rounded-2xl border border-neutral-200 bg-white shadow-2xs">
                         <input
+                          id="checkout-amount"
                           type="text"
-                          value={quote?.sourceDisplayAmount ?? customAmount}
-                          onChange={(e) => setCustomAmount(e.target.value)}
-                          disabled={request.amountMode === "FIXED"}
-                          placeholder="1.00"
+                          inputMode="decimal"
+                          value={
+                            request.amountMode === "FIXED"
+                              ? (quotedSendAmount ?? "")
+                              : customAmount
+                          }
+                          onChange={(event) =>
+                            setCustomAmount(event.target.value)
+                          }
+                          readOnly={request.amountMode === "FIXED"}
+                          placeholder={
+                            request.amountMode === "FIXED"
+                              ? "—"
+                              : "Enter amount"
+                          }
                           className="w-full font-display text-xl font-bold text-neutral-950 focus:outline-hidden bg-transparent"
                         />
                         <span className="font-bold text-xs text-neutral-500 pl-2">
-                          {activeRoute?.assetSymbol ?? "USDC"}
+                          {selectedSource?.symbol}
                         </span>
                       </div>
                     </div>
@@ -1280,7 +1313,10 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                   {/* Payer refund address */}
                   <div>
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <label className="text-xs font-semibold text-neutral-800">
+                      <label
+                        htmlFor="checkout-refund"
+                        className="text-xs font-semibold text-neutral-800"
+                      >
                         {payerMode === "EXCHANGE"
                           ? "Self-custody refund address required for exchange withdrawals"
                           : "Payer refund address"}
@@ -1294,10 +1330,15 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                     </div>
                     <div className="relative flex items-center">
                       <input
+                        id="checkout-refund"
                         type="text"
                         value={refundAddress}
                         onChange={(e) => setRefundAddress(e.target.value)}
-                        placeholder="Enter 0x... or Solana Base58 or NEAR account"
+                        placeholder={
+                          selectedSource
+                            ? "Address on " + selectedSource.networkName
+                            : "Choose a source network first"
+                        }
                         className="w-full px-4 py-3 rounded-2xl border border-neutral-200 bg-white text-xs font-mono text-neutral-950 focus:outline-hidden focus:border-neutral-900 shadow-2xs pr-10"
                       />
                       {refundAddress.trim().length > 0 &&
@@ -1307,22 +1348,9 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                           </span>
                         )}
                     </div>
-                    {refundAddress.trim().length > 0 &&
-                    !refundValidationMessage ? (
-                      <p className="mt-1 text-xs font-medium text-emerald-600 flex items-center gap-1">
-                        <span>✓</span>
-                        <span>
-                          Valid refund address (
-                          {selectedEcosystem.toUpperCase()})
-                        </span>
-                      </p>
-                    ) : refundValidationMessage ? (
+                    {refundValidationMessage && (
                       <p className="mt-1 text-xs font-medium text-amber-700">
                         {refundValidationMessage}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-[11px] text-neutral-500">
-                        ✓ Valid refund address (Ethereum, Base, Solana, or NEAR)
                       </p>
                     )}
                   </div>
@@ -1361,78 +1389,83 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                     </div>
                   </div>
 
-                  {/* Quote Breakdown Card */}
                   <div className="p-4 rounded-2xl border border-neutral-200 bg-neutral-50/60 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-neutral-950">
-                          Quote Summary
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-xs font-bold text-neutral-900">
+                        Quote Summary
+                      </h3>
+                      {quote && (
+                        <span className="text-[10px] font-semibold text-emerald-700">
+                          Provider preview · {quoteSecondsRemaining}s
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>
-                            Quote updates live ({secondsRemaining}s) ⓘ
-                          </span>
-                        </span>
-                      </div>
-                      <div className="text-[11px] font-bold">
-                        {loadingQuote ? (
-                          <span className="text-neutral-400 animate-pulse">
-                            Updating...
-                          </span>
-                        ) : quote?.routeStatus === "UNSUPPORTED_PAIR" ? (
-                          <span className="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-800 text-[10px] font-bold">
-                            UNSUPPORTED PAIR
-                          </span>
-                        ) : quote?.routeStatus === "SUPPORTED_AND_QUOTABLE" ? (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold">
-                            Live Rate
-                          </span>
-                        ) : quoteError ? (
-                          <span className="text-[#FF1A1A] text-[10px]">
-                            Quote Error
-                          </span>
-                        ) : null}
-                      </div>
+                      )}
                     </div>
-
-                    {quote?.routeStatus === "UNSUPPORTED_PAIR" ? (
-                      <div className="p-3 rounded-xl bg-white border border-neutral-200 text-xs text-neutral-700">
-                        <p className="font-bold text-neutral-950">
-                          Unsupported Route Pair
-                        </p>
-                        <p className="text-[11px] text-neutral-500 mt-0.5">
-                          {quote.statusMessage ||
-                            "No automated solver routes currently support this token pair."}
-                        </p>
+                    <dl className="space-y-2 text-xs text-neutral-600">
+                      <div className="flex justify-between gap-3">
+                        <dt>
+                          You send
+                          {selectedSource &&
+                            " (" +
+                              selectedSource.symbol +
+                              " on " +
+                              selectedSource.networkName +
+                              ")"}
+                        </dt>
+                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950">
+                          {displaySource}
+                        </dd>
                       </div>
-                    ) : (
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between items-center text-neutral-600">
-                          <span>
-                            You send ({activeRoute?.assetSymbol} on{" "}
-                            {activeRoute?.networkName})
-                          </span>
-                          <span className="font-mono font-bold text-neutral-950">
-                            {quote?.sourceDisplayAmount ?? customAmount}{" "}
-                            {activeRoute?.assetSymbol}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-neutral-600">
-                          <span>Fee ⓘ</span>
-                          <span className="font-semibold text-neutral-900">
-                            Free (0.00 {activeRoute?.assetSymbol})
-                          </span>
-                        </div>
-                        <div className="border-t border-neutral-200/80 pt-2 flex justify-between items-center">
-                          <span className="font-bold text-neutral-950">
-                            Total
-                          </span>
-                          <span className="font-mono font-bold text-neutral-950">
-                            {quote?.sourceDisplayAmount ?? customAmount}{" "}
-                            {activeRoute?.assetSymbol}
-                          </span>
-                        </div>
+                      <div className="flex justify-between gap-3">
+                        <dt>Flow platform fee</dt>
+                        <dd className="font-semibold text-neutral-950">
+                          {flowFee}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="shrink-0 max-w-[40%]">
+                          Network / Solver fee
+                        </dt>
+                        <dd className="text-right font-semibold text-neutral-950">
+                          {quote?.fees.description ??
+                            (directDisplay
+                              ? "Network fee unavailable until broadcast."
+                              : "Unavailable")}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-3 border-t border-neutral-200 pt-2">
+                        <dt className="font-bold text-neutral-950">Total</dt>
+                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950">
+                          {displaySource}
+                        </dd>
+                      </div>
+                    </dl>
+                    {!quote && !directDisplay && (
+                      <div role="status" className="text-xs text-neutral-600">
+                        <p>
+                          {loadingQuote
+                            ? "Checking route…"
+                            : routeUnavailable
+                              ? "Route unavailable"
+                              : "Quote unavailable"}
+                        </p>
+                        {!loadingQuote && !routeUnavailable && (
+                          <p>
+                            {quoteError ??
+                              refundValidationMessage ??
+                              "Choose a source asset and enter the required details."}
+                          </p>
+                        )}
+                        {quoteError === "The quote has expired." && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRefreshTrigger((value) => value + 1)
+                            }
+                            className="mt-1 font-semibold text-neutral-950 underline"
+                          >
+                            Refresh quote
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1459,27 +1492,15 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                           <h2 className="font-display font-bold text-xs text-neutral-950 truncate">
                             {request.title}
                           </h2>
-                          <p className="font-mono text-[11px] text-neutral-500 truncate">
-                            {request.recipientAddress
-                              ? `${request.recipientAddress.slice(0, 6)}...${request.recipientAddress.slice(-4)}`
-                              : "Address unavailable"}
+                          <p className="font-sans text-[11px] text-neutral-500 truncate">
+                            {request.recipientName}
                           </p>
                         </div>
                       </div>
-                      {request.recipientAddress && (
-                        <button
-                          type="button"
-                          onClick={handleCopyRecipientAddress}
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-950 hover:bg-neutral-200/70 transition-colors cursor-pointer"
-                          title="Copy recipient address"
-                        >
-                          {copiedRecipientAddress ? (
-                            <IconCheck size={14} className="text-emerald-600" />
-                          ) : (
-                            <IconCopy size={14} />
-                          )}
-                        </button>
-                      )}
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200/60">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Verified
+                      </span>
                     </div>
                   </div>
 
@@ -1489,17 +1510,17 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                       Amount due
                     </span>
                     <p className="mt-1 font-display text-3xl font-extrabold text-neutral-950">
-                      {request.displayAmount} {request.destinationAssetSymbol}
-                    </p>
-                    <p className="text-xs text-neutral-500 mt-0.5">
-                      ≈ ${request.displayAmount} USD
+                      {request.displayAmount ??
+                        quote?.destinationDisplayAmount ??
+                        "—"}{" "}
+                      {request.destinationAssetSymbol}
                     </p>
                   </div>
 
-                  {/* Settlement (you receive) */}
+                  {/* Settlement (Recipient receives) */}
                   <div>
                     <span className="text-xs font-semibold text-neutral-800 block mb-1.5">
-                      Settlement (you receive)
+                      Recipient receives
                     </span>
                     <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl border border-neutral-200/80 bg-neutral-50/70">
                       <AssetAvatar
@@ -1507,8 +1528,8 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                         size={24}
                       />
                       <span className="font-display font-bold text-xs text-neutral-950">
-                        {request.destinationAssetSymbol} on{" "}
-                        {request.destinationNetwork}
+                        {request.displayAmount} {request.destinationAssetSymbol}{" "}
+                        on {request.destinationNetwork}
                       </span>
                     </div>
                   </div>
@@ -1522,14 +1543,14 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <AssetAvatar
-                            symbol={activeRoute?.assetSymbol ?? "USDC"}
+                            symbol={selectedSource?.symbol ?? ""}
                             size={22}
                           />
                           <span className="font-bold text-xs text-neutral-950">
-                            {activeRoute?.assetSymbol ?? "USDC"}
+                            {selectedSource?.symbol}
                           </span>
                           <span className="text-[11px] text-neutral-500">
-                            {activeRoute?.networkName ?? "Base"}
+                            {selectedSource?.networkName}
                           </span>
                         </div>
                         <span className="text-neutral-400 font-bold">
@@ -1552,9 +1573,11 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                           <span>⚡</span>
                           <span>
-                            {isCrossChain
-                              ? "NEAR Intents · Instant"
-                              : "Direct route · Instant"}
+                            {isDirect
+                              ? "Direct route"
+                              : quote
+                                ? "NEAR Intents"
+                                : "Route preview"}
                           </span>
                         </span>
                       </div>
@@ -1562,69 +1585,44 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                   </div>
 
                   {/* You'll send (exact) summary box */}
-                  <div className="p-4 rounded-2xl bg-red-50/50 border border-red-100 flex items-center justify-between">
-                    <div>
+                  <div className="p-4 rounded-2xl bg-red-50/50 border border-red-100 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <div className="min-w-0 flex-[1_1_12rem]">
                       <span className="text-xs font-semibold text-neutral-800 block">
-                        You&apos;ll send (exact)
+                        You’ll send (estimated)
                       </span>
-                      <p className="mt-0.5 font-display text-2xl font-extrabold text-neutral-950">
-                        {quote?.sourceDisplayAmount ?? request.displayAmount}{" "}
-                        <span className="text-sm font-bold text-neutral-700">
-                          {quote?.sourceAssetSymbol ??
-                            activeRoute?.assetSymbol ??
-                            "USDC"}
+                      <p className="mt-0.5 break-all font-display text-2xl font-extrabold text-neutral-950">
+                        {quotedSendAmount ?? "—"}{" "}
+                        <span className="inline-block text-sm font-bold text-neutral-700">
+                          {selectedSource?.symbol}
                         </span>
                       </p>
                     </div>
                     <div className="text-right text-xs space-y-1">
                       <div>
-                        <span className="text-neutral-500">Fee ⓘ </span>
-                        <span className="font-semibold text-neutral-900">
-                          0.00 {request.destinationAssetSymbol}
+                        <span className="text-neutral-500">
+                          Flow fee {flowFee}
                         </span>
                       </div>
                       <div>
-                        <span className="text-neutral-500">You receive </span>
+                        <span className="text-neutral-500">
+                          Recipient receives{" "}
+                        </span>
                         <span className="font-bold text-neutral-950">
-                          {request.displayAmount}{" "}
+                          {quote?.destinationDisplayAmount ??
+                            request.displayAmount ??
+                            "—"}{" "}
                           {request.destinationAssetSymbol}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {commitError && (
-                    <div className="p-3 rounded-xl border border-red-200 bg-red-50 text-xs text-[#FF1A1A]">
-                      <strong>Error:</strong> {commitError}
-                    </div>
-                  )}
-
-                  {/* Primary Action Button */}
                   <button
                     type="button"
-                    onClick={handleProceedToPayment}
-                    disabled={
-                      committing ||
-                      !quote ||
-                      quote.routeStatus !== "SUPPORTED_AND_QUOTABLE" ||
-                      (isRefundRequired && !!refundValidationMessage) ||
-                      (quote.isExecutionDisabled ?? true)
-                    }
-                    className={`w-full py-4 rounded-full text-xs sm:text-sm font-semibold transition-all ${
-                      !committing &&
-                      quote &&
-                      quote.routeStatus === "SUPPORTED_AND_QUOTABLE" &&
-                      (!isRefundRequired || !refundValidationMessage) &&
-                      !quote.isExecutionDisabled
-                        ? "bg-neutral-950 text-white hover:bg-neutral-800 shadow-md cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
-                        : "bg-neutral-950 text-white opacity-90 cursor-not-allowed"
-                    }`}
+                    disabled
+                    className="w-full py-4 rounded-full text-xs sm:text-sm font-semibold bg-neutral-900 text-white cursor-not-allowed"
                   >
-                    {committing
-                      ? "Securing Deposit Address..."
-                      : quote?.isExecutionDisabled
-                        ? "Pay Now (Payment Execution Disabled)"
-                        : "Proceed to payment →"}
+                    Pay Now (Payment Execution Disabled)
                   </button>
                 </div>
               ) : (
@@ -1646,6 +1644,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                       <button
                         type="button"
                         onClick={handleGenerateNewQuote}
+                        disabled={isReadOnly}
                         className="mt-4 rounded-full bg-[#FF1A1A] px-6 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-[#E01515] transition-all cursor-pointer"
                       >
                         Generate New Quote
@@ -1706,82 +1705,89 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                     </span>
                   </div>
 
-                  <div className="flex flex-col items-center justify-center rounded-[22px] border border-neutral-200/70 bg-neutral-50 p-6">
-                    <QrCode
-                      value={instructions.qrData || instructions.depositAddress}
-                      size={156}
-                    />
-                    <p className="mt-3 text-xs font-medium text-neutral-600 text-center">
-                      Deposit address for this payment on{" "}
-                      <strong className="text-neutral-900">
-                        {instructions.sourceNetwork}
-                      </strong>
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <span className="text-[11px] font-medium text-neutral-500 block mb-1">
-                        Amount to Send
-                      </span>
-                      <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-neutral-50 px-3.5 py-2.5">
-                        <span className="font-display text-base font-bold text-neutral-950">
-                          {instructions.requiredDisplayAmount}{" "}
-                          <span className="text-[#FF1A1A]">
-                            {instructions.sourceAssetSymbol}
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleCopyAmount}
-                          disabled={isDepositExpired}
-                          className="shrink-0 font-sans text-xs font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
-                        >
-                          {copiedAmount ? "Copied" : "Copy Amount"}
-                        </button>
+                  {canShowDeposit && (
+                    <>
+                      <div className="flex flex-col items-center justify-center rounded-[22px] border border-neutral-200/70 bg-neutral-50 p-6">
+                        <QrCode
+                          value={
+                            instructions.qrData || instructions.depositAddress
+                          }
+                          size={156}
+                        />
+                        <p className="mt-3 text-xs font-medium text-neutral-600 text-center">
+                          Deposit address for this payment on{" "}
+                          <strong className="text-neutral-900">
+                            {instructions.sourceNetwork}
+                          </strong>
+                        </p>
                       </div>
-                    </div>
 
-                    <div>
-                      <span className="text-[11px] font-medium text-neutral-500 block mb-1">
-                        Deposit Address
-                      </span>
-                      <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 font-mono text-xs">
-                        <span className="truncate select-all text-neutral-800">
-                          {instructions.depositAddress}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleCopyDepositAddress}
-                          disabled={isDepositExpired}
-                          className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
-                        >
-                          {copiedAddress ? "Copied" : "Copy Address"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {instructions.depositMemo && (
-                      <div>
-                        <span className="text-[11px] font-semibold text-amber-800 block mb-1">
-                          Required Memo / Tag
-                        </span>
-                        <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 font-mono text-xs">
-                          <span className="truncate select-all text-neutral-800">
-                            {instructions.depositMemo}
+                      <div className="space-y-3 text-xs">
+                        <div>
+                          <span className="text-[11px] font-medium text-neutral-500 block mb-1">
+                            Amount to Send
                           </span>
-                          <button
-                            type="button"
-                            onClick={handleCopyMemo}
-                            disabled={isDepositExpired}
-                            className="shrink-0 font-sans font-semibold text-amber-900 hover:underline disabled:opacity-40"
-                          >
-                            {copiedMemo ? "Copied" : "Copy Memo"}
-                          </button>
+                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-neutral-50 px-3.5 py-2.5">
+                            <span className="font-display text-base font-bold text-neutral-950">
+                              {instructions.requiredDisplayAmount}{" "}
+                              <span className="text-[#FF1A1A]">
+                                {instructions.sourceAssetSymbol}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleCopyAmount}
+                              disabled={isDepositExpired}
+                              className="shrink-0 font-sans text-xs font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
+                            >
+                              {copiedAmount ? "Copied" : "Copy Amount"}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
 
+                        <div>
+                          <span className="text-[11px] font-medium text-neutral-500 block mb-1">
+                            Deposit Address
+                          </span>
+                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 font-mono text-xs">
+                            <span className="truncate select-all text-neutral-800">
+                              {instructions.depositAddress}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleCopyDepositAddress}
+                              disabled={isDepositExpired}
+                              className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
+                            >
+                              {copiedAddress ? "Copied" : "Copy Address"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {instructions.depositMemo && (
+                          <div>
+                            <span className="text-[11px] font-semibold text-amber-800 block mb-1">
+                              Required Memo / Tag
+                            </span>
+                            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 font-mono text-xs">
+                              <span className="truncate select-all text-neutral-800">
+                                {instructions.depositMemo}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleCopyMemo}
+                                disabled={isDepositExpired}
+                                className="shrink-0 font-sans font-semibold text-amber-900 hover:underline disabled:opacity-40"
+                              >
+                                {copiedMemo ? "Copied" : "Copy Memo"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  <div className="space-y-3 text-xs">
                     <div className="rounded-[14px] border border-neutral-200/80 bg-neutral-50/70 p-3.5 space-y-2 text-xs">
                       {isFundedOrProcessing ? (
                         <div className="flex justify-between items-center">
@@ -1802,7 +1808,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                             Payment Under Review
                           </span>
                         </div>
-                      ) : (
+                      ) : canShowDeposit ? (
                         <div className="flex justify-between items-center">
                           <span className="text-neutral-500">
                             Deposit Deadline:
@@ -1821,7 +1827,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                             remaining
                           </span>
                         </div>
-                      )}
+                      ) : null}
 
                       {instructions.sourceTxHash && (
                         <div className="flex justify-between items-center pt-1 border-t border-neutral-200/70">
@@ -1886,10 +1892,8 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                           <span>Refund Pending:</span>
                         </div>
                         <p className="text-[11px] leading-relaxed text-red-900">
-                          Deposit was received outside the valid quote window or
-                          could not be routed. Funds are queued for automatic
-                          refund to{" "}
-                          {instructions.payerRefundAddress || refundAddress}.
+                          This attempt requires refund reconciliation. Check the
+                          payment status for a confirmed refund.
                         </p>
                       </div>
                     )}
@@ -1918,6 +1922,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                           <button
                             type="button"
                             onClick={handleGenerateNewQuote}
+                            disabled={isReadOnly}
                             className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515]"
                           >
                             Generate New Quote
@@ -1936,6 +1941,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                           <button
                             type="button"
                             onClick={handleGenerateNewQuote}
+                            disabled={isReadOnly}
                             className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515]"
                           >
                             Generate New Quote
@@ -1960,8 +1966,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                       <strong className="text-neutral-950">
                         Pay with what you hold:
                       </strong>{" "}
-                      Select Ethereum, Base, Solana, or NEAR and your preferred
-                      token.
+                      Select a source asset and network to check the route.
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5">
@@ -1972,7 +1977,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                       <strong className="text-neutral-950">
                         Automatic routing:
                       </strong>{" "}
-                      Flow locks in a real solver quote and delivers{" "}
+                      The provider previews settlement in{" "}
                       {request.destinationAssetSymbol} on{" "}
                       {request.destinationNetwork}.
                     </span>
@@ -2002,28 +2007,10 @@ export function CheckoutView({ request }: CheckoutViewProps) {
         onClose={() => setIsAnyTokenModalOpen(false)}
         darkTheme={false}
         title="Pay with any token"
-        targetAmount={request.displayAmount ?? "1.00"}
-        targetSymbol={request.destinationAssetSymbol ?? "USDC"}
-        filterCapability="CAN_PAY_FROM"
+        filterCapability="DISCOVERABLE_BY_PROVIDER"
         onSelectToken={(token: DiscoveredToken) => {
-          if (
-            token.ecosystem === "evm" ||
-            token.ecosystem === "solana" ||
-            token.ecosystem === "near"
-          ) {
-            setSelectedEcosystem(token.ecosystem);
-          }
-          const matching = request.eligibleSourceRoutes.find(
-            (r) =>
-              r.assetSymbol.toUpperCase() === token.symbol.toUpperCase() &&
-              (r.networkKey.includes(token.networkKey) ||
-                token.networkKey.includes(r.networkKey)),
-          );
-          if (matching) {
-            setSelectedRouteId(matching.id);
-          }
-          setQuote(null);
-          setQuoteError(null);
+          selectSource(token);
+          setPayTab("ANY_TOKEN");
           setIsAnyTokenModalOpen(false);
         }}
       />

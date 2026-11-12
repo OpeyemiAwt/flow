@@ -1,44 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  PROFILE_PREFERENCE_EVENT,
+  readProfilePreference,
+} from "./profile-preferences.ts";
 
 const DEFAULT_AVATAR_SRC = "/assets/amara-avatar.png";
 
-export function getUserAvatar(): string {
-  if (typeof window === "undefined") return DEFAULT_AVATAR_SRC;
-  try {
-    return (
-      window.localStorage.getItem("flow-user-avatar") || DEFAULT_AVATAR_SRC
-    );
-  } catch {
-    return DEFAULT_AVATAR_SRC;
-  }
-}
-
-export function setUserAvatar(dataUrl: string): void {
-  try {
-    window.localStorage.setItem("flow-user-avatar", dataUrl);
-    window.dispatchEvent(new Event("flow-avatar-change"));
-  } catch (err) {
-    console.error("Failed to persist avatar:", err);
-  }
-}
-
-export function resetUserAvatar(): void {
-  try {
-    window.localStorage.removeItem("flow-user-avatar");
-    window.dispatchEvent(new Event("flow-avatar-change"));
-  } catch {
-    // ignore
-  }
-}
-
 export function UserAvatar({
+  profileId,
   className = "h-9 w-9 rounded-full object-cover border border-white/20 shrink-0",
   alt = "Profile",
   defaultSrc = DEFAULT_AVATAR_SRC,
   size,
 }: {
+  profileId?: string;
   className?: string;
   alt?: string;
   defaultSrc?: string;
@@ -47,18 +24,12 @@ export function UserAvatar({
   const [src, setSrc] = useState(defaultSrc);
 
   useEffect(() => {
-    const sync = () => {
-      try {
-        const stored = window.localStorage.getItem("flow-user-avatar");
-        setSrc(stored || defaultSrc);
-      } catch {
-        setSrc(defaultSrc);
-      }
-    };
+    const sync = () =>
+      setSrc(readProfilePreference(profileId, "avatar") || defaultSrc);
     sync();
-    window.addEventListener("flow-avatar-change", sync);
-    return () => window.removeEventListener("flow-avatar-change", sync);
-  }, [defaultSrc]);
+    window.addEventListener(PROFILE_PREFERENCE_EVENT, sync);
+    return () => window.removeEventListener(PROFILE_PREFERENCE_EVENT, sync);
+  }, [defaultSrc, profileId]);
 
   return (
     <img

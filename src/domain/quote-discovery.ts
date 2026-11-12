@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { MAX_SUPPORTED_ATOMIC_INT } from "./atomic-amounts.ts";
 import {
   type CatalogTokenDeployment,
   type EcosystemFamily,
@@ -174,7 +175,7 @@ export function validateProviderAtomicAmount(val: unknown): boolean {
   if (!/^[0-9]{1,78}$/.test(val)) return false;
   try {
     const b = BigInt(val);
-    return b > 0n;
+    return b > 0n && b <= MAX_SUPPORTED_ATOMIC_INT;
   } catch {
     return false;
   }
@@ -194,7 +195,23 @@ export interface IndicativeQuoteFeeBreakdown {
   readonly description: string;
 }
 
+export interface ProviderQuoteIdentity {
+  readonly operationId: string;
+  readonly originAsset: string;
+  readonly sourceNetwork: string;
+  readonly destinationAsset: string;
+  readonly destinationNetwork: string;
+  readonly amountAtomic: string;
+  readonly swapType: QuoteSwapType;
+  readonly refundTo: string;
+  readonly recipient: string;
+  readonly timestamp: string;
+  readonly expiresAt: string;
+}
+
 export interface IndicativeQuote {
+  readonly identity?: ProviderQuoteIdentity;
+  readonly requestVersion?: string;
   readonly attemptPublicId: string;
   readonly paymentRequestPublicId: string;
   readonly routeStatus: RouteAvailabilityStatus;
@@ -309,14 +326,9 @@ export function buildRateDescription(
       return `1 ${sourceSymbol} → ${destSymbol}`;
     }
 
-    // Normalized display units scaled by 10^12 for exact fixed-point integer division
-    const SCALE = 10n ** 12n;
-    const srcNorm = (srcBig * SCALE) / 10n ** BigInt(sourceDecimals);
-    const dstNorm = (dstBig * SCALE) / 10n ** BigInt(destDecimals);
-
-    if (srcNorm === 0n || dstNorm === 0n) {
-      return `1 ${sourceSymbol} → ${destSymbol}`;
-    }
+    // Compare like units without truncating either atomic amount.
+    const srcNorm = srcBig * 10n ** BigInt(destDecimals);
+    const dstNorm = dstBig * 10n ** BigInt(sourceDecimals);
 
     if (srcNorm >= dstNorm) {
       // ratio = srcNorm / dstNorm scaled to 4 decimal places

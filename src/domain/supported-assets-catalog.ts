@@ -17,6 +17,42 @@ export interface CatalogTokenDeployment {
   readonly isDbSeeded: boolean;
 }
 
+type PaymentDeploymentIdentity = {
+  readonly id: string;
+  readonly networkKey: string;
+  readonly decimals: number;
+  readonly standard: string;
+} & (
+  | { readonly contractIdentifier: string }
+  | { readonly contractAddress: string | null }
+);
+
+export function isSamePaymentDeployment(
+  source: PaymentDeploymentIdentity,
+  destination: PaymentDeploymentIdentity,
+): boolean {
+  if (
+    source.id !== destination.id ||
+    source.networkKey !== destination.networkKey ||
+    source.decimals !== destination.decimals ||
+    source.standard !== destination.standard
+  ) {
+    return false;
+  }
+  if (source.standard === "NATIVE") return true;
+
+  const contract = (asset: PaymentDeploymentIdentity) =>
+    "contractIdentifier" in asset
+      ? asset.contractIdentifier
+      : asset.contractAddress;
+  const from = contract(source);
+  const to = contract(destination);
+  if (!from || !to) return false;
+  return source.standard === "ERC20"
+    ? from.toLowerCase() === to.toLowerCase()
+    : from === to;
+}
+
 export function isTestnetEnabled(): boolean {
   if (typeof process === "undefined" || !process.env) return false;
   return process.env.SHOW_TESTNETS === "true";

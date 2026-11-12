@@ -30,7 +30,7 @@ export function FlowAIAssistantDrawer({
       id: "welcome",
       role: "assistant",
       content:
-        "Hello! I am your Flow Assistant. I can check your genuine on-chain balances, discover token routes across 35+ chains via NEAR Intents, look up payment status, or draft payment links for you.",
+        "Hello! I am your Flow Assistant. I can show your wallet balances, browse tokens and networks from NEAR Intents, look up payment status, or draft payment links for you.",
       timestamp: new Date().toISOString(),
     },
   ]);

@@ -7,7 +7,7 @@ import {
 } from "../../../../../components/theme-toggle.tsx";
 import { UserAvatar } from "../../../../../components/user-avatar.tsx";
 import { accountId } from "../../../../../server/accounts.ts";
-import { pageData } from "../../../../../server/pages.ts";
+import { pageData, pagePrincipal } from "../../../../../server/pages.ts";
 import { team } from "../../../../../server/team.ts";
 import { TeamManager } from "./team-manager.tsx";
 
@@ -17,9 +17,10 @@ export default async function TeamPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const snapshot = await pageData(async () =>
-    team(await headers(), accountId(id)),
-  );
+  const [snapshot, actor] = await Promise.all([
+    pageData(async () => team(await headers(), accountId(id))),
+    pagePrincipal(),
+  ]);
   return (
     <main className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0B0B] text-neutral-950 dark:text-white flex flex-col lg:flex-row">
       {/* Left Dark Sidebar */}
@@ -64,7 +65,10 @@ export default async function TeamPage({
 
         <div className="flex items-center justify-between border-t border-white/10 pt-4">
           <div className="flex items-center gap-2.5 min-w-0">
-            <UserAvatar className="h-9 w-9 rounded-full object-cover border border-white/20 shrink-0" />
+            <UserAvatar
+              profileId={actor.userId}
+              className="h-9 w-9 rounded-full object-cover border border-white/20 shrink-0"
+            />
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold text-white">
                 {snapshot.account.name}

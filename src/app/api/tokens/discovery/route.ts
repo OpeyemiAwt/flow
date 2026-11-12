@@ -15,10 +15,8 @@ export async function GET(request: Request) {
     const capability = url.searchParams.get(
       "capability",
     ) as TokenCapability | null;
-    const forceRefresh = url.searchParams.get("refresh") === "true";
 
     const allTokens = await getDiscoveredTokens({
-      forceRefresh,
       excludeWrapped: true, // User-facing wrapped tokens excluded per owner directive
     });
 

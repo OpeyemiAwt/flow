@@ -67,6 +67,20 @@ export interface SerializedAccountPortfolio {
 
 export const REFRESH_COOLDOWN_MS = 15_000;
 
+export function getMainnetWalletAddress(
+  wallet: SerializedAccountPortfolio["wallet"],
+  networkKey: string,
+): string | null {
+  if (wallet?.status !== "ACTIVE" || wallet.environment !== "mainnet") {
+    return null;
+  }
+  return (
+    wallet.addresses.find(
+      (address) => canonicalizeNetworkId(address.chainId) === networkKey,
+    )?.address ?? null
+  );
+}
+
 export function serializePortfolio(
   projection: AccountPortfolioProjection,
 ): SerializedAccountPortfolio {

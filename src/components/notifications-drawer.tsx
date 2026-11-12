@@ -2,30 +2,17 @@
 
 import { useEffect, useState } from "react";
 
-export interface AccountNotificationItem {
-  id: string;
-  type:
-    | "PAYMENT_RECEIVED"
-    | "PAYMENT_LINK_CREATED"
-    | "DIRECT_DEPOSIT_CONFIRMED"
-    | "SYNC_NOTICE";
-  title: string;
-  body: string;
-  timestamp: string;
-  isRead: boolean;
-  metadata?: {
-    txHash?: string;
-    network?: string;
-    amountDisplay?: string;
-    assetSymbol?: string;
-    linkId?: string;
-  };
-}
+import type { AccountNotification } from "../server/notifications-service.ts";
+import {
+  isInAppNotificationEnabled,
+  PROFILE_PREFERENCE_EVENT,
+} from "./profile-preferences.ts";
 
 export interface NotificationsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   accountId: string;
+  profileId?: string;
   onUnreadCountChange?: (count: number) => void;
 }
 
@@ -33,11 +20,10 @@ export function NotificationsDrawer({
   isOpen,
   onClose,
   accountId,
+  profileId,
   onUnreadCountChange,
 }: NotificationsDrawerProps) {
-  const [notifications, setNotifications] = useState<AccountNotificationItem[]>(
-    [],
-  );
+  const [notifications, setNotifications] = useState<AccountNotification[]>([]);
   const [filter, setFilter] = useState<"ALL" | "PAYMENTS" | "SYSTEM">("ALL");
   const [loading, setLoading] = useState(false);
 
@@ -53,10 +39,11 @@ export function NotificationsDrawer({
         if (!res.ok) return;
         const data = await res.json();
         if (mounted && data.ok) {
-          setNotifications(data.notifications || []);
-          if (onUnreadCountChange) {
-            onUnreadCountChange(data.unreadCount || 0);
-          }
+          const rows = (data.notifications as AccountNotification[]).filter(
+            (item) => isInAppNotificationEnabled(profileId, item.type),
+          );
+          setNotifications(rows);
+          onUnreadCountChange?.(rows.filter((item) => !item.isRead).length);
         }
       } catch (err) {
         console.error("Failed to load notifications:", err);
@@ -65,20 +52,26 @@ export function NotificationsDrawer({
       }
     }
 
-    loadNotifications();
+    void loadNotifications();
+    const refresh = () => {
+      void loadNotifications();
+    };
+    window.addEventListener(PROFILE_PREFERENCE_EVENT, refresh);
     return () => {
       mounted = false;
+      window.removeEventListener(PROFILE_PREFERENCE_EVENT, refresh);
     };
-  }, [isOpen, accountId, onUnreadCountChange]);
+  }, [isOpen, accountId, profileId, onUnreadCountChange]);
 
   const markAllRead = async () => {
     try {
       const ids = notifications.map((n) => n.id);
-      await fetch(`/api/accounts/${accountId}/notifications`, {
+      const response = await fetch(`/api/accounts/${accountId}/notifications`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ markAll: true, ids }),
       });
+      if (!response.ok) return;
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       if (onUnreadCountChange) onUnreadCountChange(0);
     } catch (err) {
@@ -88,11 +81,12 @@ export function NotificationsDrawer({
 
   const markSingleRead = async (id: string) => {
     try {
-      await fetch(`/api/accounts/${accountId}/notifications`, {
+      const response = await fetch(`/api/accounts/${accountId}/notifications`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
+      if (!response.ok) return;
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
       );
@@ -112,11 +106,11 @@ export function NotificationsDrawer({
       return (
         n.type === "PAYMENT_RECEIVED" ||
         n.type === "PAYMENT_LINK_CREATED" ||
-        n.type === "DIRECT_DEPOSIT_CONFIRMED"
+        n.type === "DEPOSIT_DETECTED"
       );
     }
     if (filter === "SYSTEM") {
-      return n.type === "SYNC_NOTICE";
+      return n.category === "system";
     }
     return true;
   });
@@ -235,7 +229,7 @@ export function NotificationsDrawer({
                           <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs">
                             ↓
                           </div>
-                        ) : item.type === "DIRECT_DEPOSIT_CONFIRMED" ? (
+                        ) : item.type === "DEPOSIT_DETECTED" ? (
                           <div className="h-7 w-7 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
                             ✓
                           </div>
@@ -255,17 +249,12 @@ export function NotificationsDrawer({
                           )}
                         </div>
                         <p className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                          {item.body}
+                          {item.description}
                         </p>
-                        {item.metadata?.txHash && (
-                          <p className="mt-1 font-mono text-[10px] text-neutral-400 truncate max-w-[240px]">
-                            tx: {item.metadata.txHash}
-                          </p>
-                        )}
                       </div>
                     </div>
                     <span className="text-[10px] text-neutral-400 shrink-0">
-                      {new Date(item.timestamp).toLocaleDateString("en-US", {
+                      {new Date(item.createdAt).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                       })}

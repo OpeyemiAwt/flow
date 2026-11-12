@@ -14,7 +14,7 @@ export default async function SecurityPage() {
   ]);
   return (
     <main>
-      <SecurityPanel {...status} accounts={accounts} />
+      <SecurityPanel {...status} accounts={accounts} profileId={actor.userId} />
     </main>
   );
 }

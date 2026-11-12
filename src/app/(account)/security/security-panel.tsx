@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FlowLogo } from "../../../components/flow-logo.tsx";
 import { ThemeToggle } from "../../../components/theme-toggle.tsx";
+import { UserAvatar } from "../../../components/user-avatar.tsx";
 import {
-  resetUserAvatar,
-  setUserAvatar,
-  UserAvatar,
-} from "../../../components/user-avatar.tsx";
+  readProfilePreference,
+  writeProfilePreference,
+} from "../../../components/profile-preferences.ts";
 import { describe, Feedback, send } from "../../controls.tsx";
 
 export interface SessionRecord {
@@ -20,6 +20,7 @@ export interface SessionRecord {
 }
 
 export interface SecurityPanelProps {
+  readonly profileId: string;
   readonly email: string;
   readonly emailEnrolled: boolean;
   readonly mailboxPaused: boolean;
@@ -37,6 +38,7 @@ export interface SecurityPanelProps {
 type SettingsTab = "notifications" | "security" | "preferences" | "profile";
 
 export function SecurityPanel({
+  profileId,
   email,
   emailEnrolled,
   googleLinked,
@@ -48,10 +50,13 @@ export function SecurityPanel({
     (searchParams?.get("tab") as SettingsTab) || "notifications";
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
-  // Notifications state
-  const [incomingPayments, setIncomingPayments] = useState(true);
-  const [paymentLinkActivity, setPaymentLinkActivity] = useState(true);
-  const [securityAlerts, setSecurityAlerts] = useState(true);
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    incomingPayments: true,
+    paymentLinkActivity: true,
+    securityAlerts: true,
+  });
+  const { incomingPayments, paymentLinkActivity, securityAlerts } =
+    notificationPreferences;
 
   // Profile Customization state
   const primaryAccount = accounts[0];
@@ -70,55 +75,82 @@ export function SecurityPanel({
 
   const backHref = primaryAccount ? `/accounts/${primaryAccount.id}` : "/";
 
-  // Sync profile name from localStorage on mount
-  useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = window.localStorage.getItem("flow-user-name");
-        if (stored && stored.trim().length > 0) {
-          setDisplayName(stored);
-        }
-      } catch {
-        // ignore
-      }
-    }
-  });
+  const defaultName = primaryAccount?.name ?? "Personal Workspace";
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setDisplayName(readProfilePreference(profileId, "name") || defaultName);
+      setNotificationPreferences({
+        incomingPayments:
+          readProfilePreference(profileId, "incomingPayments") !== "false",
+        paymentLinkActivity:
+          readProfilePreference(profileId, "paymentLinkActivity") !== "false",
+        securityAlerts:
+          readProfilePreference(profileId, "securityAlerts") !== "false",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [defaultName, profileId]);
 
-  function handleSaveDisplayName(e: React.FormEvent) {
-    e.preventDefault();
+  function toggleNotification(key: keyof typeof notificationPreferences) {
+    const next = !notificationPreferences[key];
     try {
-      window.localStorage.setItem("flow-user-name", displayName.trim());
-      window.dispatchEvent(new Event("flow-name-change"));
-      setProfileSavedMessage("Display name saved successfully.");
-      setTimeout(() => setProfileSavedMessage(null), 3000);
+      writeProfilePreference(profileId, key, String(next));
+      setNotificationPreferences({ ...notificationPreferences, [key]: next });
     } catch {
-      setProfileSavedMessage("Failed to save display name.");
+      setMessage("Could not save the notification preference.");
     }
   }
 
-  function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function handleSaveDisplayName(event: React.FormEvent) {
+    event.preventDefault();
+    const name = displayName.trim();
+    if (!name || name.length > 100) {
+      setProfileSavedMessage(
+        "Enter a display name between 1 and 100 characters.",
+      );
+      return;
+    }
+    try {
+      writeProfilePreference(profileId, "name", name);
+      setDisplayName(name);
+      setProfileSavedMessage("Display name saved in this browser.");
+    } catch {
+      setProfileSavedMessage("Could not save the display name.");
+    }
+  }
+
+  function handleAvatarUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setProfileSavedMessage("Avatar image must be under 2 MB.");
+    if (
+      !["image/png", "image/jpeg"].includes(file.type) ||
+      file.size > 2 * 1024 * 1024
+    ) {
+      setProfileSavedMessage("Choose a PNG or JPEG image up to 2 MB.");
       return;
     }
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result;
-      if (typeof result === "string") {
-        setUserAvatar(result);
-        setProfileSavedMessage("Avatar image updated successfully.");
-        setTimeout(() => setProfileSavedMessage(null), 3000);
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      try {
+        writeProfilePreference(profileId, "avatar", reader.result);
+        setProfileSavedMessage("Avatar saved in this browser.");
+      } catch {
+        setProfileSavedMessage("Could not save the avatar.");
       }
     };
+    reader.onerror = () =>
+      setProfileSavedMessage("Could not read the avatar image.");
     reader.readAsDataURL(file);
   }
 
   function handleResetAvatar() {
-    resetUserAvatar();
-    setProfileSavedMessage("Avatar reset to default.");
-    setTimeout(() => setProfileSavedMessage(null), 3000);
+    try {
+      writeProfilePreference(profileId, "avatar", null);
+      setProfileSavedMessage("Avatar reset to default.");
+    } catch {
+      setProfileSavedMessage("Could not reset the avatar.");
+    }
   }
 
   // Revoke session
@@ -421,14 +453,15 @@ export function SecurityPanel({
                         Incoming payments
                       </p>
                       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Instant alert when a payment is received.
+                        Show received payments in your notification drawer.
                       </p>
                     </div>
                     <button
                       type="button"
                       role="switch"
                       aria-checked={incomingPayments}
-                      onClick={() => setIncomingPayments((prev) => !prev)}
+                      aria-label="Incoming payments"
+                      onClick={() => toggleNotification("incomingPayments")}
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
                         incomingPayments
                           ? "bg-[#FF1A1A]"
@@ -450,14 +483,15 @@ export function SecurityPanel({
                         Payment link activity
                       </p>
                       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Notify when a customer opens or pays a payment link.
+                        Show payment link activity in your notification drawer.
                       </p>
                     </div>
                     <button
                       type="button"
                       role="switch"
                       aria-checked={paymentLinkActivity}
-                      onClick={() => setPaymentLinkActivity((prev) => !prev)}
+                      aria-label="Payment link activity"
+                      onClick={() => toggleNotification("paymentLinkActivity")}
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
                         paymentLinkActivity
                           ? "bg-[#FF1A1A]"
@@ -481,15 +515,15 @@ export function SecurityPanel({
                         Security alerts
                       </p>
                       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        New sign-ins, verification codes, and important security
-                        updates.
+                        Show security notices in your notification drawer.
                       </p>
                     </div>
                     <button
                       type="button"
                       role="switch"
                       aria-checked={securityAlerts}
-                      onClick={() => setSecurityAlerts((prev) => !prev)}
+                      aria-label="Security alerts"
+                      onClick={() => toggleNotification("securityAlerts")}
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
                         securityAlerts
                           ? "bg-[#FF1A1A]"
@@ -788,6 +822,7 @@ export function SecurityPanel({
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
                   <div className="flex items-center gap-4">
                     <UserAvatar
+                      profileId={profileId}
                       size={64}
                       className="rounded-full border-2 border-white dark:border-neutral-700 shadow-sm"
                     />
@@ -796,8 +831,7 @@ export function SecurityPanel({
                         Profile Picture
                       </p>
                       <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                        PNG or JPG up to 2MB. Appears in navigation and payment
-                        links.
+                        PNG or JPEG up to 2 MB. Saved in this browser.
                       </p>
                     </div>
                   </div>
@@ -807,7 +841,7 @@ export function SecurityPanel({
                       <span>Change photo</span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg"
                         onChange={handleAvatarUpload}
                         className="hidden"
                       />
@@ -837,6 +871,7 @@ export function SecurityPanel({
                     <input
                       id="display-name-input"
                       type="text"
+                      maxLength={100}
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       placeholder="Your name or workspace title"

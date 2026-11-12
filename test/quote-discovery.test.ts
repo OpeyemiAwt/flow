@@ -1,6 +1,8 @@
+import {
+  isSamePaymentDeployment,
+  MAINNET_SUPPORTED_DEPLOYMENTS,
+} from "../src/domain/supported-assets-catalog.ts";
 import assert from "node:assert/strict";
-import http from "node:http";
-import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 import {
   PROBE_ADDRESSES,
@@ -214,113 +216,73 @@ test("quote-discovery: buildRateDescription formats human readable exchange rate
   assert.ok(rateDesc2.includes("3000"));
 });
 
-test("quote-discovery: fetchOneClickDryQuote parses responses and handles provider errors accurately", async () => {
+test("quote-discovery: validates authentic dry response fields and errors", async (t) => {
   let mockStatus = 200;
   let mockBody: Record<string, unknown> = {};
-
-  const server = http.createServer((_req, res) => {
-    res.writeHead(mockStatus, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(mockBody));
-  });
-
-  await new Promise<void>((resolve) =>
-    server.listen(0, "127.0.0.1", () => resolve()),
-  );
-  const address = server.address() as AddressInfo;
-  const apiBase = `http://127.0.0.1:${address.port}`;
-
-  try {
-    // 1. Success case: supported and quotable with valid amounts and fees
-    mockStatus = 200;
-    mockBody = {
-      quote: {
-        amountIn: "116868899",
-        amountOut: "10000000",
-        timeEstimate: 22,
-        refundFee: "115314",
-        withdrawFee: "2400",
+  t.mock.method(globalThis, "fetch", async (_url: unknown, init: RequestInit) =>
+    Response.json(
+      {
+        quoteRequest: JSON.parse(String(init.body)),
+        timestamp: new Date().toISOString(),
+        ...mockBody,
       },
-      signature: "ed25519:test_sig",
-      correlationId: "corr-12345",
-      timestamp: "2026-11-09T14:00:00Z",
-    };
+      { status: mockStatus },
+    ),
+  );
+  const params = {
+    originAsset: "nep141:sol.omft.near",
+    destinationAsset:
+      "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
+    swapType: "EXACT_OUTPUT" as const,
+    amountAtomic: "10000000",
+    refundTo: PROBE_ADDRESSES.solana,
+    recipient: PROBE_ADDRESSES.evm,
+    skipSignatureVerification: true,
+  };
+  mockBody = {
+    quote: {
+      amountIn: "116868899",
+      amountOut: "10000000",
+      minAmountOut: "10000000",
+      timeEstimate: 22,
+      refundFee: "115314",
+      withdrawFee: "2400",
+    },
+    signature: "ed25519:fixture",
+    correlationId: "corr-12345",
+  };
+  const success = await fetchOneClickDryQuote(params);
+  assert.equal(success.ok, true);
+  assert.equal(success.routeStatus, "SUPPORTED_AND_QUOTABLE");
+  assert.equal(success.amountInAtomic, "116868899");
+  assert.equal(success.amountOutAtomic, "10000000");
+  assert.equal(success.timeEstimateSeconds, 22);
+  assert.equal(success.correlationId, "corr-12345");
+  assert.equal(success.fees?.refundFeeAtomic, "115314");
+  assert.equal(success.fees?.withdrawFeeAtomic, "2400");
+  assert.equal(
+    (
+      await fetchOneClickDryQuote({
+        ...params,
+        skipSignatureVerification: false,
+      })
+    ).ok,
+    false,
+  );
 
-    const res1 = await fetchOneClickDryQuote({
-      originAsset: "nep141:sol.omft.near",
-      destinationAsset:
-        "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
-      swapType: "EXACT_OUTPUT",
-      amountAtomic: "10000000",
-      refundTo: PROBE_ADDRESSES.solana,
-      recipient: PROBE_ADDRESSES.evm,
-      apiBase,
-    });
-
-    assert.equal(res1.ok, true);
-    assert.equal(res1.routeStatus, "SUPPORTED_AND_QUOTABLE");
-    assert.equal(res1.amountInAtomic, "116868899");
-    assert.equal(res1.amountOutAtomic, "10000000");
-    assert.equal(res1.timeEstimateSeconds, 22);
-    assert.equal(res1.correlationId, "corr-12345");
-    assert.equal(res1.signature, "ed25519:test_sig");
-    assert.equal(res1.fees?.refundFeeAtomic, "115314");
-    assert.equal(res1.fees?.withdrawFeeAtomic, "2400");
-
-    // 2. Unsupported pair (tokenIn is not valid)
-    mockStatus = 400;
-    mockBody = { message: "tokenIn is not valid" };
-
-    const res2 = await fetchOneClickDryQuote({
-      originAsset: "nep141:invalid.near",
-      destinationAsset: "nep141:base.near",
-      swapType: "EXACT_OUTPUT",
-      amountAtomic: "10000000",
-      refundTo: PROBE_ADDRESSES.solana,
-      recipient: PROBE_ADDRESSES.evm,
-      apiBase,
-    });
-
-    assert.equal(res2.ok, false);
-    assert.equal(res2.routeStatus, "UNSUPPORTED_PAIR");
-    assert.ok(res2.errorMessage?.includes("tokenIn is not valid"));
-
-    // 3. Temporarily unavailable (No liquidity available)
-    mockStatus = 400;
-    mockBody = { message: "No liquidity available" };
-
-    const res3 = await fetchOneClickDryQuote({
-      originAsset: "nep141:sol.omft.near",
-      destinationAsset: "nep141:base.near",
-      swapType: "EXACT_OUTPUT",
-      amountAtomic: "999999999999999999",
-      refundTo: PROBE_ADDRESSES.solana,
-      recipient: PROBE_ADDRESSES.evm,
-      apiBase,
-    });
-
-    assert.equal(res3.ok, false);
-    assert.equal(res3.routeStatus, "TEMPORARILY_UNAVAILABLE");
-    assert.ok(res3.errorMessage?.includes("No solver liquidity"));
-
-    // 4. Provider 500 server error
-    mockStatus = 500;
-    mockBody = { message: "Internal server error" };
-
-    const res4 = await fetchOneClickDryQuote({
-      originAsset: "nep141:sol.omft.near",
-      destinationAsset: "nep141:base.near",
-      swapType: "EXACT_OUTPUT",
-      amountAtomic: "10000000",
-      refundTo: PROBE_ADDRESSES.solana,
-      recipient: PROBE_ADDRESSES.evm,
-      apiBase,
-    });
-
-    assert.equal(res4.ok, false);
-    assert.equal(res4.routeStatus, "PROVIDER_ERROR");
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
+  mockStatus = 400;
+  mockBody = { message: "tokenIn is not valid" };
+  assert.equal(
+    (await fetchOneClickDryQuote(params)).routeStatus,
+    "UNSUPPORTED_PAIR",
+  );
+  mockBody = { message: "No liquidity available" };
+  assert.equal(
+    (await fetchOneClickDryQuote(params)).routeStatus,
+    "TEMPORARILY_UNAVAILABLE",
+  );
+  mockStatus = 500;
+  assert.equal((await fetchOneClickDryQuote(params)).ok, false);
 });
 
 test("quote-discovery: validateProviderAtomicAmount enforces exact positive integer bounds", () => {
@@ -390,95 +352,67 @@ test("quote-discovery: buildRateDescription preserves exact precision without lo
   );
 });
 
-test("quote-discovery: fetchOneClickDryQuote rejects shortfall on exact-output and malformed amounts", async () => {
-  let mockBody: Record<string, unknown> = {};
-
-  const server = http.createServer((_req, res) => {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(mockBody));
-  });
-
-  await new Promise<void>((resolve) =>
-    server.listen(0, "127.0.0.1", () => resolve()),
+test("quote-discovery: rejects mismatched identities, atomic amounts, and stale responses", async (t) => {
+  const validQuote = {
+    amountIn: "116000000",
+    amountOut: "10000000",
+    minAmountOut: "10000000",
+  };
+  let mockQuote = validQuote;
+  let echoOverride: Record<string, unknown> = {};
+  let timestamp: string | undefined;
+  t.mock.method(globalThis, "fetch", async (_url: unknown, init: RequestInit) =>
+    Response.json({
+      quoteRequest: { ...JSON.parse(String(init.body)), ...echoOverride },
+      timestamp: timestamp ?? new Date().toISOString(),
+      quote: mockQuote,
+    }),
   );
-  const address = server.address() as AddressInfo;
-  const apiBase = `http://127.0.0.1:${address.port}`;
+  const params = {
+    originAsset: "nep141:sol.omft.near",
+    destinationAsset:
+      "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
+    swapType: "EXACT_OUTPUT" as const,
+    amountAtomic: "10000000",
+    refundTo: PROBE_ADDRESSES.solana,
+    recipient: PROBE_ADDRESSES.evm,
+    skipSignatureVerification: true,
+  };
 
-  try {
-    // 1. Shortfall on exact-output (provider returned 9_999_999 when 10_000_000 requested)
-    mockBody = {
-      quote: {
-        amountIn: "116000000",
-        amountOut: "9999999", // Underfunded!
-      },
-      signature: "ed25519:sig",
-      correlationId: "corr-shortfall",
-    };
-
-    const res1 = await fetchOneClickDryQuote({
-      originAsset: "nep141:sol.omft.near",
-      destinationAsset:
-        "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
-      swapType: "EXACT_OUTPUT",
-      amountAtomic: "10000000",
-      refundTo: PROBE_ADDRESSES.solana,
-      recipient: PROBE_ADDRESSES.evm,
-      apiBase,
-    });
-
-    assert.equal(res1.ok, false);
-    assert.equal(res1.routeStatus, "PROVIDER_ERROR");
-    assert.ok(
-      res1.errorMessage?.includes("less than requested invoice amount"),
-    );
-
-    // 2. Malformed amountIn (float string "116.5")
-    mockBody = {
-      quote: {
-        amountIn: "116.5",
-        amountOut: "10000000",
-      },
-    };
-
-    const res2 = await fetchOneClickDryQuote({
-      originAsset: "nep141:sol.omft.near",
-      destinationAsset:
-        "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
-      swapType: "EXACT_OUTPUT",
-      amountAtomic: "10000000",
-      refundTo: PROBE_ADDRESSES.solana,
-      recipient: PROBE_ADDRESSES.evm,
-      apiBase,
-    });
-
-    assert.equal(res2.ok, false);
-    assert.equal(res2.routeStatus, "PROVIDER_ERROR");
-    assert.ok(res2.errorMessage?.includes("out-of-range"));
-
-    // 3. Missing timeEstimate is preserved as null, not default 30
-    mockBody = {
-      quote: {
-        amountIn: "116000000",
-        amountOut: "10000000",
-      },
-    };
-
-    const res3 = await fetchOneClickDryQuote({
-      originAsset: "nep141:sol.omft.near",
-      destinationAsset:
-        "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
-      swapType: "EXACT_OUTPUT",
-      amountAtomic: "10000000",
-      refundTo: PROBE_ADDRESSES.solana,
-      recipient: PROBE_ADDRESSES.evm,
-      apiBase,
-    });
-
-    assert.equal(res3.ok, true);
-    assert.equal(res3.timeEstimateSeconds, null);
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+  for (const override of [
+    { originAsset: "nep141:eth.omft.near" },
+    { destinationAsset: "nep141:wrap.near" },
+    { refundTo: PROBE_ADDRESSES.evm },
+    { recipient: PROBE_ADDRESSES.near },
+    { dry: false },
+    { amount: "20000000" },
+  ]) {
+    echoOverride = override;
+    assert.equal((await fetchOneClickDryQuote(params)).ok, false);
   }
+  echoOverride = {};
+  timestamp = "2025-01-01T00:00:00.000Z";
+  assert.equal((await fetchOneClickDryQuote(params)).ok, false);
+  timestamp = undefined;
+  for (const fields of [
+    { amountOut: "9999999", minAmountOut: "9999999" },
+    { amountOut: "10000001", minAmountOut: "10000000" },
+    { minAmountOut: "9999999" },
+    { amountIn: "116.5" },
+    { depositAddress: PROBE_ADDRESSES.evm },
+  ]) {
+    mockQuote = { ...validQuote, ...fields };
+    assert.equal((await fetchOneClickDryQuote(params)).ok, false);
+  }
+  mockQuote = validQuote;
+  assert.equal(
+    (await fetchOneClickDryQuote({ ...params, swapType: "EXACT_INPUT" })).ok,
+    false,
+  );
+  const quote = await fetchOneClickDryQuote(params);
+  assert.equal(quote.ok, true);
+  assert.equal(quote.timeEstimateSeconds, null);
+  assert.equal(quote.fees?.withdrawFeeAtomic, null);
 });
 
 test("quote-discovery: isRouteExchangeCompatible checks sender-independent refunding", () => {
@@ -509,6 +443,36 @@ test("quote-discovery: isRouteExchangeCompatible checks sender-independent refun
   // Unmapped/unsupported token is incompatible
   assert.equal(
     isRouteExchangeCompatible("CROSS_CHAIN_1CLICK", "unsupported-chain:FOO"),
+    false,
+  );
+});
+
+test("direct payments require an identical network, asset deployment and contract", () => {
+  const usdc = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+    (d) => d.id === "base-mainnet:USDC",
+  );
+  const eth = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+    (d) => d.id === "base-mainnet:ETH",
+  );
+  const solUsdc = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+    (d) => d.id === "solana-mainnet:USDC",
+  );
+  assert.ok(usdc && eth && solUsdc);
+  assert.equal(isSamePaymentDeployment(usdc, usdc), true);
+  assert.equal(isSamePaymentDeployment(usdc, eth), false);
+  assert.equal(isSamePaymentDeployment(usdc, solUsdc), false);
+  assert.equal(
+    isSamePaymentDeployment(usdc, {
+      ...usdc,
+      contractIdentifier: "0x" + "a".repeat(40),
+    }),
+    false,
+  );
+  assert.equal(
+    isSamePaymentDeployment(solUsdc, {
+      ...solUsdc,
+      contractIdentifier: solUsdc.contractIdentifier.toLowerCase(),
+    }),
     false,
   );
 });

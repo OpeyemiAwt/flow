@@ -1,17 +1,16 @@
 import {
-  canonicalizeNetworkId,
   MAINNET_SUPPORTED_DEPLOYMENTS,
+  type CatalogTokenDeployment,
 } from "../../domain/supported-assets-catalog.ts";
+import { MAX_SUPPORTED_DECIMALS } from "../../domain/atomic-amounts.ts";
+import { ONE_CLICK_ASSET_MAPPINGS } from "../../domain/quote-discovery.ts";
 
 export type TokenCapability =
   | "DISCOVERABLE_BY_PROVIDER"
-  | "QUOTABLE"
-  | "CAN_PAY_FROM"
   | "CAN_RECEIVE_TO"
   | "CAN_DIRECT_DEPOSIT"
   | "CAN_HOLD_IN_FLOW"
-  | "CAN_SEND_FROM_FLOW"
-  | "CAN_SWAP_TO_NEAR";
+  | "CAN_SEND_FROM_FLOW";
 
 export interface DiscoveredToken {
   readonly id: string;
@@ -87,6 +86,11 @@ const CHAIN_MAPPING: Record<
     networkName: "Bitcoin",
     ecosystem: "other",
   },
+  monad: {
+    networkKey: "monad-mainnet",
+    networkName: "Monad",
+    ecosystem: "evm",
+  },
   sui: { networkKey: "sui-mainnet", networkName: "Sui", ecosystem: "other" },
   tron: { networkKey: "tron-mainnet", networkName: "Tron", ecosystem: "other" },
   aptos: {
@@ -97,6 +101,37 @@ const CHAIN_MAPPING: Record<
   bsc: {
     networkKey: "binance-smart-chain",
     networkName: "BNB Chain",
+    ecosystem: "evm",
+  },
+  adi: { networkKey: "adi-mainnet", networkName: "ADI", ecosystem: "evm" },
+  aurora: {
+    networkKey: "aurora-mainnet",
+    networkName: "Aurora",
+    ecosystem: "evm",
+  },
+  bera: {
+    networkKey: "berachain-mainnet",
+    networkName: "Berachain",
+    ecosystem: "evm",
+  },
+  gnosis: {
+    networkKey: "gnosis-mainnet",
+    networkName: "Gnosis",
+    ecosystem: "evm",
+  },
+  plasma: {
+    networkKey: "plasma-mainnet",
+    networkName: "Plasma",
+    ecosystem: "evm",
+  },
+  scroll: {
+    networkKey: "scroll-mainnet",
+    networkName: "Scroll",
+    ecosystem: "evm",
+  },
+  xlayer: {
+    networkKey: "xlayer-mainnet",
+    networkName: "X Layer",
     ecosystem: "evm",
   },
 };
@@ -119,7 +154,8 @@ const EXCLUDED_WRAPPED_SYMBOLS = new Set([
 
 let cachedTokens: DiscoveredToken[] | null = null;
 let cacheExpiresAt = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let refreshInFlight: Promise<DiscoveredToken[]> | undefined;
 
 /**
  * Returns whether a symbol represents a user-facing wrapped derivative.
@@ -128,25 +164,15 @@ export function isUserFacingWrappedToken(
   symbol: string,
   coingeckoId?: string | null,
 ): boolean {
-  const norm = symbol.trim().toUpperCase();
-  if (EXCLUDED_WRAPPED_SYMBOLS.has(norm)) return true;
-  if (coingeckoId && coingeckoId.startsWith("wrapped-")) return true;
-  if (
-    norm.startsWith("W") &&
-    norm.length >= 4 &&
-    norm !== "WAL" &&
-    norm !== "WIF"
-  ) {
-    // Check common wrapped tokens
-    if (["WETH", "WBTC", "WNEAR", "WSOL", "WAVAX", "WBNB"].includes(norm)) {
-      return true;
-    }
-  }
-  return false;
+  const baseSymbol = symbol.split("(")[0]?.trim().toUpperCase() ?? "";
+  return (
+    EXCLUDED_WRAPPED_SYMBOLS.has(baseSymbol) ||
+    (coingeckoId?.toLowerCase().split("-").includes("wrapped") ?? false)
+  );
 }
 
 /**
- * Maps raw 1Click token response into a DiscoveredToken with verified capability flags.
+ * Maps provider metadata without asserting that a particular route is quotable.
  */
 export function normalizeDiscoveredToken(raw: Raw1ClickToken): DiscoveredToken {
   const chainInfo = CHAIN_MAPPING[raw.blockchain.toLowerCase()] ?? {
@@ -171,177 +197,181 @@ export function normalizeDiscoveredToken(raw: Raw1ClickToken): DiscoveredToken {
     standard = "NEP141";
   }
 
-  const isWrapped = isUserFacingWrappedToken(raw.symbol, raw.coingeckoId);
-
-  // Check if token matches one of the 11 verified FLOW custody deployments
-  const custodyMatch = MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => {
+  const nativeNear =
+    raw.assetId === ONE_CLICK_ASSET_MAPPINGS["near-mainnet:NEAR"] &&
+    chainInfo.networkKey === "near-mainnet" &&
+    raw.decimals === 24 &&
+    (raw.contractAddress === "wrap.near" || isNative);
+  const isWrapped =
+    !nativeNear && isUserFacingWrappedToken(raw.symbol, raw.coingeckoId);
+  const custodyMatch = MAINNET_SUPPORTED_DEPLOYMENTS.find((deployment) => {
     if (
-      canonicalizeNetworkId(d.networkKey) !==
-      canonicalizeNetworkId(chainInfo.networkKey)
-    ) {
+      deployment.networkKey !== chainInfo.networkKey ||
+      deployment.decimals !== raw.decimals ||
+      ONE_CLICK_ASSET_MAPPINGS[deployment.id] !== raw.assetId
+    )
       return false;
-    }
-    if (d.symbol.toUpperCase() !== raw.symbol.toUpperCase()) {
-      return false;
-    }
-    if (d.standard === "NATIVE" && isNative) {
-      return true;
-    }
-    if (
-      d.contractIdentifier &&
-      raw.contractAddress &&
-      d.contractIdentifier.toLowerCase() === raw.contractAddress.toLowerCase()
-    ) {
-      return true;
-    }
-    return false;
+    if (deployment.id === "near-mainnet:NEAR") return nativeNear;
+    if (deployment.symbol !== raw.symbol.toUpperCase()) return false;
+    if (deployment.standard === "NATIVE") return isNative;
+    if (!raw.contractAddress || deployment.standard !== standard) return false;
+    return standard === "ERC20"
+      ? deployment.contractIdentifier.toLowerCase() ===
+          raw.contractAddress.toLowerCase()
+      : deployment.contractIdentifier === raw.contractAddress;
   });
 
-  const capabilities: TokenCapability[] = [
-    "DISCOVERABLE_BY_PROVIDER",
-    "QUOTABLE",
-  ];
-
-  if (!isWrapped) {
-    capabilities.push("CAN_PAY_FROM");
-  }
-
   if (custodyMatch) {
-    capabilities.push("CAN_RECEIVE_TO");
-    capabilities.push("CAN_DIRECT_DEPOSIT");
-    capabilities.push("CAN_HOLD_IN_FLOW");
-    capabilities.push("CAN_SEND_FROM_FLOW");
-    if (custodyMatch.id !== "near-mainnet:NEAR") {
-      capabilities.push("CAN_SWAP_TO_NEAR");
-    }
+    const curated = curatedToken(custodyMatch);
+    return {
+      ...curated,
+      capabilities: [...curated.capabilities, "DISCOVERABLE_BY_PROVIDER"],
+      priceUsd:
+        typeof raw.price === "number" &&
+        Number.isFinite(raw.price) &&
+        raw.price > 0
+          ? raw.price
+          : null,
+      priceUpdatedAt:
+        typeof raw.priceUpdatedAt === "string" ? raw.priceUpdatedAt : null,
+    };
   }
-
-  const id = custodyMatch
-    ? custodyMatch.id
-    : `${chainInfo.networkKey}:${raw.symbol}`;
 
   return {
-    id,
+    id: raw.assetId,
     assetId: raw.assetId,
     symbol: raw.symbol,
-    name: custodyMatch
-      ? custodyMatch.name
-      : `${raw.symbol} (${chainInfo.networkName})`,
+    name: raw.symbol,
     decimals: raw.decimals,
-    networkKey: chainInfo.networkKey,
-    networkName: chainInfo.networkName,
-    ecosystem: chainInfo.ecosystem,
+    ...chainInfo,
     standard,
-    contractAddress: raw.contractAddress ?? null,
-    priceUsd: raw.price ?? null,
-    priceUpdatedAt: raw.priceUpdatedAt ?? null,
+    contractAddress: isNative ? null : (raw.contractAddress ?? null),
+    priceUsd:
+      typeof raw.price === "number" &&
+      Number.isFinite(raw.price) &&
+      raw.price > 0
+        ? raw.price
+        : null,
+    priceUpdatedAt:
+      typeof raw.priceUpdatedAt === "string" ? raw.priceUpdatedAt : null,
     isNative,
     isWrapped,
+    capabilities: ["DISCOVERABLE_BY_PROVIDER"],
+  };
+}
+
+function curatedToken(deployment: CatalogTokenDeployment): DiscoveredToken {
+  const isNative = deployment.standard === "NATIVE";
+  const capabilities: TokenCapability[] = [
+    "CAN_RECEIVE_TO",
+    "CAN_DIRECT_DEPOSIT",
+    "CAN_HOLD_IN_FLOW",
+    "CAN_SEND_FROM_FLOW",
+  ];
+  return {
+    id: deployment.id,
+    assetId: ONE_CLICK_ASSET_MAPPINGS[deployment.id]!,
+    symbol: deployment.symbol,
+    name: deployment.name,
+    decimals: deployment.decimals,
+    networkKey: deployment.networkKey,
+    networkName: deployment.networkName,
+    ecosystem: deployment.ecosystem,
+    standard: deployment.standard,
+    contractAddress: isNative ? null : deployment.contractIdentifier,
+    priceUsd: null,
+    priceUpdatedAt: null,
+    isNative,
+    isWrapped: false,
     capabilities,
   };
 }
 
-/**
- * Returns static fallback tokens derived from the 11 verified mainnet deployments
- * if the remote 1Click tokens endpoint is down or unreachable.
- */
 export function getStaticFallbackTokens(): DiscoveredToken[] {
-  return MAINNET_SUPPORTED_DEPLOYMENTS.map((d) => {
-    const isNative = d.standard === "NATIVE";
-    const capabilities: TokenCapability[] = [
-      "DISCOVERABLE_BY_PROVIDER",
-      "QUOTABLE",
-      "CAN_PAY_FROM",
-      "CAN_RECEIVE_TO",
-      "CAN_DIRECT_DEPOSIT",
-      "CAN_HOLD_IN_FLOW",
-      "CAN_SEND_FROM_FLOW",
-    ];
-    if (d.id !== "near-mainnet:NEAR") {
-      capabilities.push("CAN_SWAP_TO_NEAR");
-    }
-
-    return {
-      id: d.id,
-      assetId: d.contractIdentifier,
-      symbol: d.symbol,
-      name: d.name,
-      decimals: d.decimals,
-      networkKey: d.networkKey,
-      networkName: d.networkName,
-      ecosystem: d.ecosystem,
-      standard: d.standard as "NATIVE" | "ERC20" | "SPL" | "NEP141",
-      contractAddress: isNative ? null : d.contractIdentifier,
-      priceUsd: d.kind === "STABLECOIN" ? 1.0 : null,
-      priceUpdatedAt: new Date().toISOString(),
-      isNative,
-      isWrapped: false,
-      capabilities,
-    };
-  });
+  return MAINNET_SUPPORTED_DEPLOYMENTS.filter(
+    (d) => ONE_CLICK_ASSET_MAPPINGS[d.id],
+  ).map(curatedToken);
 }
 
-/**
- * Fetches dynamic tokens from 1Click endpoint with TTL caching and fallback.
- */
+function isProviderToken(input: unknown): input is Raw1ClickToken {
+  if (!input || typeof input !== "object") return false;
+  const token = input as Partial<Raw1ClickToken>;
+  return (
+    typeof token.assetId === "string" &&
+    /^[a-z0-9][a-zA-Z0-9:._-]{2,127}$/.test(token.assetId) &&
+    typeof token.blockchain === "string" &&
+    /^[a-z0-9_-]{1,32}$/i.test(token.blockchain) &&
+    typeof token.symbol === "string" &&
+    token.symbol.trim().length > 0 &&
+    token.symbol.length <= 32 &&
+    typeof token.decimals === "number" &&
+    Number.isInteger(token.decimals) &&
+    token.decimals >= 0 &&
+    token.decimals <= MAX_SUPPORTED_DECIMALS &&
+    (token.contractAddress == null ||
+      typeof token.contractAddress === "string") &&
+    (token.coingeckoId == null || typeof token.coingeckoId === "string")
+  );
+}
+
+async function fetchTokens(): Promise<DiscoveredToken[]> {
+  const curated = getStaticFallbackTokens();
+  try {
+    const response = await fetch("https://1click.chaindefuser.com/v0/tokens", {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(6000),
+      cache: "no-store",
+      redirect: "error",
+    });
+    if (!response.ok) throw new Error("Token registry unavailable");
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) throw new Error("Malformed token registry");
+
+    const tokens = new Map(curated.map((token) => [token.assetId, token]));
+    const reservedIds = new Set(tokens.keys());
+    for (const row of data.filter(isProviderToken)) {
+      const token = normalizeDiscoveredToken(row);
+      if (
+        !reservedIds.has(token.assetId) ||
+        token.capabilities.includes("CAN_HOLD_IN_FLOW")
+      ) {
+        tokens.set(token.assetId, token);
+      }
+    }
+    cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+    return [...tokens.values()];
+  } catch {
+    cacheExpiresAt = Date.now() + 15_000;
+    return cachedTokens ?? curated;
+  }
+}
+
 export async function getDiscoveredTokens(options?: {
   forceRefresh?: boolean;
   excludeWrapped?: boolean;
 }): Promise<DiscoveredToken[]> {
-  const now = Date.now();
-  if (!options?.forceRefresh && cachedTokens && now < cacheExpiresAt) {
-    return options?.excludeWrapped
-      ? cachedTokens.filter((t) => !t.isWrapped)
-      : cachedTokens;
+  if (options?.forceRefresh || !cachedTokens || Date.now() >= cacheExpiresAt) {
+    refreshInFlight ??= fetchTokens()
+      .then((tokens) => {
+        cachedTokens = tokens;
+        return tokens;
+      })
+      .finally(() => {
+        refreshInFlight = undefined;
+      });
+    await refreshInFlight;
   }
+  const tokens = cachedTokens ?? [];
+  return options?.excludeWrapped ? tokens.filter((t) => !t.isWrapped) : tokens;
+}
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch("https://1click.chaindefuser.com/v0/tokens", {
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      throw new Error(`1Click tokens endpoint returned HTTP ${res.status}`);
-    }
-
-    const data: Raw1ClickToken[] = await res.json();
-    if (!Array.isArray(data) || data.length === 0) {
-      throw new Error("Empty or malformed token list returned by 1Click");
-    }
-
-    const normalized = data.map(normalizeDiscoveredToken);
-
-    // Merge in any of our 11 curated deployments if missing from provider
-    const fallback = getStaticFallbackTokens();
-    const existingIds = new Set(normalized.map((t) => t.id));
-    for (const fb of fallback) {
-      if (!existingIds.has(fb.id)) {
-        normalized.push(fb);
-      }
-    }
-
-    cachedTokens = normalized;
-    cacheExpiresAt = now + CACHE_TTL_MS;
-
-    return options?.excludeWrapped
-      ? normalized.filter((t) => !t.isWrapped)
-      : normalized;
-  } catch {
-    // If cache already exists, return it despite error
-    if (cachedTokens) {
-      return options?.excludeWrapped
-        ? cachedTokens.filter((t) => !t.isWrapped)
-        : cachedTokens;
-    }
-    // Otherwise fallback to static verified catalog
-    const fallback = getStaticFallbackTokens();
-    return options?.excludeWrapped
-      ? fallback.filter((t) => !t.isWrapped)
-      : fallback;
-  }
+export async function resolveQuoteAsset(
+  id: string,
+): Promise<DiscoveredToken | null> {
+  const exact = (token: DiscoveredToken) =>
+    token.id === id || token.assetId === id;
+  const curated = getStaticFallbackTokens().find(exact);
+  if (curated) return curated;
+  const tokens = await getDiscoveredTokens({ excludeWrapped: true });
+  return tokens.find(exact) ?? null;
 }

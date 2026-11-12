@@ -11,7 +11,6 @@ import { PortfolioView, type WorkspaceTab } from "./portfolio-view.tsx";
 
 const VALID_VIEWS: ReadonlySet<WorkspaceTab> = new Set([
   "dashboard",
-  "assets",
   "send",
   "receive",
   "request",
@@ -58,6 +57,7 @@ export default async function AccountPage({
         allAccounts={allAccounts}
         initialView={initialView}
         userEmail={actor.email}
+        profileId={actor.userId}
       />
     </main>
   );

@@ -4,9 +4,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { FlowLogo } from "./flow-logo.tsx";
 import { UserAvatar } from "./user-avatar.tsx";
+import {
+  PROFILE_PREFERENCE_EVENT,
+  readProfilePreference,
+} from "./profile-preferences.ts";
 
 export type NavTabId =
-  "dashboard" | "assets" | "send" | "receive" | "request" | "activity";
+  "dashboard" | "send" | "receive" | "request" | "activity";
 
 export interface FloatingNavProps {
   activeTab: NavTabId;
@@ -16,7 +20,7 @@ export interface FloatingNavProps {
   onOpenAssistant?: () => void;
   userEmail?: string;
   userName?: string;
-  onSignOut?: () => void;
+  profileId?: string;
 }
 
 interface NavTabItem {
@@ -41,25 +45,6 @@ const TABS: NavTabItem[] = [
         strokeLinejoin="round"
       >
         <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z" />
-      </svg>
-    ),
-  },
-  {
-    id: "assets",
-    label: "Wallets & Assets",
-    icon: (
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="2" y="5" width="20" height="14" rx="2" />
-        <path d="M16 12h.01" />
       </svg>
     ),
   },
@@ -150,31 +135,39 @@ export function FloatingNav({
   onOpenAssistant,
   userEmail = "user@flow.xyz",
   userName = "Personal",
-  onSignOut,
+  profileId,
 }: FloatingNavProps) {
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentUserName, setCurrentUserName] = useState(userName);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  // Sync custom user name from localStorage
   useEffect(() => {
-    const sync = () => {
-      try {
-        const stored = window.localStorage.getItem("flow-user-name");
-        if (stored && stored.trim().length > 0) {
-          setCurrentUserName(stored);
-        } else {
-          setCurrentUserName(userName);
-        }
-      } catch {
-        setCurrentUserName(userName);
-      }
-    };
+    const sync = () =>
+      setCurrentUserName(readProfilePreference(profileId, "name") || userName);
     sync();
-    window.addEventListener("flow-name-change", sync);
-    return () => window.removeEventListener("flow-name-change", sync);
-  }, [userName]);
+    window.addEventListener(PROFILE_PREFERENCE_EVENT, sync);
+    return () => window.removeEventListener(PROFILE_PREFERENCE_EVENT, sync);
+  }, [profileId, userName]);
+
+  const signOut = async () => {
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      const response = await fetch("/api/auth/sign-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (response.status !== 204) throw new Error("Sign-out failed");
+      window.location.replace("/sign-in");
+    } catch {
+      setSignOutError("Could not sign out. Try again.");
+      setSigningOut(false);
+    }
+  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -293,10 +286,15 @@ export function FloatingNav({
             <button
               type="button"
               onClick={() => setProfileOpen((prev) => !prev)}
+              aria-label="Account menu"
               aria-expanded={profileOpen}
               className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full bg-white dark:bg-[#141414] border border-neutral-200/80 dark:border-neutral-800/80 shadow-xs hover:border-neutral-300 dark:hover:border-neutral-700 transition-all select-none cursor-pointer"
             >
-              <UserAvatar alt={currentUserName} size={28} />
+              <UserAvatar
+                profileId={profileId}
+                alt={currentUserName}
+                size={28}
+              />
               <span className="hidden sm:inline text-xs font-semibold text-neutral-900 dark:text-neutral-100">
                 {currentUserName}
               </span>
@@ -434,58 +432,33 @@ export function FloatingNav({
 
                 <div className="my-1 border-t border-neutral-100 dark:border-neutral-800" />
 
-                {onSignOut ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileOpen(false);
-                      onSignOut();
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors text-left cursor-pointer"
+                <button
+                  type="button"
+                  disabled={signingOut}
+                  onClick={signOut}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors text-left cursor-pointer"
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
                   >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                      <polyline points="16 17 21 12 16 7" />
-                      <line x1="21" y1="12" x2="9" y2="12" />
-                    </svg>
-                    <span>Sign out</span>
-                  </button>
-                ) : (
-                  <form
-                    action="/api/auth/sign-out"
-                    method="POST"
-                    className="block w-full"
-                  >
-                    <button
-                      type="submit"
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors text-left cursor-pointer"
-                    >
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                        <polyline points="16 17 21 12 16 7" />
-                        <line x1="21" y1="12" x2="9" y2="12" />
-                      </svg>
-                      <span>Sign out</span>
-                    </button>
-                  </form>
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  <span>Sign out</span>
+                </button>
+                {signOutError && (
+                  <p role="alert" className="px-3 py-2 text-xs text-red-600">
+                    {signOutError}
+                  </p>
                 )}
               </div>
             )}

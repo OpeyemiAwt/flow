@@ -585,6 +585,7 @@ async function signOut(request: Request): Promise<Response> {
   const headers = privateHeaders();
   for (const key of Object.values(auth.cookies))
     headers.append("set-cookie", cookie(auth, key, "", 0));
+
   return reply(204, undefined, headers);
 }
 

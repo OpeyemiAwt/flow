@@ -1,3 +1,4 @@
+import { formatAtomicToDisplay } from "../domain/atomic-amounts.ts";
 import { type FlowDb } from "../foundation/prisma.ts";
 
 export type NotificationCategory = "all" | "payments" | "accounts" | "system";
@@ -29,6 +30,7 @@ const readNotificationIds = new Set<string>();
 export async function getAccountNotifications(
   db: FlowDb,
   accountId: string,
+  viewer: string,
 ): Promise<AccountNotification[]> {
   const notifications: AccountNotification[] = [];
 
@@ -43,7 +45,7 @@ export async function getAccountNotifications(
         source_asset_symbol: string;
         destination_network: string;
         destination_asset_symbol: string;
-        quoted_destination_atomic_amount: string;
+        settled_atomic_amount: string;
         destination_decimals: number;
         settled_at: Date | null;
         created_at: Date;
@@ -57,12 +59,20 @@ export async function getAccountNotifications(
         pa.source_asset_symbol,
         pr.destination_network,
         pr.destination_asset_symbol,
-        pa.quoted_destination_atomic_amount,
-        pa.source_decimals as destination_decimals,
+        settlement.atomic_amount::text AS settled_atomic_amount,
+        pr.destination_decimals,
         pa.settled_at,
         pa.created_at
       FROM flow.payment_attempts pa
       JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
+      JOIN LATERAL (
+        SELECT pv.atomic_amount
+        FROM flow.payment_verifications pv
+        WHERE pv.payment_attempt_id = pa.id AND pv.verification_type = 'DESTINATION_SETTLEMENT'
+          AND pv.finality = 'FINALIZED' AND pv.evidence_source = 'CHAIN_RPC_DIRECT'
+        ORDER BY pv.verified_at DESC
+        LIMIT 1
+      ) settlement ON true
       WHERE pr.account_id = ${accountId}::uuid
         AND pa.status = 'SETTLED'
       ORDER BY pa.settled_at DESC NULLS LAST, pa.created_at DESC
@@ -71,10 +81,10 @@ export async function getAccountNotifications(
 
     for (const a of completedAttempts) {
       const notifId = `notif_settled_${a.attempt_id}`;
-      const amount = (
-        Number(a.quoted_destination_atomic_amount) /
-        10 ** 6
-      ).toFixed(2);
+      const amount = formatAtomicToDisplay(
+        a.settled_atomic_amount,
+        a.destination_decimals,
+      );
       notifications.push({
         id: notifId,
         accountId,
@@ -83,7 +93,7 @@ export async function getAccountNotifications(
         title: "Payment received",
         description: `+${amount} ${a.destination_asset_symbol} on ${a.destination_network.replace("-mainnet", "")}`,
         link: `/accounts/${accountId}?view=activity`,
-        isRead: readNotificationIds.has(notifId),
+        isRead: readNotificationIds.has(viewer + ":" + notifId),
         createdAt: (a.settled_at ?? a.created_at).toISOString(),
       });
     }
@@ -116,9 +126,9 @@ export async function getAccountNotifications(
         category: "payments",
         type: "PAYMENT_LINK_CREATED",
         title: "Payment link created",
-        description: `"${pr.title}" is active and ready to share.`,
-        link: `/accounts/${accountId}?view=payment-links`,
-        isRead: readNotificationIds.has(notifId),
+        description: `"${pr.title}"`,
+        link: `/accounts/${accountId}?view=request`,
+        isRead: readNotificationIds.has(viewer + ":" + notifId),
         createdAt: pr.created_at.toISOString(),
       });
     }
@@ -154,9 +164,9 @@ export async function getAccountNotifications(
         category: "system",
         type: "SYNC_NOTICE",
         title: "Balance sync notice",
-        description: `${se.network}: ${se.last_error}`,
+        description: `Balance refresh is incomplete on ${se.network}.`,
         link: `/accounts/${accountId}?view=dashboard`,
-        isRead: readNotificationIds.has(notifId),
+        isRead: readNotificationIds.has(viewer + ":" + notifId),
         createdAt: se.observed_at.toISOString(),
       });
     }
@@ -172,12 +182,16 @@ export async function getAccountNotifications(
   return notifications;
 }
 
-export function markNotificationAsRead(notificationId: string): void {
-  readNotificationIds.add(notificationId);
+export function markNotificationAsRead(
+  notificationId: string,
+  viewer = "fixture",
+): void {
+  readNotificationIds.add(viewer + ":" + notificationId);
 }
 
-export function markAllNotificationsAsRead(notificationIds: string[]): void {
-  for (const id of notificationIds) {
-    readNotificationIds.add(id);
-  }
+export function markAllNotificationsAsRead(
+  notificationIds: string[],
+  viewer = "fixture",
+): void {
+  for (const id of notificationIds) markNotificationAsRead(id, viewer);
 }

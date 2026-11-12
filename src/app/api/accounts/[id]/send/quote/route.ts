@@ -1,115 +1,176 @@
-import { NextResponse } from "next/server";
-import { fetchOneClickDryQuote } from "../../../../../../server/providers/one-click-adapter.ts";
-import { resolveOneClickAssetId } from "../../../../../../domain/quote-discovery.ts";
+import { z } from "zod";
+import { parseDisplayToAtomic } from "../../../../../../domain/atomic-amounts.ts";
 import {
-  formatAtomicToDisplay,
-  parseDisplayToAtomic,
-} from "../../../../../../domain/atomic-amounts.ts";
+  getMainnetWalletAddress,
+  isBalanceMatchingDeployment,
+  serializePortfolio,
+} from "../../../../../../domain/portfolio.ts";
+import { isBannedIllustrativeAddress } from "../../../../../../domain/quote-discovery.ts";
+import { MAINNET_SUPPORTED_DEPLOYMENTS } from "../../../../../../domain/supported-assets-catalog.ts";
+import { runtime as appRuntime } from "../../../../../../foundation/prisma.ts";
+import {
+  access,
+  accountId,
+  principal,
+} from "../../../../../../server/accounts.ts";
+import { getAccountBalances } from "../../../../../../server/assets/asset-service.ts";
+import {
+  ApiFailure,
+  api,
+  input,
+  reply,
+} from "../../../../../../server/http.ts";
+import { resolveQuoteAsset } from "../../../../../../server/providers/near-intents-discovery.ts";
+import { quoteOneClickPreview } from "../../../../../../server/providers/one-click-preview.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const schema = z.object({
+  operation: z.enum(["SEND", "CONVERT", "ADD_MONEY"]).default("SEND"),
+  sourceDeploymentId: z.string().trim().min(1).max(128),
+  destinationDeploymentId: z.string().trim().min(1).max(128),
+  sourceDisplayAmount: z.string().trim().min(1).max(116),
+  recipientAddress: z.string().trim().max(128).optional(),
+  refundAddress: z.string().trim().max(128).optional(),
+  requestVersion: z.string().uuid().optional(),
+});
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  try {
-    await params;
-    const body = await request.json();
-    const {
-      sourceDeploymentId,
-      destinationDeploymentId,
-      sourceDisplayAmount,
-      recipientAddress,
-      sourceDecimals = 6,
-      destinationDecimals = 6,
-    } = body;
+  return api(async () => {
+    const id = accountId((await params).id);
+    const { db } = appRuntime();
+    const actor = await principal(db, request.headers);
+    await access(db, actor, id);
+    if (!actor.session.token) throw new ApiFailure(401, "AUTH_REQUIRED");
+    const body = await input(request, schema);
+    const destinationDeployment = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+      (d) => d.id === body.destinationDeploymentId,
+    );
+    if (!destinationDeployment) {
+      throw new ApiFailure(
+        400,
+        "The selected destination asset is unavailable.",
+      );
+    }
 
+    const sourceDeployment = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+      (d) => d.id === body.sourceDeploymentId,
+    );
+    const isAddMoney = body.operation === "ADD_MONEY";
+    if (!isAddMoney && !sourceDeployment) {
+      throw new ApiFailure(
+        400,
+        "Select a supported asset held in this FLOW wallet.",
+      );
+    }
+    const [source, destination] = await Promise.all([
+      resolveQuoteAsset(body.sourceDeploymentId),
+      resolveQuoteAsset(destinationDeployment.id),
+    ]);
+    if (!source || !destination) {
+      throw new ApiFailure(400, "The selected asset pair is unavailable.");
+    }
     if (
-      !sourceDeploymentId ||
-      !destinationDeploymentId ||
-      !sourceDisplayAmount ||
-      !recipientAddress
+      isAddMoney &&
+      (destination.id !== "near-mainnet:NEAR" ||
+        source.networkKey === destination.networkKey)
     ) {
-      return NextResponse.json(
-        { ok: false, error: "Missing required quote parameters" },
-        { status: 400 },
+      throw new ApiFailure(
+        400,
+        "The selected source has no supported cross-chain deposit route to native NEAR.",
       );
     }
 
-    const originAsset = resolveOneClickAssetId(sourceDeploymentId);
-    const destinationAsset = resolveOneClickAssetId(destinationDeploymentId);
+    let amount: bigint;
+    try {
+      amount = parseDisplayToAtomic(body.sourceDisplayAmount, source.decimals);
+    } catch {
+      throw new ApiFailure(
+        400,
+        "Enter a valid amount for the selected source asset.",
+      );
+    }
+    if (amount <= 0n)
+      throw new ApiFailure(400, "Enter an amount greater than zero.");
 
-    if (!originAsset || !destinationAsset) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Selected route is not currently available via NEAR Intents",
-        },
-        { status: 400 },
+    const portfolio = serializePortfolio(
+      await getAccountBalances(db, id, { sessionToken: actor.session.token }),
+    );
+    if (!portfolio.wallet || portfolio.wallet.status !== "ACTIVE") {
+      throw new ApiFailure(400, "An active wallet is required for this quote.");
+    }
+    const recipient =
+      body.operation === "SEND"
+        ? body.recipientAddress
+        : getMainnetWalletAddress(portfolio.wallet, destination.networkKey);
+    const refundTo = isAddMoney
+      ? body.refundAddress
+      : getMainnetWalletAddress(portfolio.wallet, source.networkKey);
+    if (
+      !recipient ||
+      !refundTo ||
+      isBannedIllustrativeAddress(recipient) ||
+      isBannedIllustrativeAddress(refundTo)
+    ) {
+      throw new ApiFailure(
+        400,
+        "A valid recipient and refund address on the selected networks are required.",
       );
     }
 
-    const amountAtomic = parseDisplayToAtomic(
-      sourceDisplayAmount,
-      sourceDecimals,
-    ).toString();
+    if (sourceDeployment && !isAddMoney) {
+      const balance = portfolio.balances.find(
+        (record) =>
+          record.networkAsset.isVerified &&
+          record.networkAsset.status === "ACTIVE" &&
+          isBalanceMatchingDeployment(record, sourceDeployment),
+      );
+      const observedAt = Date.parse(balance?.lastSyncedAt ?? "");
+      if (
+        !balance ||
+        balance.syncStatus !== "SYNCED" ||
+        !Number.isFinite(observedAt) ||
+        Date.now() - observedAt > 120_000 ||
+        balance.finality === "UNKNOWN"
+      ) {
+        throw new ApiFailure(
+          409,
+          "Refresh the source balance before requesting a quote.",
+        );
+      }
+      if (amount > BigInt(balance.atomicBalance)) {
+        throw new ApiFailure(
+          400,
+          "The amount exceeds the available source balance.",
+        );
+      }
+    }
 
-    const dryQuote = await fetchOneClickDryQuote({
-      originAsset,
-      destinationAsset,
+    const result = await quoteOneClickPreview({
+      source,
+      destination,
+      operationId: body.operation + ":" + id,
+      amountAtomic: amount.toString(),
       swapType: "EXACT_INPUT",
-      amountAtomic,
-      refundTo: recipientAddress, // Safe refund fallback
-      recipient: recipientAddress,
-      deadlineSeconds: 900,
+      recipient,
+      refundTo,
+      signal: request.signal,
     });
-
-    if (!dryQuote.ok || !dryQuote.amountOutAtomic) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            dryQuote.errorMessage ||
-            "Failed to obtain NEAR Intents quote for this route",
-        },
-        { status: 400 },
-      );
-    }
-
-    const recipientDisplayAmount = formatAtomicToDisplay(
-      BigInt(dryQuote.amountOutAtomic),
-      destinationDecimals,
-    );
-
-    const sourceNum = Number(sourceDisplayAmount);
-    const destNum = Number(recipientDisplayAmount);
-    const rate = sourceNum > 0 ? (destNum / sourceNum).toFixed(4) : "1.0000";
-
-    return NextResponse.json({
-      ok: true,
-      quote: {
-        amountInAtomic: dryQuote.amountInAtomic,
-        amountOutAtomic: dryQuote.amountOutAtomic,
-        recipientDisplayAmount,
-        rate,
-        estimatedTimeSeconds: dryQuote.timeEstimateSeconds ?? 60,
-        intentFeeDisplay: dryQuote.fees?.withdrawFeeDisplay ?? "0.00",
-        networkCostDisplay: dryQuote.fees?.networkGasEstimateDisplay ?? "$0.00",
-        routeType: "NEAR_INTENTS_CROSS_CHAIN",
-        canExecute: false, // Strict safety guard! Outgoing transfer execution is disabled
-        executionDisabledReason:
-          "Transfer preview only. Outgoing custody signing is disabled by security policy (FLOW_EXECUTION=disabled).",
-      },
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
+    if (!result.ok) {
+      return reply(422, {
         ok: false,
-        error:
-          error instanceof Error ? error.message : "Quote generation failed",
-      },
-      { status: 500 },
-    );
-  }
+        routeStatus: result.routeStatus,
+        error: result.error,
+      });
+    }
+    return reply(200, {
+      ok: true,
+      quote: result.quote,
+      requestVersion: body.requestVersion,
+    });
+  });
 }

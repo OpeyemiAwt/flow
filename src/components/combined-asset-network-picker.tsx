@@ -17,6 +17,7 @@ export interface CombinedAssetNetworkPickerProps {
   readonly className?: string;
   readonly id?: string;
   readonly ariaLabel?: string;
+  readonly inline?: boolean;
 }
 
 export function CombinedAssetNetworkPicker({
@@ -29,6 +30,7 @@ export function CombinedAssetNetworkPicker({
   className = "",
   id,
   ariaLabel,
+  inline = false,
 }: CombinedAssetNetworkPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -107,7 +109,7 @@ export function CombinedAssetNetworkPicker({
         }
         aria-expanded={isOpen}
         className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border text-left transition-all ${
-          isOpen
+          isOpen && !inline
             ? "border-neutral-950 dark:border-white ring-2 ring-neutral-950/10 dark:ring-white/10 bg-white dark:bg-[#1a1a1a]"
             : "border-neutral-200/90 dark:border-neutral-800 bg-white dark:bg-[#141414] hover:border-neutral-300 dark:hover:border-neutral-700 shadow-2xs"
         } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
@@ -128,6 +130,7 @@ export function CombinedAssetNetworkPicker({
                 {selectedDeployment.symbol}
               </div>
               <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+                {inline && "on "}
                 {selectedDeployment.networkName}
               </div>
             </div>
@@ -157,34 +160,38 @@ export function CombinedAssetNetworkPicker({
 
       {/* Popover Dropdown */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-full z-50 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#141414] shadow-xl overflow-hidden animate-in fade-in duration-150">
+        <div
+          className={`mt-2 w-full rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#141414] overflow-hidden animate-in fade-in duration-150 ${inline ? "shadow-xs" : "absolute left-0 top-full z-50 shadow-xl"}`}
+        >
           {/* Search Box */}
-          <div className="p-2.5 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50">
-            <div className="relative flex items-center">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="absolute left-3 text-neutral-400"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search token or network..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl text-xs bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-700 text-neutral-950 dark:text-white placeholder:text-neutral-400 focus:outline-hidden focus:border-neutral-900 dark:focus:border-neutral-400"
-              />
+          {!inline && (
+            <div className="p-2.5 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <div className="relative flex items-center">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="absolute left-3 text-neutral-400"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search token or network..."
+                  className="w-full pl-9 pr-3 py-2 rounded-xl text-xs bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-700 text-neutral-950 dark:text-white placeholder:text-neutral-400 focus:outline-hidden focus:border-neutral-900 dark:focus:border-neutral-400"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Options List */}
           <div className="max-h-64 overflow-y-auto p-1.5 space-y-0.5">
@@ -206,7 +213,9 @@ export function CombinedAssetNetworkPicker({
                     }}
                     className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-colors cursor-pointer ${
                       isSelected
-                        ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-950 dark:text-white"
+                        ? inline
+                          ? "bg-red-50 text-neutral-950"
+                          : "bg-neutral-100 dark:bg-neutral-800 text-neutral-950 dark:text-white"
                         : "hover:bg-neutral-50 dark:hover:bg-neutral-800/60 text-neutral-800 dark:text-neutral-200"
                     }`}
                   >
@@ -220,11 +229,14 @@ export function CombinedAssetNetworkPicker({
                       <div className="min-w-0">
                         <div className="font-display font-semibold text-xs text-neutral-950 dark:text-white leading-tight">
                           {opt.symbol}{" "}
-                          <span className="font-normal text-[11px] text-neutral-500 dark:text-neutral-400">
-                            · {opt.name}
-                          </span>
+                          {!inline && (
+                            <span className="font-normal text-[11px] text-neutral-500 dark:text-neutral-400">
+                              · {opt.name}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                          {inline && "on "}
                           {opt.networkName}
                         </div>
                       </div>

@@ -1,3 +1,4 @@
+import { formatAtomicToDisplay } from "../domain/atomic-amounts.ts";
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
 
 export interface AssistantActionCard {
@@ -34,22 +35,24 @@ export async function processAssistantQuery(params: {
     Array<{
       network: string;
       symbol: string;
-      display_balance: string;
+      atomic_balance: string;
       decimals: number;
     }>
   >`
-    SELECT na.network, a.symbol, wb.display_balance, na.decimals
+    SELECT na.network, COALESCE(na.symbol_override,a.symbol) AS symbol, wb.atomic_balance::text, na.decimals
     FROM flow.wallet_balances wb
     JOIN flow.network_assets na ON na.id = wb.network_asset_id
     JOIN flow.assets a ON a.id = na.asset_id
     JOIN flow.wallets w ON w.id = wb.wallet_id
     WHERE w.account_id = ${params.accountId}::uuid
-      AND wb.display_balance IS NOT NULL
+      AND wb.atomic_balance > 0 AND wb.sync_status = 'SYNCED'
+      AND w.status = 'ACTIVE' AND w.environment = 'mainnet' AND na.is_verified AND na.status = 'ACTIVE'
   `;
 
-  const nonZero = balances.filter(
-    (b) => Number(b.display_balance) > 0 && b.display_balance !== "0",
-  );
+  const nonZero = balances.map((row) => ({
+    ...row,
+    displayBalance: formatAtomicToDisplay(row.atomic_balance, row.decimals),
+  }));
 
   // Intent A: Balance check
   if (
@@ -62,18 +65,14 @@ export async function processAssistantQuery(params: {
       return {
         role: "assistant",
         content:
-          "Your current total verified balance is $0.00. You do not have any funded assets yet. You can use Add Money to deposit supported tokens from Base, Ethereum, Solana, or NEAR.",
+          "No funded balance was found in the synced holdings. Open Home to check wallet and balance status.",
         timestamp: new Date().toISOString(),
       };
     }
 
     const summaryText = nonZero
-      .map((b) => `${b.display_balance} ${b.symbol} on ${b.network}`)
+      .map((b) => `${b.displayBalance} ${b.symbol} on ${b.network}`)
       .join(", ");
-
-    const totalUsd = nonZero
-      .filter((b) => ["USDC", "USDT"].includes(b.symbol.toUpperCase()))
-      .reduce((sum, b) => sum + (Number(b.display_balance) || 0), 0);
 
     return {
       role: "assistant",
@@ -82,11 +81,11 @@ export async function processAssistantQuery(params: {
         type: "BALANCE_SUMMARY",
         title: "Verified Portfolio Holdings",
         data: {
-          totalUsd: `$${totalUsd.toFixed(2)}`,
+          totalUsd: "Price unavailable",
           assets: nonZero.map((b) => ({
             symbol: b.symbol,
             network: b.network,
-            balance: b.display_balance,
+            balance: b.displayBalance,
           })),
         },
         ctaLabel: "View All Assets",
@@ -102,27 +101,18 @@ export async function processAssistantQuery(params: {
     prompt.includes("convert") ||
     prompt.includes("exchange")
   ) {
-    // Extract potential amount or asset
-    const amountMatch = prompt.match(/\b\d+(\.\d+)?\b/);
-    const amount = amountMatch ? amountMatch[0] : "10";
-    const fromSymbol = prompt.includes("sol")
-      ? "SOL"
-      : prompt.includes("eth")
-        ? "ETH"
-        : "USDC";
-    const fromNetwork = fromSymbol === "SOL" ? "Solana" : "Base";
-
     return {
       role: "assistant",
-      content: `I can prepare a cross-chain swap draft for you. This will swap ${amount} ${fromSymbol} on ${fromNetwork} into native NEAR on NEAR Mainnet via NEAR Intents.`,
+      content:
+        "Choose your asset, network and amount in Convert to check for an available quote.",
       card: {
         type: "PREVIEW_SWAP",
         title: "Swap via NEAR Intents",
         data: {
-          fromAsset: `${fromSymbol} (${fromNetwork})`,
+          fromAsset: "Select source asset",
           toAsset: "NEAR (NEAR Mainnet)",
-          amount,
-          route: "NEAR Intents • Best route",
+          amount: "Enter amount",
+          route: "Quote unavailable",
           executionNotice:
             "Preview only. Outgoing custody signing remains disabled by safety policy.",
         },

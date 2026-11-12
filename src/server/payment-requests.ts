@@ -14,18 +14,32 @@ import {
   serializePaymentRequest,
   serializePublicPaymentRequest,
 } from "../domain/payment-requests.ts";
-import type {
-  PaymentAttemptStatus,
-  PaymentDepositInstructions,
+import {
+  isBannedIllustrativeAddress,
+  validateProviderAtomicAmount,
+  type PaymentAttemptStatus,
+  type PaymentDepositInstructions,
 } from "../domain/quote-discovery.ts";
 import {
   CURATED_SUPPORTED_DEPLOYMENTS,
-  getEquivalentNetworkTokens,
+  canonicalizeNetworkId,
 } from "../domain/supported-assets-catalog.ts";
 import { getPrismaClient, runtime, type FlowDb } from "../foundation/prisma.ts";
 import { access, principal } from "./accounts.ts";
 import { clientBudget } from "./auth/limits.ts";
 import { ApiFailure, reply } from "./http.ts";
+import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
+import { validateProviderAddress } from "./providers/one-click-preview.ts";
+
+export function readPaymentWalletAddresses(publicId: string) {
+  return getPrismaClient("worker").$queryRaw<
+    Array<{ address: string; chain_id: string }>
+  >`SELECT wa.address, wa.chain_id
+      FROM flow.wallets w
+      JOIN flow.wallet_addresses wa ON wa.wallet_id = w.id
+      JOIN flow.payment_requests pr ON pr.account_id = w.account_id
+      WHERE pr.public_id = ${publicId} AND w.status = 'ACTIVE'`;
+}
 
 export interface CreatePaymentRequestInput {
   title: string;
@@ -503,6 +517,144 @@ export async function updatePaymentRequest(
   return reply(200, result);
 }
 
+export async function readPaymentAttempt(
+  publicId: string,
+  requestedAttemptId: string | null,
+  merchantAddresses: readonly { address: string }[],
+): Promise<PaymentDepositInstructions | null> {
+  const attemptRows = await getPrismaClient("worker").$queryRaw<
+    Array<{
+      attempt_public_id: string;
+      status: string;
+      deposit_address: string | null;
+      deposit_memo: string | null;
+      deposit_deadline: Date | null;
+      route_type: string;
+      is_provider_verified: boolean;
+      destination_network: string;
+      destination_asset_symbol: string;
+      destination_decimals: number;
+      request_status: string;
+      request_expires_at: Date | null;
+      payer_memo_required: boolean;
+      source_network: string;
+      source_asset_id: string;
+      source_asset_symbol: string;
+      source_decimals: number;
+      quoted_source_atomic_amount: string | null;
+      quoted_destination_atomic_amount: string | null;
+      source_tx_hash: string | null;
+      destination_tx_hash: string | null;
+      settled_at: Date | null;
+      payer_refund_address: string | null;
+    }>
+  >`
+    SELECT
+      pa.attempt_public_id,
+      pa.status::text AS status,
+      pa.deposit_address,
+      pa.deposit_memo,
+      pa.deposit_deadline,
+      pa.route_type,
+      pa.is_provider_verified,
+      pr.destination_network,
+      pr.destination_asset_symbol,
+      pr.destination_decimals,
+      pr.status::text AS request_status,
+      pr.expires_at AS request_expires_at,
+      pr.payer_memo_required,
+      pa.source_network,
+      pa.source_asset_id,
+      pa.source_asset_symbol,
+      pa.source_decimals,
+      pa.quoted_source_atomic_amount::text,
+      pa.quoted_destination_atomic_amount::text,
+      pa.source_tx_hash,
+      pa.destination_tx_hash,
+      pa.settled_at,
+      pa.payer_refund_address
+    FROM flow.payment_attempts pa
+    JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
+    WHERE pr.public_id = ${publicId}
+      AND (
+        (${requestedAttemptId}::text IS NOT NULL AND pa.attempt_public_id = ${requestedAttemptId})
+        OR (
+          ${requestedAttemptId}::text IS NULL
+          AND pa.deposit_address IS NOT NULL
+          AND pa.status IN ('DEPOSIT_COMMITTED', 'DETECTED', 'SETTLING', 'SETTLED', 'EXCEPTION_REFUND_REQUIRED', 'FAILED')
+        )
+      )
+    ORDER BY pa.updated_at DESC
+    LIMIT 1
+  `;
+
+  const att = attemptRows[0];
+  if (!att) return null;
+  const address = att.deposit_address?.trim();
+  const hasVerifiedDeposit =
+    att.status === "DEPOSIT_COMMITTED" &&
+    att.route_type === "CROSS_CHAIN_1CLICK" &&
+    att.is_provider_verified &&
+    att.request_status === "ACTIVE" &&
+    (!att.request_expires_at || +att.request_expires_at > Date.now()) &&
+    !att.source_tx_hash &&
+    Boolean(att.deposit_deadline && +att.deposit_deadline > Date.now()) &&
+    validateProviderAtomicAmount(att.quoted_source_atomic_amount) &&
+    (!att.payer_memo_required || Boolean(att.deposit_memo?.trim())) &&
+    Boolean(
+      address &&
+      !address.startsWith("flow-") &&
+      !isBannedIllustrativeAddress(address) &&
+      merchantAddresses.length > 0 &&
+      !merchantAddresses.some(
+        (wallet) => wallet.address.toLowerCase() === address.toLowerCase(),
+      ),
+    );
+  const source = hasVerifiedDeposit
+    ? await resolveQuoteAsset(att.source_asset_id)
+    : null;
+  const canPay =
+    source &&
+    address &&
+    source.networkKey ===
+      (canonicalizeNetworkId(att.source_network) ?? att.source_network) &&
+    source.decimals === att.source_decimals &&
+    validateProviderAddress(source, address).valid;
+  const sourceDisplayAmount = formatAtomicToDisplay(
+    BigInt(att.quoted_source_atomic_amount ?? "0"),
+    att.source_decimals,
+  );
+  const destDisplayAmount = formatAtomicToDisplay(
+    BigInt(att.quoted_destination_atomic_amount ?? "0"),
+    att.destination_decimals,
+  );
+  return {
+    attemptPublicId: att.attempt_public_id,
+    status: att.status as PaymentAttemptStatus,
+    depositAddress: canPay ? (address ?? "") : "",
+    depositMemo: canPay ? att.deposit_memo : null,
+    depositDeadline: att.deposit_deadline
+      ? new Date(att.deposit_deadline).toISOString()
+      : "",
+    sourceNetwork: att.source_network,
+    sourceAssetId: att.source_asset_id,
+    sourceAssetSymbol: att.source_asset_symbol,
+    sourceDecimals: att.source_decimals,
+    destinationNetwork: att.destination_network,
+    destinationAssetSymbol: att.destination_asset_symbol,
+    requiredAtomicAmount: att.quoted_source_atomic_amount ?? "0",
+    requiredDisplayAmount: sourceDisplayAmount,
+    destinationDisplayAmount: destDisplayAmount,
+    qrData: canPay ? (address ?? "") : "",
+    instructionsNotice: `Payment status: ${att.status}`,
+    isExecutionDisabled: true,
+    sourceTxHash: att.source_tx_hash,
+    destinationTxHash: att.destination_tx_hash,
+    settledAt: att.settled_at ? new Date(att.settled_at).toISOString() : null,
+    payerRefundAddress: att.payer_refund_address ?? null,
+  };
+}
+
 export async function readPublicPaymentRequest(
   request: Request,
   publicId: string,
@@ -539,123 +691,18 @@ export async function readPublicPaymentRequest(
   let recipientAddress: string | null = null;
   let activeAttempt: PaymentDepositInstructions | null = null;
   try {
-    const workerDb = getPrismaClient("worker");
-    const equivalentNetworks = getEquivalentNetworkTokens(
-      row.destination_network,
+    const recipientWalletRows = await readPaymentWalletAddresses(publicId);
+    recipientAddress =
+      recipientWalletRows.find(
+        (rowAddress) =>
+          canonicalizeNetworkId(rowAddress.chain_id) ===
+          row.destination_network,
+      )?.address ?? null;
+    activeAttempt = await readPaymentAttempt(
+      publicId,
+      new URL(request.url).searchParams.get("attempt"),
+      recipientWalletRows,
     );
-    const recipientWalletRows = await workerDb.$queryRaw<
-      Array<{ address: string }>
-    >`
-      SELECT wa.address
-      FROM flow.wallets w
-      JOIN flow.wallet_addresses wa ON wa.wallet_id = w.id
-      JOIN flow.payment_requests pr ON pr.account_id = w.account_id
-      WHERE pr.public_id = ${publicId}
-        AND wa.network = ANY(${equivalentNetworks})
-        AND w.status = 'ACTIVE'
-      LIMIT 1
-    `;
-    if (recipientWalletRows.length > 0 && recipientWalletRows[0]?.address) {
-      recipientAddress = recipientWalletRows[0].address;
-    }
-
-    const url = new URL(request.url);
-    const requestedAttemptId = url.searchParams.get("attempt");
-
-    const attemptRows = await workerDb.$queryRaw<
-      Array<{
-        attempt_public_id: string;
-        status: string;
-        deposit_address: string | null;
-        deposit_memo: string | null;
-        deposit_deadline: Date | null;
-        deposit_instructions: Record<string, unknown> | null;
-        source_network: string;
-        source_asset_id: string;
-        source_asset_symbol: string;
-        source_decimals: number;
-        quoted_source_atomic_amount: string | null;
-        quoted_destination_atomic_amount: string | null;
-        source_tx_hash: string | null;
-        destination_tx_hash: string | null;
-        settled_at: Date | null;
-        payer_refund_address: string | null;
-      }>
-    >`
-      SELECT
-        pa.attempt_public_id,
-        pa.status::text AS status,
-        pa.deposit_address,
-        pa.deposit_memo,
-        pa.deposit_deadline,
-        pa.deposit_instructions,
-        pa.source_network,
-        pa.source_asset_id,
-        pa.source_asset_symbol,
-        pa.source_decimals,
-        pa.quoted_source_atomic_amount::text,
-        pa.quoted_destination_atomic_amount::text,
-        pa.source_tx_hash,
-        pa.destination_tx_hash,
-        pa.settled_at,
-        pa.payer_refund_address
-      FROM flow.payment_attempts pa
-      JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
-      WHERE pr.public_id = ${publicId}
-        AND (
-          (${requestedAttemptId}::text IS NOT NULL AND pa.attempt_public_id = ${requestedAttemptId})
-          OR (
-            ${requestedAttemptId}::text IS NULL
-            AND pa.deposit_address IS NOT NULL
-            AND pa.status IN ('DEPOSIT_COMMITTED', 'DETECTED', 'SETTLING', 'SETTLED', 'EXCEPTION_REFUND_REQUIRED', 'FAILED')
-          )
-        )
-      ORDER BY pa.updated_at DESC
-      LIMIT 1
-    `;
-
-    const att = attemptRows[0];
-    if (att) {
-      const sourceDisplayAmount = formatAtomicToDisplay(
-        BigInt(att.quoted_source_atomic_amount ?? "0"),
-        att.source_decimals,
-      );
-      const destDisplayAmount = formatAtomicToDisplay(
-        BigInt(att.quoted_destination_atomic_amount ?? "0"),
-        row.destination_decimals,
-      );
-      activeAttempt = {
-        attemptPublicId: att.attempt_public_id,
-        status: att.status as PaymentAttemptStatus,
-        depositAddress: att.deposit_address ?? "",
-        depositMemo: att.deposit_memo,
-        depositDeadline: att.deposit_deadline
-          ? new Date(att.deposit_deadline).toISOString()
-          : "",
-        sourceNetwork: att.source_network,
-        sourceAssetId: att.source_asset_id,
-        sourceAssetSymbol: att.source_asset_symbol,
-        sourceDecimals: att.source_decimals,
-        destinationNetwork: row.destination_network,
-        destinationAssetSymbol: row.destination_asset_symbol,
-        requiredAtomicAmount: att.quoted_source_atomic_amount ?? "0",
-        requiredDisplayAmount: sourceDisplayAmount,
-        destinationDisplayAmount: destDisplayAmount,
-        qrData:
-          att.deposit_instructions &&
-          typeof att.deposit_instructions === "object"
-            ? ((att.deposit_instructions.qrData as string) ?? "")
-            : "",
-        instructionsNotice: `Payment status: ${att.status}`,
-        isExecutionDisabled: true,
-        sourceTxHash: att.source_tx_hash,
-        destinationTxHash: att.destination_tx_hash,
-        settledAt: att.settled_at
-          ? new Date(att.settled_at).toISOString()
-          : null,
-        payerRefundAddress: att.payer_refund_address ?? null,
-      };
-    }
   } catch {
     // Non-fatal if worker DB is unavailable in unit context
   }

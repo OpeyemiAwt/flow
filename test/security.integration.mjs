@@ -10,6 +10,7 @@ let app;
 let workerDb;
 let operatorDb;
 const sessionCookie = "__Host-flow-test-session";
+const fixtureSolanaRefund = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw";
 
 before(async () => {
   app = await securityServer();
@@ -43,6 +44,24 @@ after(async () => {
     await app.stop();
   }
 });
+
+async function captureRecoveryScreen(page, name) {
+  const directory = process.env.FLOW_TEST_SCREENSHOT_DIR;
+  if (!directory) return;
+  const original = page.viewportSize();
+  for (const [suffix, viewport] of [
+    ["desktop", { width: 1440, height: 1000 }],
+    ["mobile", { width: 390, height: 844 }],
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.screenshot({
+      path: directory + "/" + name + "-" + suffix + ".png",
+      fullPage: true,
+      animations: "disabled",
+    });
+  }
+  if (original) await page.setViewportSize(original);
+}
 
 async function result(response, status) {
   const body = await app.inspect(response);
@@ -1450,32 +1469,21 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
     await page.goto(personalDashboardUrl);
     await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
 
-    // 4. Wallets & Supported Assets view
-    await page.getByRole("button", { name: "Wallets & Assets" }).click();
-    await page
-      .getByRole("heading", {
-        name: "Wallets & Supported Assets",
-      })
-      .waitFor();
-    const registryText = await page.locator("table").innerText();
-    for (const token of ["ETH", "USDC", "USDT", "SOL", "NEAR"]) {
-      assert.ok(
-        registryText.includes(token),
-        `Expected curated registry to include ${token}`,
-      );
-    }
-    for (const forbidden of ["cbETH", "mSOL", "JUP", "wNEAR", "USDC.e"]) {
-      assert.ok(
-        !registryText.includes(forbidden),
-        `Forbidden non-canonical token ${forbidden} found in registry`,
-      );
-    }
-    await snap(page, "05-wallets-and-assets.png");
-    await page.setViewportSize({ width: 390, height: 844 });
-    await snap(page, "05-wallets-and-assets-mobile.png");
-    await page.setViewportSize({ width: 1440, height: 900 });
+    assert.equal(
+      await page.getByRole("button", { name: "Wallets & Assets" }).count(),
+      0,
+    );
+    await page.goto(personalDashboardUrl + "?view=assets");
+    await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
+    assert.equal(
+      await page
+        .getByRole("heading", { name: "Wallets & Supported Assets" })
+        .count(),
+      0,
+    );
 
     // 5. Send & Convert view (Sender Source vs Recipient Settlement + Address Validation)
+    await page.goto(personalDashboardUrl);
     await page
       .getByRole("button", { name: /^Send$/ })
       .first()
@@ -1703,11 +1711,6 @@ test("m5 phase 1: payment requests & public guest checkout — authorization, cr
     viewport: { width: 1440, height: 900 },
   });
 
-  const brainArtifactDir =
-    process.env.FLOW_CAPTURE_SCREENSHOTS_DIR ||
-    "/Users/user/.gemini/antigravity/brain/799cfa99-869c-4a92-b3b0-b81a38ecce2b";
-  const canCapture = Boolean(brainArtifactDir && existsSync(brainArtifactDir));
-
   try {
     const page = await ctx.newPage();
     const payUrl = `${app.origin}/pay/${created.publicId}`;
@@ -1726,45 +1729,17 @@ test("m5 phase 1: payment requests & public guest checkout — authorization, cr
         .first()
         .isVisible(),
     );
-    assert.ok(await page.getByText("Self-Custody Wallet").first().isVisible());
-    assert.ok(await page.getByText("Exchange Withdrawal").first().isVisible());
-
-    // Capture wallet mode screenshot if directory exists
-    if (canCapture) {
-      await page.screenshot({
-        path: `${brainArtifactDir}/14-public-guest-checkout-wallet.png`,
-      });
-      await page.setViewportSize({ width: 390, height: 844 });
-      await page.screenshot({
-        path: `${brainArtifactDir}/14-public-guest-checkout-wallet-mobile.png`,
-      });
-      await page.setViewportSize({ width: 1440, height: 900 });
-    }
-
-    // Switch to Exchange Withdrawal mode
-    await page.getByRole("button", { name: /Exchange Withdrawal/i }).click();
-    assert.ok(
+    assert.equal(
       await page
-        .getByText(/Self-custody refund address required/i)
-        .first()
-        .isVisible(),
+        .getByRole("button", { name: "Pay Now (Payment Execution Disabled)" })
+        .count(),
+      0,
     );
-    assert.ok(
-      await page
-        .getByPlaceholder("Enter 0x... or Solana Base58 or NEAR account")
-        .isVisible(),
-    );
-
-    // Switch ecosystem to Solana
-    await page.getByRole("button", { name: /Solana/i }).click();
-    assert.ok(await page.getByText("SOL").first().isVisible());
-
-    // Capture exchange mode screenshot if directory exists
-    if (canCapture) {
-      await page.screenshot({
-        path: `${brainArtifactDir}/15-public-guest-checkout-exchange.png`,
-      });
-    }
+    await page
+      .getByText(
+        /Quote unavailable. This payment request cannot accept payments/,
+      )
+      .waitFor();
   } finally {
     await ctx.close();
   }
@@ -1773,6 +1748,7 @@ test("m5 phase 1: payment requests & public guest checkout — authorization, cr
 test("security: M5 Phase 2 real route discovery, read-only quotes, refund validation, and public checkout integration", async () => {
   const owner = await person("payment-owner-m5p2@example.com");
   const unauth = await app.createClient();
+  await quoteFixtureWallet(owner.account.id);
 
   // 1. Create a Base Mainnet payment request for 10.00 USDC
   const createRes = await owner.client.post(
@@ -1801,6 +1777,7 @@ test("security: M5 Phase 2 real route discovery, read-only quotes, refund valida
     data: {
       sourceDeploymentId: "solana-mainnet:SOL",
       payerMode: "WALLET",
+      refundAddress: fixtureSolanaRefund,
     },
   });
   assert.equal(solQuoteRes.status(), 200);
@@ -1859,17 +1836,14 @@ test("security: M5 Phase 2 real route discovery, read-only quotes, refund valida
       data: {
         sourceDeploymentId: "solana-mainnet:SOL",
         payerMode: "EXCHANGE",
-        refundAddress: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+        refundAddress: fixtureSolanaRefund,
       },
     },
   );
   assert.equal(validExchangeQuoteRes.status(), 200);
   const validExchangeQuote = await validExchangeQuoteRes.json();
   assert.equal(validExchangeQuote.payerMode, "EXCHANGE");
-  assert.equal(
-    validExchangeQuote.refundAddress,
-    "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-  );
+  assert.equal(validExchangeQuote.refundAddress, fixtureSolanaRefund);
 
   // 4. Test Direct Transfer Route (Base Mainnet USDC -> Base Mainnet USDC)
   const directQuoteRes = await unauth.post(
@@ -1920,75 +1894,48 @@ test("security: M5 Phase 2 real route discovery, read-only quotes, refund valida
     viewport: { width: 1440, height: 900 },
   });
 
-  const brainArtifactDir =
-    process.env.FLOW_CAPTURE_SCREENSHOTS_DIR ||
-    "/Users/user/.gemini/antigravity/brain/799cfa99-869c-4a92-b3b0-b81a38ecce2b";
-  const canCapture = Boolean(brainArtifactDir && existsSync(brainArtifactDir));
-
   try {
     const page = await ctx.newPage();
-    const payUrl = `${app.origin}/pay/${created.publicId}`;
-
-    await page.goto(payUrl);
+    await page.goto(app.origin + "/pay/" + created.publicId);
     await page
       .getByRole("heading", { name: "Cross-Chain Services Retainer" })
       .waitFor();
-
-    // Select Solana ecosystem
-    await page.getByRole("button", { name: /Solana/i }).click();
-    await page.getByText("SOL").first().click();
-
-    // Wait for Quote Summary card to render
-    await page.getByText("Quote Summary").waitFor();
-    await page.waitForTimeout(1500);
-
-    // Verify disabled action button
-    assert.ok(
+    await page.getByRole("button", { name: /pay with any token/i }).click();
+    await page
+      .getByRole("button", { name: /\bSOL\b.*Solana/i })
+      .first()
+      .click();
+    const refund = page.getByLabel("Payer refund address");
+    await refund.fill(fixtureSolanaRefund);
+    await page.getByText(/You send .*SOL on Solana/).waitFor();
+    assert.equal(
       await page
         .getByRole("button", { name: "Pay Now (Payment Execution Disabled)" })
         .isDisabled(),
+      true,
     );
-
-    // Capture screenshot: 16-public-guest-checkout-quote.png
-    if (canCapture) {
-      await page.screenshot({
-        path: `${brainArtifactDir}/16-public-guest-checkout-quote.png`,
-      });
-    }
-
-    // Switch to Exchange mode and verify mandatory refund validation
     await page.getByRole("button", { name: /Exchange Withdrawal/i }).click();
-    assert.ok(
-      await page
-        .getByText("A valid self-custody refund address is required")
-        .first()
-        .isVisible(),
+    const exchangeRefund = page.getByLabel(
+      /Self-custody refund address required/i,
     );
+    await exchangeRefund.fill("0x1234567890123456789012345678901234567890");
+    await page
+      .getByText(/Solana requires a valid Base58 public key/i)
+      .first()
+      .waitFor();
 
-    // Type invalid EVM address for Solana refund
-    const refundInput = page.getByPlaceholder(
-      "Enter 0x... or Solana Base58 or NEAR account",
-    );
-    await refundInput.fill("0x1234567890123456789012345678901234567890");
-    await page.waitForTimeout(300);
-    assert.ok(
-      await page
-        .getByText("Solana refund address must be a valid Base58 public key")
-        .isVisible(),
-    );
-
-    // Now switch to Ethereum & Base and select USDT (unsupported pair in 1Click solvers)
-    await page.getByRole("button", { name: /Ethereum & Base/i }).click();
-    await page.getByText("USDT").first().click();
-    await page.waitForTimeout(800);
-    assert.ok(await page.getByText("UNSUPPORTED PAIR").isVisible());
-
-    // Capture screenshot: 17-public-guest-checkout-unsupported.png
-    if (canCapture) {
-      await page.screenshot({
-        path: `${brainArtifactDir}/17-public-guest-checkout-unsupported.png`,
-      });
-    }
+    await page.getByRole("button", { name: "Pay with stablecoins" }).click();
+    await page.getByRole("button", { name: /USDC on Base/i }).click();
+    await page
+      .getByRole("button", { name: /USDT.*Ethereum/i })
+      .first()
+      .click();
+    await exchangeRefund.fill("0x" + "3".repeat(40));
+    await page
+      .getByText("The provider does not support the selected asset pair.", {
+        exact: true,
+      })
+      .waitFor();
   } finally {
     await ctx.close();
   }
@@ -1997,6 +1944,7 @@ test("security: M5 Phase 2 real route discovery, read-only quotes, refund valida
 test("security: M5 Phase 3 quote integrity, precision overflow, token confusion, optional amount enforcement, and lifecycle boundaries", async () => {
   const owner = await person("payment-owner-m5p3@example.com");
   const unauth = await app.createClient();
+  await quoteFixtureWallet(owner.account.id);
 
   // 1. Create an OPTIONAL amount payment request
   const optCreateRes = await owner.client.post(
@@ -2075,6 +2023,7 @@ test("security: M5 Phase 3 quote integrity, precision overflow, token confusion,
         sourceDeploymentId: "solana-mainnet:SOL",
         payerMode: "WALLET",
         payerAmount: "25.0",
+        refundAddress: fixtureSolanaRefund,
       },
     },
   );
@@ -2181,7 +2130,7 @@ test("security: M5 Phase 4 deposit commitment, instruction issuance, polling, an
     `INSERT INTO flow.wallet_addresses (
       id, wallet_id, network, chain_id, address, public_key
     ) VALUES (
-      gen_random_uuid(), $1::uuid, 'base-mainnet', '8453', '0xdest_wallet', 'pk_dest_1'
+      gen_random_uuid(), $1::uuid, 'base-mainnet', '8453', '0x4242424242424242424242424242424242424242', 'pk_dest_1'
     )`,
     [ownerWalletId],
   );
@@ -2191,6 +2140,7 @@ test("security: M5 Phase 4 deposit commitment, instruction issuance, polling, an
     data: {
       sourceDeploymentId: "solana-mainnet:SOL",
       payerMode: "WALLET",
+      refundAddress: fixtureSolanaRefund,
     },
   });
   assert.equal(quoteRes.status(), 200);
@@ -2339,7 +2289,7 @@ test("security: M5 Phase 4 deposit commitment, instruction issuance, polling, an
   await workerDb.query(
     `SELECT * FROM flow.record_payment_verification(
       $1, 'DESTINATION_SETTLEMENT', 'base-mainnet', $2,
-      '0xsolver_dest', '0xdest_wallet',
+      '0xsolver_dest', '0x4242424242424242424242424242424242424242',
       'base-mainnet:USDC', NULL, 50000000,
       456789, '0xblock_dest', 'FINALIZED', NULL, 'CHAIN_RPC_DIRECT', '{"verified": true}'::jsonb
     )`,
@@ -2412,12 +2362,7 @@ test("security: M5 Phase 4 deposit commitment, instruction issuance, polling, an
   assert.ok(polled.sourceTxHash);
   assert.ok(polled.destinationTxHash);
 
-  // 12. End-to-end Browser Lifecycle Demonstration & Screenshot Capture
-  const brainArtifactDir =
-    process.env.FLOW_CAPTURE_SCREENSHOTS_DIR ||
-    "/Users/user/.gemini/antigravity/brain/799cfa99-869c-4a92-b3b0-b81a38ecce2b";
-  const canCapture = Boolean(brainArtifactDir && existsSync(brainArtifactDir));
-
+  // Browser coverage for a dry preview and the independently verified receipt.
   const demoReqRes = await owner.client.post(
     `/api/accounts/${owner.account.id}/payment-requests`,
     {
@@ -2447,39 +2392,36 @@ test("security: M5 Phase 4 deposit commitment, instruction issuance, polling, an
       .getByRole("heading", { name: "Global Infrastructure Services" })
       .waitFor();
 
-    // Select Solana ecosystem and SOL
-    await page.getByRole("button", { name: /Solana/i }).click();
-    await page.getByText("SOL").first().click();
+    await page.getByRole("button", { name: /pay with any token/i }).click();
+    await page
+      .getByRole("button", { name: /\bSOL\b.*Solana/i })
+      .first()
+      .click();
+    await page.getByLabel("Payer refund address").fill(fixtureSolanaRefund);
+    await page.getByText(/You send .*SOL on Solana/).waitFor();
+    const proceed = page.getByRole("button", {
+      name: "Pay Now (Payment Execution Disabled)",
+    });
+    assert.equal(await proceed.isDisabled(), true);
 
-    // Wait for verified quote preview
-    await page.getByText("Pay Now (Payment Execution Disabled)").waitFor();
-    await page.waitForTimeout(500);
-
-    // Capture screenshot: 18-public-guest-checkout-deposit.png
-    if (canCapture) {
-      await page.screenshot({
-        path: `${brainArtifactDir}/18-public-guest-checkout-deposit.png`,
-      });
-    }
-
-    // Update invoice status to COMPLETED via worker settlement to demonstrate settled state
+    // A request label alone is insufficient evidence for a paid receipt.
     await workerDb.query(
-      `UPDATE flow.payment_requests SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP WHERE public_id = $1`,
+      "UPDATE flow.payment_requests SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP WHERE public_id = $1",
       [demoReq.publicId],
     );
-
-    // Reload page to view completed invoice
     await page.reload();
+    await page
+      .getByText(
+        /Quote unavailable. This payment request cannot accept payments/,
+      )
+      .waitFor();
+    assert.equal(await page.getByText("Payment Completed!").count(), 0);
+
+    await page.goto(app.origin + "/pay/" + paymentReq.publicId);
     await page.getByText("Payment Completed!").waitFor();
     await page.getByText(/Paid & Settled/i).waitFor();
-    await page.waitForTimeout(500);
-
-    // Capture screenshot: 19-public-guest-checkout-settled.png
-    if (canCapture) {
-      await page.screenshot({
-        path: `${brainArtifactDir}/19-public-guest-checkout-settled.png`,
-      });
-    }
+    assert.equal(await proceed.count(), 0);
+    await captureRecoveryScreen(page, "flow-settled-receipt");
   } finally {
     await ctx.close();
   }
@@ -2701,8 +2643,13 @@ test("phase 6 end-to-end acceptance scenarios A–G: live OutLayer wallet provis
   // =========================================================================
   // SCENARIO C, D, E, F — Payment Link, Quote Lifecycle, Active Attempt Recovery & Exceptions
   // =========================================================================
+  const settlementWorkspace = await business(
+    reloginClient,
+    "Nova Labs Mainnet Settlement",
+  );
+  await quoteFixtureWallet(settlementWorkspace.id);
   const createPr = await reloginClient.post(
-    `/api/accounts/${bizId}/payment-requests`,
+    `/api/accounts/${settlementWorkspace.id}/payment-requests`,
     {
       data: {
         title: "Q4 Protocol Audit",
@@ -2735,7 +2682,7 @@ test("phase 6 end-to-end acceptance scenarios A–G: live OutLayer wallet provis
     data: {
       sourceDeploymentId: "solana-mainnet:SOL",
       payerMode: "EXCHANGE",
-      refundAddress: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+      refundAddress: fixtureSolanaRefund,
     },
   });
   assert.equal(validQuoteRes.status(), 200);
@@ -2749,13 +2696,14 @@ test("phase 6 end-to-end acceptance scenarios A–G: live OutLayer wallet provis
       payment_request_id, attempt_public_id, payer_mode,
       source_network, source_asset_id, source_asset_symbol, source_decimals,
       route_type, route_status, swap_type, quoted_source_atomic_amount, quoted_destination_atomic_amount,
-      payer_refund_address, deposit_address, quote_expires_at,
+      payer_refund_address, deposit_address, deposit_deadline, quote_expires_at,
       status, verification_tier, is_provider_verified
     ) VALUES (
       $1::uuid, $2, 'WALLET',
       'solana-mainnet', 'solana-mainnet:SOL', 'SOL', 9,
       'CROSS_CHAIN_1CLICK', 'SUPPORTED_AND_QUOTABLE', 'EXACT_OUTPUT', 680000000, 100000000,
       '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU', '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin',
+      CURRENT_TIMESTAMP + INTERVAL '15 minutes',
       CURRENT_TIMESTAMP + INTERVAL '15 minutes',
       'DEPOSIT_COMMITTED', 'PROVIDER_VERIFIED', true
     )`,
@@ -2772,6 +2720,20 @@ test("phase 6 end-to-end acceptance scenarios A–G: live OutLayer wallet provis
     pubReadJson.activeAttempt.depositAddress,
     "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
   );
+
+  await workerDb.query(
+    "UPDATE flow.payment_attempts SET deposit_deadline = now() - interval '1 second' WHERE attempt_public_id = $1",
+    [recoveryAttemptId],
+  );
+  const expiredRead = await result(
+    await guest.get(
+      "/api/pay/" + pr.publicId + "/attempt/" + recoveryAttemptId,
+    ),
+    200,
+  );
+  assert.equal(expiredRead.depositAddress, "");
+  assert.equal(expiredRead.depositMemo, null);
+  assert.equal(expiredRead.qrData, "");
 
   // Scenario F: Transition attempt to EXCEPTION_REFUND_REQUIRED and verify truthful status recovery
   await workerDb.query(
@@ -3686,29 +3648,25 @@ test("security: scoped single-use rehearsal authorization lifecycle, privilege s
       "Test-cleanup setting must NOT bypass production immutability",
     );
 
-    // 11. Legitimate Commitment: Valid single-use authorization allows commitment
-    const commitSuccessRes = await unauth.post(
+    // A rehearsal authorization cannot bypass the public execution switch.
+    const disabledCommit = await unauth.post(
       `/api/pay/${paymentReq.publicId}/commit`,
-      {
-        data: { attemptPublicId: attemptPublicId1 },
-      },
+      { data: { attemptPublicId: attemptPublicId1 } },
     );
-    assert.equal(commitSuccessRes.status(), 200);
-    const instructions = await commitSuccessRes.json();
-    assert.equal(instructions.status, "DEPOSIT_COMMITTED");
-    assert.ok(instructions.depositAddress);
-    assert.ok(instructions.depositDeadline);
-
-    // 12. Verify Authorization was Atomically Consumed in Database
-    const consumedAuthRows = await workerDb.query(
+    assert.equal(disabledCommit.status(), 403);
+    assert.match(
+      (await disabledCommit.json()).error,
+      /PAYMENT_EXECUTION_DISABLED/,
+    );
+    const unusedAuthorization = await workerDb.query(
       `SELECT consumed_at, consumed_by_attempt_id
        FROM flow.payment_rehearsal_authorizations
        WHERE id = $1`,
       [validAuthId],
     );
-    assert.ok(consumedAuthRows.rows[0].consumed_at !== null);
+    assert.equal(unusedAuthorization.rows[0].consumed_at, null);
+    assert.equal(unusedAuthorization.rows[0].consumed_by_attempt_id, null);
 
-    // 13. Adversarial Replay Check: Second attempt CANNOT reuse consumed authorization
     const quoteRes2 = await unauth.post(
       `/api/pay/${paymentReq.publicId}/quote`,
       {
@@ -4060,4 +4018,653 @@ test("security: 1Click payment deadline, rate guarantee vs deposit address inact
     "Public status must reflect reconciled committed atomic amount",
   );
   assert.equal(pollJson.destinationTxHash, destTxHash);
+  const history = await result(
+    await merchant.client.get(
+      "/api/accounts/" + merchant.account.id + "/activities",
+    ),
+    200,
+  );
+  const matching = history.activities.filter(
+    (activity) => activity.txHash === destTxHash,
+  );
+  assert.equal(matching.length, 1);
+  assert.equal(matching[0].activityType, "FLOW_CROSS_CHAIN_SETTLEMENT");
+  assert.equal(matching[0].atomicAmount, "1000000");
+  if (process.env.FLOW_TEST_SCREENSHOT_DIR) {
+    const context = await app.browser.newContext({
+      ignoreHTTPSErrors: true,
+      storageState: await merchant.client.storageState(),
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto(
+        app.origin + "/accounts/" + merchant.account.id + "?view=activity",
+      );
+      await page
+        .getByRole("heading", { name: "Activity", exact: true })
+        .waitFor();
+      await page
+        .getByText("Payment Settled", { exact: true })
+        .first()
+        .waitFor();
+      await captureRecoveryScreen(page, "flow-activity");
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+async function quoteFixtureWallet(accountId) {
+  const walletId = randomUUID();
+  const baseAddress = "0x" + randomBytes(20).toString("hex");
+  const nearAddress = randomBytes(32).toString("hex");
+  const ethAddress = "0x" + randomBytes(20).toString("hex");
+  await workerDb.query(
+    "INSERT INTO flow.wallets (id,account_id,provider,environment,provider_wallet_id,near_account_id,encrypted_credential,key_id,key_digest,status,policy_state) VALUES ($1,$2,'OUTLAYER','mainnet',$3,$4,'fixture-envelope','v1','fixture-digest','ACTIVE','stored')",
+    [walletId, accountId, "fixture-" + walletId, nearAddress],
+  );
+  await workerDb.query(
+    "INSERT INTO flow.wallet_addresses (wallet_id,network,chain_id,address,public_key) VALUES ($1,'base','8453',$2,'fixture-pubkey'),($1,'near','near-mainnet',$3,'fixture-pubkey'),($1,'ethereum','1',$4,'fixture-pubkey')",
+    [walletId, baseAddress, nearAddress, ethAddress],
+  );
+  return { walletId, baseAddress, nearAddress, ethAddress };
+}
+
+test("FLOW preview checkout and Add Money use bound dry quotes and hide expired payment controls", async () => {
+  const owner = await person(
+    "preview-merchant-" + randomUUID() + "@example.test",
+  );
+  const guest = await app.createClient();
+  const wallet = await quoteFixtureWallet(owner.account.id);
+  const invoice = await post(
+    owner.client,
+    "/api/accounts/" + owner.account.id + "/payment-requests",
+    {
+      title: "Preview invoice",
+      destinationNetwork: "base-mainnet",
+      destinationAssetId: "base-mainnet:USDC",
+      amountMode: "FIXED",
+      requestedAmount: "10",
+      expiresInHours: 24,
+    },
+    201,
+  );
+  const quotePath = "/api/pay/" + invoice.publicId + "/quote";
+  for (const [id, network, refundAddress] of [
+    ["nep141:sui.omft.near", "sui-mainnet", "0x" + "a".repeat(64)],
+    [
+      "nep141:tron.omft.near",
+      "tron-mainnet",
+      "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+    ],
+    [
+      "nep245:v2_1.omni.hot.tg:143_11111111111111111111",
+      "monad-mainnet",
+      "0x" + "3".repeat(40),
+    ],
+  ]) {
+    const quote = await post(
+      guest,
+      quotePath,
+      { sourceDeploymentId: id, payerMode: "WALLET", refundAddress },
+      200,
+    );
+    assert.equal(quote.routeStatus, "SUPPORTED_AND_QUOTABLE");
+    assert.equal(quote.identity.originAsset, id);
+    assert.equal(quote.identity.sourceNetwork, network);
+    assert.equal(quote.identity.refundTo, refundAddress);
+    assert.equal(quote.identity.recipient, wallet.baseAddress);
+    assert.equal(quote.identity.swapType, "EXACT_OUTPUT");
+    assert.equal(quote.destinationAtomicAmount, "10000000");
+    assert.equal(quote.depositAddress, undefined);
+    assert.equal(quote.isExecutionDisabled, true);
+  }
+
+  const version = randomUUID();
+  const sameNetworkSwap = await post(
+    guest,
+    quotePath,
+    {
+      sourceDeploymentId: "base-mainnet:ETH",
+      payerMode: "WALLET",
+      refundAddress: "0x" + "3".repeat(40),
+      requestVersion: version,
+    },
+    200,
+  );
+  assert.equal(sameNetworkSwap.routeType, "CROSS_CHAIN_1CLICK");
+  assert.equal(sameNetworkSwap.routeStatus, "SUPPORTED_AND_QUOTABLE");
+  assert.equal(sameNetworkSwap.identity.sourceNetwork, "base-mainnet");
+  assert.equal(sameNetworkSwap.identity.destinationNetwork, "base-mainnet");
+  assert.notEqual(
+    sameNetworkSwap.identity.originAsset,
+    sameNetworkSwap.identity.destinationAsset,
+  );
+  assert.equal(sameNetworkSwap.requestVersion, version);
+  assert.equal(sameNetworkSwap.depositAddress, undefined);
+  assert.equal(sameNetworkSwap.depositDeadline, undefined);
+  const observedAttempt = await result(
+    await guest.get(
+      `/api/pay/${invoice.publicId}/attempt/${sameNetworkSwap.attemptPublicId}`,
+    ),
+    200,
+  );
+  assert.equal(observedAttempt.status, "QUOTE_OBSERVED");
+  assert.equal(observedAttempt.depositAddress, "");
+  assert.equal(observedAttempt.qrData, "");
+
+  const bitcoin = await post(
+    guest,
+    quotePath,
+    {
+      sourceDeploymentId: "nep141:btc.omft.near",
+      payerMode: "WALLET",
+      refundAddress: "0x" + "3".repeat(40),
+    },
+    200,
+  );
+  assert.equal(bitcoin.routeStatus, "UNSUPPORTED_PAIR");
+  assert.equal(bitcoin.statusMessage, "Route unavailable");
+  assert.equal(bitcoin.sourceDisplayAmount, undefined);
+
+  const bad = await post(
+    guest,
+    quotePath,
+    { sourceDeploymentId: "SUI", payerMode: "WALLET" },
+    200,
+  );
+  assert.equal(bad.routeStatus, "UNSUPPORTED_PAIR");
+  assert.equal(bad.sourceDisplayAmount, undefined);
+  await post(
+    guest,
+    quotePath,
+    {
+      sourceDeploymentId: "nep141:sui.omft.near",
+      payerMode: "WALLET",
+      refundAddress: "0x" + "3".repeat(40),
+    },
+    400,
+  );
+
+  const add = await post(
+    owner.client,
+    "/api/accounts/" + owner.account.id + "/send/quote",
+    {
+      operation: "ADD_MONEY",
+      sourceDeploymentId: "ethereum-mainnet:ETH",
+      destinationDeploymentId: "near-mainnet:NEAR",
+      sourceDisplayAmount: "10",
+      refundAddress: "0x" + "3".repeat(40),
+    },
+    200,
+  );
+  assert.equal(add.quote.identity.recipient, wallet.nearAddress);
+  assert.equal(add.quote.identity.refundTo, "0x" + "3".repeat(40));
+  assert.equal(add.quote.identity.destinationAsset, "nep141:wrap.near");
+  assert.equal(add.quote.identity.destinationNetwork, "near-mainnet");
+  assert.equal(
+    add.quote.recipientDisplayAmount,
+    "5853.077195269072290382299549",
+  );
+  assert.equal(add.quote.canExecute, false);
+  assert.equal(add.quote.depositAddress, undefined);
+
+  const browser = await app.browser.newContext({
+    ignoreHTTPSErrors: true,
+    viewport: { width: 1440, height: 1000 },
+  });
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(12_000);
+    await page.goto(app.origin + "/pay/" + invoice.publicId);
+    const proceed = page.getByRole("button", {
+      name: "Pay Now (Payment Execution Disabled)",
+    });
+    await proceed.waitFor();
+    assert.equal(await proceed.isDisabled(), true);
+    if (process.env.FLOW_TEST_SCREENSHOT_DIR) {
+      const basePicker = page.getByRole("button", {
+        name: "USDC on Base",
+        exact: true,
+      });
+      await basePicker.click();
+      await captureRecoveryScreen(page, "flow-checkout-stablecoins");
+      await basePicker.click();
+      for (const [symbol, network, refundAddress] of [
+        ["SOL", "Solana", fixtureSolanaRefund],
+        ["NEAR", "NEAR Mainnet", "fixture.refund.near"],
+      ]) {
+        await page.getByRole("button", { name: /pay with any token/i }).click();
+        await page
+          .getByRole("button", {
+            name: new RegExp("\\b" + symbol + "\\b.*" + network, "i"),
+          })
+          .first()
+          .click();
+        await page.getByLabel("Payer refund address").fill(refundAddress);
+        await page.getByText(/Provider preview ·/).waitFor();
+        await captureRecoveryScreen(
+          page,
+          "flow-checkout-" + symbol.toLowerCase(),
+        );
+      }
+    }
+    await page.getByRole("button", { name: /pay with any token/i }).click();
+    const suiOption = page.getByRole("button", { name: /\bSUI\b/i }).first();
+    await suiOption.waitFor();
+    await captureRecoveryScreen(page, "flow-any-token-picker");
+    await suiOption.click();
+    await page.getByLabel("Payer refund address").fill("0x" + "a".repeat(64));
+    await page.getByText(/Provider preview ·/).waitFor();
+    assert.equal(
+      await page.getByText(wallet.baseAddress, { exact: true }).count(),
+      0,
+    );
+    await captureRecoveryScreen(page, "flow-checkout-preview");
+    const lateRefund = "0x" + "b".repeat(64);
+    const delayed = Promise.withResolvers();
+    const intercepted = Promise.withResolvers();
+    const pattern = "**/api/pay/" + invoice.publicId + "/quote";
+    await page.route(pattern, async (route) => {
+      if (route.request().postDataJSON()?.refundAddress === lateRefund) {
+        const response = await route.fetch();
+        intercepted.resolve();
+        await delayed.promise;
+        await route.fulfill({ response }).catch(() => {});
+      } else {
+        await route.continue();
+      }
+    });
+    try {
+      await page.getByLabel("Payer refund address").fill(lateRefund);
+      await Promise.race([
+        intercepted.promise,
+        delay(5000).then(() => {
+          throw new Error("Updated quote request did not start");
+        }),
+      ]);
+      await page
+        .getByRole("button", { name: "Choose token and network" })
+        .click();
+      await page
+        .getByRole("button", { name: /\bBTC\b.*Bitcoin/i })
+        .first()
+        .click();
+      delayed.resolve();
+      await page
+        .getByText("Route unavailable", { exact: true })
+        .first()
+        .waitFor();
+      assert.equal(await page.getByText(/Provider preview ·/).count(), 0);
+      assert.equal(
+        await page
+          .getByRole("button", { name: /Copy (Address|Amount)/ })
+          .count(),
+        0,
+      );
+      await captureRecoveryScreen(page, "flow-checkout-unavailable");
+      assert.equal(await proceed.isDisabled(), true);
+    } finally {
+      delayed.resolve();
+      await page.unroute(pattern);
+    }
+    await workerDb.query(
+      "UPDATE flow.payment_requests SET expires_at = now() - interval '1 minute' WHERE public_id = $1",
+      [invoice.publicId],
+    );
+    await post(
+      guest,
+      quotePath,
+      { sourceDeploymentId: "base-mainnet:USDC", payerMode: "WALLET" },
+      400,
+    );
+    await page.reload();
+    await page.getByText("Payment Request Expired:", { exact: true }).waitFor();
+    assert.equal(await proceed.count(), 0);
+    assert.equal(
+      await page.getByRole("button", { name: "Pay with any token" }).count(),
+      0,
+    );
+    await captureRecoveryScreen(page, "flow-expired-invoice");
+    await browser.addCookies((await owner.client.storageState()).cookies);
+    await page.goto(app.origin + "/accounts/" + owner.account.id);
+    await page
+      .getByRole("button", { name: /Add Money/i })
+      .first()
+      .click();
+    await page
+      .getByText("Cross-chain deposit quote", { exact: true })
+      .waitFor();
+    await page.getByRole("button", { name: /Select any asset/i }).click();
+    await page
+      .getByRole("button", { name: /ETH.*Ethereum/i })
+      .first()
+      .click();
+    await page
+      .getByPlaceholder(/^Address on Ethereum/)
+      .fill("0x" + "3".repeat(40));
+    await page.getByRole("button", { name: "Review Deposit Quote" }).click();
+    await page
+      .getByText("5853.077195269072290382299549 NEAR", { exact: true })
+      .first()
+      .waitFor();
+    await captureRecoveryScreen(page, "flow-add-money-preview");
+    if (process.env.FLOW_TEST_SCREENSHOT_DIR) {
+      await page
+        .getByRole("button", { name: "Direct receive", exact: true })
+        .click();
+      await page
+        .getByText("Your permanent deposit address", { exact: true })
+        .waitFor();
+      await captureRecoveryScreen(page, "flow-direct-receive");
+    }
+  } finally {
+    await browser.close();
+  }
+});
+
+test("FLOW Send and Convert invalidate old quotes and keep execution disabled", async () => {
+  const owner = await person(
+    "outgoing-preview-" + randomUUID() + "@example.test",
+  );
+  const guest = await app.createClient();
+  const wallet = await quoteFixtureWallet(owner.account.id);
+  await workerDb.query(
+    "INSERT INTO flow.wallet_balances (wallet_id, network_asset_id, atomic_balance, finality, sync_status, last_synced_at) SELECT $1, id, CASE WHEN chain_id='8453' THEN 2000000::numeric ELSE 1000000000000000000::numeric END, 'FINALIZED', 'SYNCED', now() FROM flow.network_assets WHERE (chain_id='8453' AND lower(contract_address)='0x833589fcd6edb6e08f4c7c32d4f71b54bda02913') OR (chain_id='1' AND token_standard='NATIVE')",
+    [wallet.walletId],
+  );
+  const accountPath = "/api/accounts/" + owner.account.id + "/send/quote";
+  const baseRequest = {
+    sourceDeploymentId: "base-mainnet:USDC",
+    destinationDeploymentId: "ethereum-mainnet:ETH",
+    sourceDisplayAmount: "1",
+    recipientAddress: "0x" + "2".repeat(40),
+    sourceDecimals: 18,
+  };
+  await post(guest, accountPath, baseRequest, 401);
+  const sendQuote = await post(owner.client, accountPath, baseRequest, 200);
+  assert.equal(sendQuote.quote.amountInAtomic, "1000000");
+  assert.equal(sendQuote.quote.recipientDisplayAmount, "0.000459082174293001");
+  assert.equal(sendQuote.quote.identity.refundTo, wallet.baseAddress);
+  assert.equal(sendQuote.quote.canExecute, false);
+  await post(
+    owner.client,
+    accountPath,
+    { ...baseRequest, sourceDisplayAmount: "2.000001" },
+    400,
+  );
+  const convert = await post(
+    owner.client,
+    accountPath,
+    {
+      ...baseRequest,
+      operation: "CONVERT",
+      destinationDeploymentId: "near-mainnet:NEAR",
+    },
+    200,
+  );
+  assert.equal(convert.quote.identity.recipient, wallet.nearAddress);
+  assert.equal(convert.quote.canExecute, false);
+
+  const browser = await app.browser.newContext({
+    ignoreHTTPSErrors: true,
+    viewport: { width: 1440, height: 1000 },
+    storageState: await owner.client.storageState(),
+  });
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(12_000);
+    await page.goto(
+      app.origin + "/accounts/" + owner.account.id + "?view=send",
+    );
+    await page.getByLabel("Send amount", { exact: true }).fill("1");
+    await page
+      .getByLabel(/Recipient Solana.*address/i)
+      .fill("4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw");
+    let oldStarted;
+    let releaseOld;
+    const ready = new Promise((resolve) => {
+      oldStarted = resolve;
+    });
+    const release = new Promise((resolve) => {
+      releaseOld = resolve;
+    });
+    await page.route("**/send/quote", async (route) => {
+      if (
+        route.request().postDataJSON()?.destinationDeploymentId ===
+        "solana-mainnet:SOL"
+      ) {
+        const response = await route.fetch();
+        oldStarted();
+        await release;
+        await route.fulfill({ response }).catch(() => {});
+      } else await route.continue();
+    });
+    await page.getByRole("button", { name: "Review Quote" }).click();
+    await Promise.race([
+      ready,
+      delay(10_000).then(() => {
+        throw new Error("SOL preview did not start");
+      }),
+    ]);
+    await page.getByRole("button", { name: /Recipient receives SOL/i }).click();
+    await page
+      .getByRole("button", { name: /ETH.*Ethereum/i })
+      .first()
+      .click();
+    await page
+      .getByLabel(/Recipient Ethereum.*address/i)
+      .fill(baseRequest.recipientAddress);
+    await page.getByRole("button", { name: "Review Quote" }).click();
+    await page.getByText("0.000459082174293001 ETH", { exact: true }).waitFor();
+    releaseOld();
+    await page.waitForTimeout(200);
+    assert.equal(await page.getByText("0.005 SOL", { exact: true }).count(), 0);
+    assert.equal(
+      await page
+        .getByRole("button", { name: /Outgoing Execution Disabled/ })
+        .isDisabled(),
+      true,
+    );
+    await captureRecoveryScreen(page, "flow-send-preview");
+
+    await page.getByRole("button", { name: /USDC on Base/i }).click();
+    await page
+      .getByRole("button", { name: /ETH.*Ethereum/i })
+      .first()
+      .click();
+    await page.getByText("Quote unavailable", { exact: true }).waitFor();
+    assert.equal(
+      await page.getByText("0.000459082174293001 ETH", { exact: true }).count(),
+      0,
+    );
+
+    await page.getByRole("button", { name: "Convert", exact: true }).click();
+    await page.getByRole("button", { name: "Review Quote" }).click();
+    await page
+      .getByText("5853.077195269072290382299549 NEAR", { exact: true })
+      .first()
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole("button", { name: /Swap Execution Disabled/ })
+        .isDisabled(),
+      true,
+    );
+    await captureRecoveryScreen(page, "flow-convert-preview");
+    await page.getByLabel("Convert amount", { exact: true }).fill("0.5");
+    await page.getByText("Quote unavailable", { exact: true }).waitFor();
+  } finally {
+    await browser.close();
+  }
+});
+
+test("FLOW portfolio distinguishes a posted deposit from P&L and signs out the browser session", async () => {
+  const owner = await person(
+    "profile-preview-" + randomUUID() + "@example.test",
+  );
+  const guest = await app.createClient();
+  const wallet = await quoteFixtureWallet(owner.account.id);
+  await workerDb.query(
+    `INSERT INTO flow.wallet_balances (wallet_id, network_asset_id, atomic_balance, finality, sync_status, last_synced_at)
+      SELECT $1, id, CASE WHEN chain_id = '8453' AND lower(contract_address) = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
+        THEN 1000000 ELSE 0 END, 'FINALIZED', 'SYNCED', now()
+      FROM flow.network_assets
+      WHERE is_verified AND status = 'ACTIVE' AND chain_id IN ('8453', '1', 'near-mainnet')`,
+    [wallet.walletId],
+  );
+  const merchantLedger = randomUUID();
+  const custodyLedger = randomUUID();
+  await workerDb.query(
+    "INSERT INTO flow.ledger_accounts (id, account_id, account_type, account_code, asset_id, network, decimals) VALUES ($1,$2,'LIABILITY','LIABILITY_MERCHANT_PAYABLE','base-mainnet:USDC','base-mainnet',6),($3,NULL,'ASSET','ASSET_CUSTODY_IN_FLIGHT','base-mainnet:USDC','base-mainnet',6) ON CONFLICT DO NOTHING",
+    [merchantLedger, owner.account.id, custodyLedger],
+  );
+  const {
+    rows: [custody],
+  } = await workerDb.query(
+    "SELECT id FROM flow.ledger_accounts WHERE account_id IS NULL AND account_code='ASSET_CUSTODY_IN_FLIGHT' AND asset_id='base-mainnet:USDC' AND network='base-mainnet'",
+  );
+  await workerDb.query(
+    "SELECT * FROM flow.post_balanced_ledger_journal($1,'PAYMENT_SETTLEMENT',$2,'Test payment settlement',$3::jsonb)",
+    [
+      "lj_" + randomBytes(16).toString("hex"),
+      "fixture-" + randomUUID(),
+      JSON.stringify([
+        {
+          ledger_account_id: custody.id,
+          entry_direction: "DEBIT",
+          amount_atomic: "1000000",
+        },
+        {
+          ledger_account_id: merchantLedger,
+          entry_direction: "CREDIT",
+          amount_atomic: "1000000",
+        },
+      ]),
+    ],
+  );
+  const ledgerPath = "/api/accounts/" + owner.account.id + "/ledger/summary";
+  await result(await guest.get(ledgerPath), 401);
+  await result(
+    await owner.client.get("/api/accounts/" + owner.account.id + "/activities"),
+    200,
+  );
+  const ledger = await result(await owner.client.get(ledgerPath), 200);
+  assert.deepEqual(ledger.movements, [
+    {
+      assetId: "base-mainnet:USDC",
+      network: "base-mainnet",
+      decimals: 6,
+      inflow: "1000000",
+      outflow: "0",
+    },
+  ]);
+  await result(
+    await guest.get("/api/accounts/" + owner.account.id + "/notifications"),
+    401,
+  );
+  await post(
+    guest,
+    "/api/accounts/" + owner.account.id + "/ai-assistant",
+    { prompt: "Show holdings" },
+    401,
+  );
+
+  const browser = await app.browser.newContext({
+    ignoreHTTPSErrors: true,
+    viewport: { width: 1440, height: 1000 },
+    storageState: await owner.client.storageState(),
+  });
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(12_000);
+    const accountPath = app.origin + "/accounts/" + owner.account.id;
+    await page.goto(accountPath);
+    await page.getByText("P&L unavailable", { exact: true }).waitFor();
+    assert.equal(await page.getByText(/\+100%/).count(), 0);
+    await page
+      .getByText(/^1 USDC \(Base(?: Mainnet)?\)$/)
+      .first()
+      .waitFor();
+
+    await captureRecoveryScreen(page, "flow-home");
+
+    await page.goto(app.origin + "/security?tab=profile");
+    await page.getByLabel("Display Name").fill("Fixture Display Name");
+    await page.getByRole("button", { name: "Save Changes" }).click();
+    await page
+      .getByText("Display name saved in this browser.", { exact: true })
+      .waitFor();
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "fixture.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ5sAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    });
+    await page
+      .getByText("Avatar saved in this browser.", { exact: true })
+      .waitFor();
+    await page.goto(app.origin + "/security?tab=notifications");
+    const preference = page.getByRole("switch", { name: "Incoming payments" });
+    await preference.waitFor();
+    await captureRecoveryScreen(page, "flow-settings-notifications");
+
+    await preference.click();
+    await page.reload();
+    await preference.waitFor();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[role="switch"][aria-label="Incoming payments"]')
+          ?.getAttribute("aria-checked") === "false",
+    );
+
+    await page.goto(accountPath);
+    await page
+      .getByText("Fixture Display Name", { exact: true })
+      .first()
+      .waitFor();
+    const accountMenu = page.getByRole("button", { name: "Account menu" });
+    assert.match(
+      await accountMenu.locator("img").getAttribute("src"),
+      /^data:image\/png;base64,/,
+    );
+    if (process.env.FLOW_TEST_SCREENSHOT_DIR) {
+      await page.getByRole("button", { name: "Flow AI Assistant" }).click();
+      await page.getByText("Flow AI Assistant", { exact: true }).waitFor();
+      await captureRecoveryScreen(page, "flow-ai-drawer");
+      await page.goto(accountPath);
+      await accountMenu.waitFor();
+    }
+    await accountMenu.click();
+    await captureRecoveryScreen(page, "flow-profile-menu");
+    const signOut = page.getByRole("button", { name: "Sign out", exact: true });
+    await page.route("**/api/auth/sign-out", (route) =>
+      route.fulfill({ status: 503, body: "Unavailable" }),
+    );
+    await signOut.click();
+    await page
+      .getByText("Could not sign out. Try again.", { exact: true })
+      .waitFor();
+    assert.equal(page.url(), accountPath);
+    await page.unroute("**/api/auth/sign-out");
+    await signOut.click();
+    await page.waitForURL("**/sign-in");
+    assert.equal(
+      (await browser.cookies()).some((cookie) => cookie.name === sessionCookie),
+      false,
+    );
+    await result(await owner.client.get("/api/me"), 401);
+    const {
+      rows: [persisted],
+    } = await workerDb.query(
+      "SELECT id FROM flow.wallets WHERE account_id=$1",
+      [owner.account.id],
+    );
+    assert.equal(persisted.id, wallet.walletId);
+  } finally {
+    await browser.close();
+  }
 });

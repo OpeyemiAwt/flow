@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { appendFile, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { getStaticFallbackTokens } from "../../src/server/providers/near-intents-discovery.ts";
 
 if (
   process.env.FLOW_ENV !== "test" ||
@@ -203,6 +204,55 @@ globalThis.fetch = async (input, init) => {
     );
     return Response.json({ id: "fixture-delivery" });
   }
+  if (url.href === "https://1click.chaindefuser.com/v0/tokens") {
+    const blockchain = {
+      "ethereum-mainnet": "eth",
+      "base-mainnet": "base",
+      "solana-mainnet": "sol",
+      "near-mainnet": "near",
+    };
+    return Response.json([
+      ...getStaticFallbackTokens().map((token) => ({
+        assetId: token.assetId,
+        blockchain: blockchain[token.networkKey],
+        symbol: token.symbol,
+        decimals: token.decimals,
+        contractAddress: token.contractAddress,
+        price: token.id === "base-mainnet:USDC" ? 1 : null,
+        priceUpdatedAt: new Date().toISOString(),
+      })),
+      {
+        assetId: "nep141:btc.omft.near",
+        blockchain: "btc",
+        symbol: "BTC",
+        decimals: 8,
+      },
+      {
+        assetId: "nep141:wrapped-btc.fixture.near",
+        blockchain: "eth",
+        symbol: "WBTC",
+        decimals: 8,
+      },
+      {
+        assetId: "nep141:sui.omft.near",
+        blockchain: "sui",
+        symbol: "SUI",
+        decimals: 9,
+      },
+      {
+        assetId: "nep141:tron.omft.near",
+        blockchain: "tron",
+        symbol: "TRX",
+        decimals: 6,
+      },
+      {
+        assetId: "nep245:v2_1.omni.hot.tg:143_11111111111111111111",
+        blockchain: "monad",
+        symbol: "MON",
+        decimals: 18,
+      },
+    ]);
+  }
   if (url.href === "https://1click.chaindefuser.com/v0/quote") {
     const request = new Request(input, init);
     const body = await request.json();
@@ -219,14 +269,29 @@ globalThis.fetch = async (input, init) => {
       body.dry === false
         ? "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
         : undefined;
+    const amountIn =
+      body.swapType === "EXACT_INPUT"
+        ? body.amount
+        : body.originAsset === "nep141:sui.omft.near"
+          ? "12543561154"
+          : "50000000";
+    const amountOut =
+      body.swapType === "EXACT_INPUT"
+        ? body.destinationAsset === "nep141:wrap.near"
+          ? "5853077195269072290382299549"
+          : body.destinationAsset === "nep141:sol.omft.near"
+            ? "5000000"
+            : "459082174293001"
+        : body.amount;
     return Response.json({
       depositAddress,
       quote: {
         depositAddress,
-        amountIn: "50000000",
+        amountIn,
         amountInFormatted: "0.05",
         amountInUsd: "10.00",
-        amountOut: body.amount || "10000000",
+        amountOut,
+        minAmountOut: amountOut,
         amountOutFormatted: "10.00",
         amountOutUsd: "10.00",
         timeEstimate: 30,

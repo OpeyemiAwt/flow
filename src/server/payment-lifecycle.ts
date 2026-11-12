@@ -3,7 +3,6 @@ import {
   type PaymentAttemptStatus,
   type PaymentDepositInstructions,
   isValidPaymentAttemptPublicId,
-  resolveOneClickAssetId,
   isBannedIllustrativeAddress,
 } from "../domain/quote-discovery.ts";
 import { formatAtomicToDisplay } from "../domain/atomic-amounts.ts";
@@ -11,9 +10,17 @@ import { isValidPublicPaymentId } from "../domain/payment-requests.ts";
 import {
   isFinancialExecutionDisabled,
   isValidEvmAddress,
-  isValidNearAddress,
-  isValidSolanaAddress,
 } from "../domain/custody.ts";
+import {
+  canonicalizeNetworkId,
+  isSamePaymentDeployment,
+} from "../domain/supported-assets-catalog.ts";
+import {
+  readPaymentAttempt,
+  readPaymentWalletAddresses,
+} from "./payment-requests.ts";
+import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
+import { validateProviderAddress } from "./providers/one-click-preview.ts";
 import { getPrismaClient, runtime } from "../foundation/prisma.ts";
 import { fetchOneClickCommittedQuote } from "./providers/one-click-adapter.ts";
 import { clientBudget } from "./auth/limits.ts";
@@ -238,7 +245,38 @@ export async function commitPaymentAttempt(
       }
     }
 
-    const isDirect = attempt.source_network === attempt.destination_network;
+    const [
+      sourceDeployment,
+      destinationDeployment,
+      merchantWallets,
+      [invoice],
+    ] = await Promise.all([
+      resolveQuoteAsset(attempt.source_asset_id),
+      resolveQuoteAsset(row.destination_asset_id),
+      readPaymentWalletAddresses(publicId),
+      db.$queryRaw<Array<{ payer_memo_required: boolean }>>`
+          SELECT payer_memo_required FROM flow.get_public_payment_request(${publicId})
+        `,
+    ]);
+    if (
+      !sourceDeployment ||
+      !destinationDeployment ||
+      !invoice ||
+      sourceDeployment.networkKey !==
+        (canonicalizeNetworkId(attempt.source_network) ??
+          attempt.source_network) ||
+      sourceDeployment.decimals !== attempt.source_decimals ||
+      destinationDeployment.networkKey !==
+        (canonicalizeNetworkId(attempt.destination_network) ??
+          attempt.destination_network) ||
+      destinationDeployment.decimals !== attempt.destination_decimals
+    ) {
+      throw new ApiFailure(400, "COMMITMENT_DEPLOYMENT_MISMATCH");
+    }
+    const isDirect = isSamePaymentDeployment(
+      sourceDeployment,
+      destinationDeployment,
+    );
     committedPayerRefund =
       committedPayerRefund || row.payer_refund_address?.trim() || null;
     const payerRefund = committedPayerRefund;
@@ -257,14 +295,7 @@ export async function commitPaymentAttempt(
       }
 
       // Check against all recipient OutLayer wallet addresses
-      const recipientWallets = await db.$queryRaw<Array<{ address: string }>>`
-        SELECT wa.address
-        FROM flow.wallet_addresses wa
-        JOIN flow.wallets w ON w.id = wa.wallet_id
-        JOIN flow.payment_requests pr ON pr.account_id = w.account_id
-        WHERE pr.public_id = ${publicId}
-      `;
-      const isRecipientAddress = recipientWallets.some(
+      const isRecipientAddress = merchantWallets.some(
         (w) => w.address.trim().toLowerCase() === payerRefund.toLowerCase(),
       );
       if (isRecipientAddress) {
@@ -274,33 +305,14 @@ export async function commitPaymentAttempt(
         );
       }
 
-      // Validate format per source ecosystem
-      if (
-        attempt.source_network.toLowerCase().includes("solana") &&
-        !isValidSolanaAddress(payerRefund)
-      ) {
+      const refundValidation = validateProviderAddress(
+        sourceDeployment,
+        payerRefund,
+      );
+      if (!refundValidation.valid) {
         throw new ApiFailure(
           400,
-          "PAYER_REFUND_ADDRESS_INVALID: Source network is Solana but refund address is not a valid Solana address.",
-        );
-      }
-      if (
-        (attempt.source_network.toLowerCase().includes("base") ||
-          attempt.source_network.toLowerCase().includes("ethereum")) &&
-        !isValidEvmAddress(payerRefund)
-      ) {
-        throw new ApiFailure(
-          400,
-          "PAYER_REFUND_ADDRESS_INVALID: Source network is EVM but refund address is not a valid EVM address.",
-        );
-      }
-      if (
-        attempt.source_network.toLowerCase().includes("near") &&
-        !isValidNearAddress(payerRefund)
-      ) {
-        throw new ApiFailure(
-          400,
-          "PAYER_REFUND_ADDRESS_INVALID: Source network is NEAR but refund address is not a valid NEAR address.",
+          refundValidation.reason ?? "PAYER_REFUND_ADDRESS_INVALID",
         );
       }
 
@@ -368,17 +380,11 @@ export async function commitPaymentAttempt(
     if (isDirect) {
       depositAddress = recipientAddress;
     } else {
-      const sourceOneClickId = resolveOneClickAssetId(attempt.source_asset_id);
-      const destOneClickId = resolveOneClickAssetId(row.destination_asset_id);
-      if (!sourceOneClickId || !destOneClickId) {
-        throw new ApiFailure(400, "UNSUPPORTED_ONE_CLICK_ASSET_PAIR");
-      }
-
       // Task 3: Remote commit timeout & persistence safety
       try {
         committedRes = await fetchOneClickCommittedQuote({
-          originAsset: sourceOneClickId,
-          destinationAsset: destOneClickId,
+          originAsset: sourceDeployment.assetId,
+          destinationAsset: destinationDeployment.assetId,
           swapType: "EXACT_OUTPUT",
           amountAtomic:
             attempt.quoted_destination_atomic_amount ??
@@ -400,6 +406,28 @@ export async function commitPaymentAttempt(
           504,
           "COMMIT_TIMEOUT_RECONCILIATION_REQUIRED: Provider committed quote request timed out or network error. Payment attempt marked RECONCILIATION_REQUIRED to prevent duplicate commitment.",
         );
+      }
+
+      if (committedRes.ok) {
+        const address = committedRes.depositAddress;
+        if (
+          !address ||
+          !validateProviderAddress(sourceDeployment, address).valid ||
+          isBannedIllustrativeAddress(address) ||
+          merchantWallets.some(
+            (wallet) => wallet.address.toLowerCase() === address.toLowerCase(),
+          ) ||
+          !committedRes.amountInAtomic ||
+          !committedRes.depositDeadline ||
+          (invoice.payer_memo_required && !committedRes.depositMemo)
+        ) {
+          committedRes = {
+            ...committedRes,
+            ok: false,
+            errorMessage:
+              "The provider did not return valid source deposit instructions.",
+          };
+        }
       }
 
       if (!committedRes.ok || !committedRes.depositAddress) {
@@ -655,116 +683,25 @@ export async function commitPaymentAttempt(
  * Polling endpoint for public guest checkout to inspect payment attempt lifecycle status.
  */
 export async function getPaymentAttemptStatus(
-  request: Request,
+  _request: Request,
   publicId: string,
   attemptPublicId: string,
 ): Promise<Response> {
   if (!isValidPublicPaymentId(publicId)) {
     throw new ApiFailure(404, "PAYMENT_REQUEST_NOT_FOUND");
   }
-
   if (!isValidPaymentAttemptPublicId(attemptPublicId)) {
     throw new ApiFailure(400, "INVALID_ATTEMPT_PUBLIC_ID");
   }
 
-  const { db } = runtime();
-
-  const rows = await db.$queryRaw<
-    Array<{
-      id: string;
-      attempt_public_id: string;
-      status: string;
-      deposit_address: string | null;
-      deposit_memo: string | null;
-      deposit_deadline: Date | null;
-      deposit_instructions: Record<string, unknown> | null;
-      source_network: string;
-      source_asset_id: string;
-      source_asset_symbol: string;
-      source_decimals: number;
-      quoted_source_atomic_amount: string | null;
-      quoted_destination_atomic_amount: string | null;
-      source_tx_hash: string | null;
-      destination_tx_hash: string | null;
-      settled_at: Date | null;
-      destination_network: string;
-      destination_asset_symbol: string;
-      destination_decimals: number;
-    }>
-  >`
-    SELECT
-      id,
-      attempt_public_id,
-      status,
-      deposit_address,
-      deposit_memo,
-      deposit_deadline,
-      deposit_instructions,
-      source_network,
-      source_asset_id,
-      source_asset_symbol,
-      source_decimals,
-      quoted_source_atomic_amount::text,
-      quoted_destination_atomic_amount::text,
-      source_tx_hash,
-      destination_tx_hash,
-      settled_at,
-      destination_network,
-      destination_asset_symbol,
-      destination_decimals
-    FROM flow.get_public_payment_attempt(${publicId}, ${attemptPublicId})
-    LIMIT 1
-  `;
-
-  if (rows.length === 0) {
-    throw new ApiFailure(404, "PAYMENT_ATTEMPT_NOT_FOUND");
-  }
-
-  const row = rows[0]!;
-
-  const sourceDisplayAmount = formatAtomicToDisplay(
-    BigInt(row.quoted_source_atomic_amount ?? "0"),
-    row.source_decimals,
+  const merchantWallets = await readPaymentWalletAddresses(publicId);
+  const attempt = await readPaymentAttempt(
+    publicId,
+    attemptPublicId,
+    merchantWallets,
   );
-  const destDisplayAmount = formatAtomicToDisplay(
-    BigInt(row.quoted_destination_atomic_amount ?? "0"),
-    row.destination_decimals,
-  );
-
-  const instructions: PaymentDepositInstructions = {
-    attemptPublicId: row.attempt_public_id,
-    status: row.status as PaymentAttemptStatus,
-    depositAddress: row.deposit_address ?? "",
-    depositMemo: row.deposit_memo,
-    depositDeadline: row.deposit_deadline
-      ? new Date(row.deposit_deadline).toISOString()
-      : "",
-    sourceNetwork: row.source_network,
-    sourceAssetId: row.source_asset_id,
-    sourceAssetSymbol: row.source_asset_symbol,
-    sourceDecimals: row.source_decimals,
-    destinationNetwork: row.destination_network,
-    destinationAssetSymbol: row.destination_asset_symbol,
-    requiredAtomicAmount: row.quoted_source_atomic_amount ?? "0",
-    requiredDisplayAmount: sourceDisplayAmount,
-    destinationDisplayAmount: destDisplayAmount,
-    qrData:
-      row.deposit_instructions && typeof row.deposit_instructions === "object"
-        ? ((row.deposit_instructions.qrData as string) ?? "")
-        : "",
-    instructionsNotice: `Payment status: ${row.status}`,
-    isExecutionDisabled: true,
-    sourceTxHash: row.source_tx_hash,
-    destinationTxHash: row.destination_tx_hash,
-    settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : null,
-    payerRefundAddress:
-      row.deposit_instructions && typeof row.deposit_instructions === "object"
-        ? (((row.deposit_instructions as Record<string, unknown>)
-            .payerRefundAddress as string) ?? null)
-        : null,
-  };
-
-  return reply(200, instructions);
+  if (!attempt) throw new ApiFailure(404, "PAYMENT_ATTEMPT_NOT_FOUND");
+  return reply(200, attempt);
 }
 
 /**

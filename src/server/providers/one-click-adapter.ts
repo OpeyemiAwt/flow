@@ -9,6 +9,8 @@ import {
   validateProviderAtomicAmount,
 } from "../../domain/quote-discovery.ts";
 
+import { MAX_SUPPORTED_ATOMIC_INT } from "../../domain/atomic-amounts.ts";
+
 export interface OneClickQuoteRequest {
   dry: boolean;
   swapType: QuoteSwapType;
@@ -25,7 +27,12 @@ export interface OneClickQuoteRequest {
 }
 
 export interface OneClickRawResponse {
+  depositAddress?: string;
+  depositMemo?: string;
   quote?: {
+    depositAddress?: string;
+    depositMemo?: string;
+    deadline?: string;
     amountIn: string;
     amountInFormatted?: string;
     amountInUsd?: string;
@@ -85,6 +92,18 @@ export function getOneClickHeaders(): Record<string, string> {
   return headers;
 }
 
+function atomicFee(value: unknown): string | null {
+  return typeof value === "string" &&
+    /^[0-9]{1,78}$/.test(value) &&
+    BigInt(value) <= MAX_SUPPORTED_ATOMIC_INT
+    ? value
+    : null;
+}
+
+function dryQuoteError(errorMessage: string): OneClickDryQuoteResult {
+  return { ok: false, routeStatus: "PROVIDER_ERROR", errorMessage };
+}
+
 export async function fetchOneClickDryQuote(params: {
   originAsset: string;
   destinationAsset: string;
@@ -96,16 +115,15 @@ export async function fetchOneClickDryQuote(params: {
   apiBase?: string;
   managerPublicKey?: string;
   skipSignatureVerification?: boolean;
+  signal?: AbortSignal;
 }): Promise<OneClickDryQuoteResult> {
   const apiBase = params.apiBase ?? DEFAULT_ONE_CLICK_API_BASE;
-  const deadlineDate = new Date(
-    Date.now() + (params.deadlineSeconds ?? 600) * 1000,
-  );
-
+  const requestedAt = Date.now();
+  const deadline = requestedAt + (params.deadlineSeconds ?? 600) * 1000;
   const payload: OneClickQuoteRequest = {
     dry: true,
     swapType: params.swapType,
-    slippageTolerance: 100, // 1%
+    slippageTolerance: 100,
     originAsset: params.originAsset,
     depositType: "ORIGIN_CHAIN",
     destinationAsset: params.destinationAsset,
@@ -114,181 +132,172 @@ export async function fetchOneClickDryQuote(params: {
     refundType: "ORIGIN_CHAIN",
     recipient: params.recipient,
     recipientType: "DESTINATION_CHAIN",
-    deadline: deadlineDate.toISOString(),
+    deadline: new Date(deadline).toISOString(),
   };
+  if (!validateProviderAtomicAmount(payload.amount)) {
+    return dryQuoteError("Invalid requested atomic amount.");
+  }
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-    const response = await fetch(`${apiBase}/v0/quote`, {
+    const timeout = AbortSignal.timeout(TIMEOUT_MS);
+    const response = await fetch(apiBase + "/v0/quote", {
       method: "POST",
       headers: getOneClickHeaders(),
       body: JSON.stringify(payload),
-      signal: controller.signal,
+      signal: params.signal
+        ? AbortSignal.any([params.signal, timeout])
+        : timeout,
+      cache: "no-store",
+      redirect: "error",
     });
-
-    clearTimeout(timeoutId);
-
     const data = (await response.json()) as OneClickRawResponse;
-
     if (!response.ok) {
-      const msg = data.message ?? data.error ?? `HTTP ${response.status}`;
-      const msgLower = msg.toLowerCase();
-      if (
-        msgLower.includes("tokenin is not valid") ||
-        msgLower.includes("tokenout is not valid") ||
-        msgLower.includes("unsupported")
-      ) {
+      const message = String(data.message ?? data.error ?? "").toLowerCase();
+      if (/token(?:in|out) is not valid|unsupported/.test(message)) {
         return {
           ok: false,
           routeStatus: "UNSUPPORTED_PAIR",
-          errorMessage: msg,
+          errorMessage:
+            "The provider does not support the selected asset pair.",
         };
       }
       if (
-        msgLower.includes("no liquidity") ||
-        msgLower.includes("insufficient liquidity")
+        response.status === 429 ||
+        /no liquidity|insufficient liquidity|amount is too (?:small|low)/.test(
+          message,
+        )
       ) {
         return {
           ok: false,
           routeStatus: "TEMPORARILY_UNAVAILABLE",
-          errorMessage:
-            "No solver liquidity currently available for this route.",
+          errorMessage: "The provider could not quote this amount and route.",
         };
       }
-      return {
-        ok: false,
-        routeStatus: "PROVIDER_ERROR",
-        errorMessage: msg,
-      };
+      return dryQuoteError(
+        "The quote provider returned HTTP " + response.status + ".",
+      );
     }
 
-    if (!data.quote || !data.quote.amountIn || !data.quote.amountOut) {
-      return {
-        ok: false,
-        routeStatus: "PROVIDER_ERROR",
-        errorMessage: "Malformed quote payload received from provider.",
-      };
-    }
-
-    // Cryptographic quote signature verification (Requirement 1)
+    const quote = data.quote;
+    const echo = data.quoteRequest;
     if (
-      data.signature &&
-      data.quoteRequest &&
-      data.timestamp &&
-      !params.skipSignatureVerification
+      !quote ||
+      quote.depositAddress ||
+      quote.depositMemo ||
+      data.depositAddress ||
+      data.depositMemo
     ) {
-      if (
-        data.signature === "0x1clickfixturesignature" &&
-        process.env.FLOW_ENV === "test"
-      ) {
-        // Allow fixture signature in test environment
-      } else {
-        const isSigValid = verifyQuoteSignature(
+      return dryQuoteError("Provider response was not a dry quote.");
+    }
+    if (
+      !echo ||
+      (Object.keys(payload) as (keyof OneClickQuoteRequest)[]).some(
+        (key) => echo[key] !== payload[key],
+      )
+    ) {
+      return dryQuoteError(
+        "The provider quote does not match the requested route and inputs.",
+      );
+    }
+
+    const timestamp = Date.parse(data.timestamp ?? "");
+    const expiresAt = Math.min(
+      deadline,
+      quote.deadline === undefined ? Infinity : Date.parse(quote.deadline),
+    );
+    const now = Date.now();
+    if (
+      !Number.isFinite(timestamp) ||
+      timestamp < requestedAt - 30_000 ||
+      timestamp > now + 30_000 ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= now ||
+      expiresAt <= timestamp
+    ) {
+      return dryQuoteError(
+        "The provider quote has an invalid or expired timestamp.",
+      );
+    }
+
+    const fixtureSignature =
+      data.signature === "0x1clickfixturesignature" &&
+      process.env.FLOW_ENV === "test";
+    if (
+      !params.skipSignatureVerification &&
+      !fixtureSignature &&
+      (!data.signature ||
+        !verifyQuoteSignature(
           data as unknown as OneClickQuoteResponse,
           params.managerPublicKey,
-        );
-        if (!isSigValid) {
-          return {
-            ok: false,
-            routeStatus: "PROVIDER_ERROR",
-            errorMessage:
-              "INVALID_QUOTE_SIGNATURE: Provider quote cryptographic signature verification failed.",
-          };
-        }
-      }
-    }
-
-    // Validate atomic integer amount format and positive bounds (Requirement 6)
-    if (
-      !validateProviderAtomicAmount(data.quote.amountIn) ||
-      !validateProviderAtomicAmount(data.quote.amountOut)
+        ))
     ) {
-      return {
-        ok: false,
-        routeStatus: "PROVIDER_ERROR",
-        errorMessage: "Malformed or out-of-range provider atomic amounts.",
-      };
+      return dryQuoteError(
+        "INVALID_QUOTE_SIGNATURE: Provider quote signature verification failed.",
+      );
     }
-
-    // Validate exact-output destination satisfaction (Requirement 7)
-    if (params.swapType === "EXACT_OUTPUT") {
-      const expectedRequested = BigInt(params.amountAtomic);
-      const returnedOut = BigInt(data.quote.amountOut);
-      if (returnedOut < expectedRequested) {
-        return {
-          ok: false,
-          routeStatus: "PROVIDER_ERROR",
-          errorMessage: `Provider quote output amount (${data.quote.amountOut}) is less than requested invoice amount (${params.amountAtomic}).`,
-        };
-      }
-      if (data.quote.minAmountOut) {
-        if (!validateProviderAtomicAmount(data.quote.minAmountOut)) {
-          return {
-            ok: false,
-            routeStatus: "PROVIDER_ERROR",
-            errorMessage: "Provider minAmountOut has invalid atomic format.",
-          };
-        }
-        if (BigInt(data.quote.minAmountOut) < expectedRequested) {
-          return {
-            ok: false,
-            routeStatus: "PROVIDER_ERROR",
-            errorMessage: `Provider minAmountOut (${data.quote.minAmountOut}) is less than requested invoice amount (${params.amountAtomic}).`,
-          };
-        }
-      }
+    if (
+      !validateProviderAtomicAmount(quote.amountIn) ||
+      !validateProviderAtomicAmount(quote.amountOut) ||
+      (quote.minAmountOut !== undefined &&
+        (!validateProviderAtomicAmount(quote.minAmountOut) ||
+          BigInt(quote.minAmountOut) > BigInt(quote.amountOut)))
+    ) {
+      return dryQuoteError(
+        "Malformed or out-of-range provider atomic amounts.",
+      );
     }
-
-    const hasProviderFees = Boolean(
-      data.quote.refundFee || data.quote.withdrawFee,
-    );
-    const feeDescription = hasProviderFees
-      ? [
-          data.quote.refundFee ? `Refund fee: ${data.quote.refundFee}` : null,
-          data.quote.withdrawFee
-            ? `Withdraw fee: ${data.quote.withdrawFee}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join("; ")
-      : "Solver and network fees are determined at route execution.";
+    const exactAmount = BigInt(payload.amount);
+    if (
+      payload.swapType === "EXACT_INPUT" &&
+      BigInt(quote.amountIn) !== exactAmount
+    ) {
+      return dryQuoteError(
+        "The provider quote does not match the exact input amount.",
+      );
+    }
+    if (
+      payload.swapType === "EXACT_OUTPUT" &&
+      (BigInt(quote.amountOut) !== exactAmount ||
+        quote.minAmountOut === undefined ||
+        BigInt(quote.minAmountOut) !== exactAmount)
+    ) {
+      return dryQuoteError(
+        "The provider quote does not match the exact invoice amount.",
+      );
+    }
 
     return {
       ok: true,
       routeStatus: "SUPPORTED_AND_QUOTABLE",
-      amountInAtomic: data.quote.amountIn,
-      amountOutAtomic: data.quote.amountOut,
-      minAmountOutAtomic: data.quote.minAmountOut ?? undefined,
-      // Preserve missing fields as null rather than arbitrary defaults (Requirement 8)
+      amountInAtomic: quote.amountIn,
+      amountOutAtomic: quote.amountOut,
+      minAmountOutAtomic: quote.minAmountOut,
       timeEstimateSeconds:
-        typeof data.quote.timeEstimate === "number" &&
-        data.quote.timeEstimate > 0
-          ? data.quote.timeEstimate
+        typeof quote.timeEstimate === "number" &&
+        Number.isSafeInteger(quote.timeEstimate) &&
+        quote.timeEstimate > 0
+          ? quote.timeEstimate
           : null,
       fees: {
-        refundFeeAtomic: data.quote.refundFee ?? null,
-        withdrawFeeAtomic: data.quote.withdrawFee ?? null,
-        isEstimate: !hasProviderFees,
-        description: feeDescription,
+        refundFeeAtomic: atomicFee(quote.refundFee),
+        withdrawFeeAtomic: atomicFee(quote.withdrawFee),
+        isEstimate: true,
+        description: "Solver and source network fee breakdown unavailable.",
       },
-      correlationId: data.correlationId ?? undefined,
-      signature: data.signature ?? undefined,
-      quoteTimestamp: data.timestamp ?? null,
-      providerDeadline: data.quoteRequest?.deadline ?? payload.deadline,
+      correlationId: data.correlationId,
+      signature: data.signature,
+      quoteTimestamp: new Date(timestamp).toISOString(),
+      providerDeadline: new Date(expiresAt).toISOString(),
     };
-  } catch (err: unknown) {
-    const isTimeout =
-      err instanceof Error &&
-      (err.name === "AbortError" || err.message.includes("abort"));
-    return {
-      ok: false,
-      routeStatus: "PROVIDER_ERROR",
-      errorMessage: isTimeout
+  } catch (error) {
+    const timedOut =
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError");
+    return dryQuoteError(
+      timedOut
         ? "Provider quote request timed out."
-        : "Failed to connect to route provider.",
-    };
+        : "Could not read a quote from the provider.",
+    );
   }
 }
 
