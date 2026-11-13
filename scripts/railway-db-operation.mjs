@@ -123,6 +123,53 @@ async function migrate() {
   });
 }
 
+async function migrateStaging() {
+  if (
+    process.env.FLOW_ENV !== "staging" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "staging-only" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail("Migration is restricted to the designated isolated staging database.");
+  }
+
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  const password = process.env.FLOW_STAGING_MIGRATOR_PASSWORD;
+  if (!rawUrl || !password || !/^[a-f0-9]{64}$/.test(password)) {
+    fail("The isolated staging bootstrap URL and generated migrator credential are required.");
+  }
+  const migrationUrl = new URL(rawUrl);
+  if (
+    !migrationUrl.hostname.endsWith(".railway.internal") ||
+    migrationUrl.pathname !== "/railway" ||
+    decodeURIComponent(migrationUrl.username) !== "postgres"
+  ) {
+    fail("The staging migration source does not identify the isolated Railway PostgreSQL service.");
+  }
+  migrationUrl.pathname = "/flow_staging";
+  migrationUrl.username = "flow_staging_migrator";
+  migrationUrl.password = password;
+  migrationUrl.search = "?sslmode=require&sslaccept=strict";
+
+  const migrationEnv = { ...process.env, FLOW_MIGRATION_DATABASE_URL: migrationUrl.toString() };
+  delete migrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;
+  for (const key of Object.keys(migrationEnv)) {
+    if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) delete migrationEnv[key];
+  }
+  const child = spawn("node", ["node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "prisma.config.ts"], {
+    stdio: "inherit",
+    env: migrationEnv,
+  });
+  child.once("error", (error) => {
+    console.error(JSON.stringify({ event: "staging_migration_start_failed", error: error.message }));
+    process.exit(1);
+  });
+  child.once("exit", (code) => {
+    if (code !== 0) process.exitCode = code ?? 1;
+  });
+}
+
 async function testQa() {
   if (
     process.env.FLOW_ENV !== "test" ||
@@ -227,6 +274,7 @@ function idle() {
 }
 
 if (operation === "bootstrap-staging-and-qa") await bootstrap();
+else if (operation === "migrate-staging") await migrateStaging();
 else if (operation === "migrate-qa") await migrate();
 else if (operation === "test-qa") await testQa();
 else if (operation === "test-unit") await testUnit();
