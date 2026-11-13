@@ -302,14 +302,21 @@ export async function securityServer() {
           });
       },
       async failMail(enabled) {
-        await writeFile(path.join(dir, "mail-failure"), enabled ? "failed" : "");
+        await writeFile(
+          path.join(dir, "mail-failure"),
+          enabled ? "failed" : "",
+        );
       },
       diagnostics() {
         return serverLogs
           .split("\n")
-          .filter((line) =>
-            line.includes('"event":"google_oauth_callback_rejected"') ||
-            line.includes('"event":"google_oauth_provider_callback_rejected"'),
+          .filter(
+            (line) =>
+              line.includes('"event":"google_oauth_callback_rejected"') ||
+              line.includes(
+                '"event":"google_oauth_provider_callback_rejected"',
+              ) ||
+              line.includes('"event":"google_identity_proof_rejected"'),
           )
           .join("\n");
       },
