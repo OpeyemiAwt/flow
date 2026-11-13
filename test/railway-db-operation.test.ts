@@ -21,7 +21,10 @@ test("staging database operations fail closed outside the designated staging env
   });
 
   assert.equal(result.status, 78);
-  assert.match(result.stderr, /restricted to the designated Railway staging environment/);
+  assert.match(
+    result.stderr,
+    /restricted to the designated Railway staging environment/,
+  );
   assert.ok(!result.stderr.includes(sentinel));
 });
 
@@ -41,7 +44,10 @@ test("QA migration operation refuses staging or production migration targets", (
   });
 
   assert.equal(result.status, 78);
-  assert.match(result.stderr, /restricted to the isolated flow_test QA database first/);
+  assert.match(
+    result.stderr,
+    /restricted to the isolated flow_test QA database first/,
+  );
   assert.ok(!result.stderr.includes(sentinel));
 });
 
@@ -57,7 +63,8 @@ test("repeatable QA integration operation fails closed outside the isolated test
       FLOW_EXECUTION: "disabled",
       FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
       FLOW_BOOTSTRAP_DATABASE_URL: `postgresql://postgres:${sentinel}@db.railway.internal:5432/railway`,
-      FLOW_MIGRATION_DATABASE_URL: "postgresql://flow_test_migrator:secret@db.railway.internal:5432/flow_test",
+      FLOW_MIGRATION_DATABASE_URL:
+        "postgresql://flow_test_migrator:secret@db.railway.internal:5432/flow_test",
     },
     encoding: "utf8",
   });

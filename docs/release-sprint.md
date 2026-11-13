@@ -17,21 +17,21 @@ The 28-hour target covers complete implementation, integration, testing, product
 
 ## Full scope and completion evidence
 
-| Capability | Required verified result |
-| --- | --- |
-| Email authentication | Real delivery, hashed and expiring OTPs, persistent rate/attempt limits, resend throttling, replay rejection, correct onboarding/dashboard redirects |
-| Google OAuth and account linking | Final HTTPS callback, verified identity, explicit safe linking, unrelated users never merged |
-| Sessions and recovery | Durable authenticated sessions, server-side logout/revocation, recovery appropriate to the passwordless model, tenant isolation |
-| Wallet onboarding | Dedicated OutLayer provisioning worker, unique wallet per account, encrypted credentials, four-chain addresses, retry/crash recovery, same wallet after re-login |
-| Profile and notifications | Authenticated server persistence, cross-session consistency, tenant isolation, real event/read state where applicable |
-| Asset discovery and quotes | Broad eligible NEAR Intents catalog, exact selected token/network, verified identity and precision, genuine fees/minimums/deadlines, no silent substitution |
-| Direct Receive and balances | Correct permanent registered addresses, verified chain synchronization, no invented balances |
-| Payment Links and guest checkout | Persistent links, Stablecoins and Any Token, payer refund validation, authorized provider commitment, actual deposit instructions, final settlement and receipt |
-| Cross-chain Add Money | Durable intent, unique provider deposit instructions, native NEAR settlement into the registered wallet, confirmed ledger/balance/Activity |
-| Send and Convert | Real held assets, exact destination and token, explicit approval, gas funding, custody signing, broadcast, finality, accounting and failure recovery |
-| Financial history and reporting | Complete Activity and monthly reporting backed by chain evidence and posted ledger, idempotent reconciliation |
-| Production | Railway application, isolated PostgreSQL, persistent worker, HTTPS/custom domain, production email/OAuth/provider configuration, health/restart checks, secure backup and recovery |
-| Release verification | Full automated suite, build/security checks, CI, desktop/mobile visual checks, live service evidence, controlled end-to-end financial tests |
+| Capability                       | Required verified result                                                                                                                                                           |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email authentication             | Real delivery, hashed and expiring OTPs, persistent rate/attempt limits, resend throttling, replay rejection, correct onboarding/dashboard redirects                               |
+| Google OAuth and account linking | Final HTTPS callback, verified identity, explicit safe linking, unrelated users never merged                                                                                       |
+| Sessions and recovery            | Durable authenticated sessions, server-side logout/revocation, recovery appropriate to the passwordless model, tenant isolation                                                    |
+| Wallet onboarding                | Dedicated OutLayer provisioning worker, unique wallet per account, encrypted credentials, four-chain addresses, retry/crash recovery, same wallet after re-login                   |
+| Profile and notifications        | Authenticated server persistence, cross-session consistency, tenant isolation, real event/read state where applicable                                                              |
+| Asset discovery and quotes       | Broad eligible NEAR Intents catalog, exact selected token/network, verified identity and precision, genuine fees/minimums/deadlines, no silent substitution                        |
+| Direct Receive and balances      | Correct permanent registered addresses, verified chain synchronization, no invented balances                                                                                       |
+| Payment Links and guest checkout | Persistent links, Stablecoins and Any Token, payer refund validation, authorized provider commitment, actual deposit instructions, final settlement and receipt                    |
+| Cross-chain Add Money            | Durable intent, unique provider deposit instructions, native NEAR settlement into the registered wallet, confirmed ledger/balance/Activity                                         |
+| Send and Convert                 | Real held assets, exact destination and token, explicit approval, gas funding, custody signing, broadcast, finality, accounting and failure recovery                               |
+| Financial history and reporting  | Complete Activity and monthly reporting backed by chain evidence and posted ledger, idempotent reconciliation                                                                      |
+| Production                       | Railway application, isolated PostgreSQL, persistent worker, HTTPS/custom domain, production email/OAuth/provider configuration, health/restart checks, secure backup and recovery |
+| Release verification             | Full automated suite, build/security checks, CI, desktop/mobile visual checks, live service evidence, controlled end-to-end financial tests                                        |
 
 ## Verification and authorization sequence
 

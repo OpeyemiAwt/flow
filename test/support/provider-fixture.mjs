@@ -197,8 +197,15 @@ globalThis.fetch = async (input, init) => {
     ) {
       return Response.json({ error: "invalid_credentials" }, { status: 401 });
     }
-    if (await readFile(path.join(directory, "mail-failure"), "utf8").catch(() => "")) {
-      return Response.json({ error: "fixture_delivery_failure" }, { status: 503 });
+    if (
+      await readFile(path.join(directory, "mail-failure"), "utf8").catch(
+        () => "",
+      )
+    ) {
+      return Response.json(
+        { error: "fixture_delivery_failure" },
+        { status: 503 },
+      );
     }
     await appendFile(
       path.join(directory, "mail.jsonl"),
