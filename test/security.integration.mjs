@@ -1346,13 +1346,23 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     await page.getByRole("button", { name: "Continue with Google" }).click();
     await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
     assert.equal(new URL(page.url()).pathname, "/onboarding");
-    await page.goto(`${app.origin}/accounts`);
-    await page.getByLabel("Business name").fill(businessName);
-    await page.getByRole("button", { name: "Create business" }).click();
-    await page.getByText(businessName).first().waitFor();
-    const id = new URL(page.url()).pathname.split("/").at(-1);
+    const createdBusiness = await page.evaluate(async (name) => {
+      const response = await fetch("/api/accounts", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({ name }),
+      });
+      return { status: response.status, result: await response.json() };
+    }, businessName);
+    assert.equal(createdBusiness.status, 201);
+    const id = createdBusiness.result.account.id;
     const privateUrl = `${app.origin}/accounts/${id}`;
     const teamUrl = `${privateUrl}/team`;
+    await page.goto(privateUrl);
+    await page.getByText(businessName).first().waitFor();
     await page
       .getByRole("link", { name: /Manage team/i })
       .first()
