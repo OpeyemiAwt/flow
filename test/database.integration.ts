@@ -315,15 +315,37 @@ test("account sync enqueue is account-scoped, idempotent, and lease-completable"
     (error: unknown) => (error as { code?: string }).code === "42501",
   );
 
-  const claimed = await indexerPool.query<{
-    job_id: string;
-    account_id: string;
-    wallet_id: string;
-    lease_token: string;
-  }>(
-    "SELECT job_id, account_id, wallet_id, lease_token FROM flow.claim_account_sync_job($1, 60)",
-    [`qa-indexer-${randomUUID()}`],
-  );
+  // Other tests may have queued independent accounts before this case. Drain
+  // those jobs using the indexer API until this account's job is claimed.
+  let claimed: {
+    rows: Array<{
+      job_id: string;
+      account_id: string;
+      wallet_id: string;
+      lease_token: string;
+    }>;
+  } = { rows: [] };
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const next = await indexerPool.query<{
+      job_id: string;
+      account_id: string;
+      wallet_id: string;
+      lease_token: string;
+    }>(
+      "SELECT job_id, account_id, wallet_id, lease_token FROM flow.claim_account_sync_job($1, 60)",
+      [`qa-indexer-${randomUUID()}`],
+    );
+    if (next.rows[0]?.job_id === first?.job_id) {
+      claimed = next;
+      break;
+    }
+    if (next.rows[0]) {
+      await indexerPool.query(
+        "SELECT flow.finish_account_sync_job($1::uuid, $2::uuid, NULL)",
+        [next.rows[0].job_id, next.rows[0].lease_token],
+      );
+    }
+  }
   assert.equal(claimed.rows[0]?.job_id, first?.job_id);
   assert.equal(claimed.rows[0]?.account_id, owner.accountId);
   assert.equal(claimed.rows[0]?.wallet_id, walletId);
@@ -575,9 +597,8 @@ test("account ownership: enforces single wallet per account and preserves accoun
   );
 
   // Attempt to insert duplicate wallet for personal account -> violates wallets_account_id_key (23505)
-  assert.ok(legacyWorkerPool, "Legacy worker role fixture is required");
   await assert.rejects(
-    legacyWorkerPool.query(
+    workerPool.query(
       `
       INSERT INTO flow.wallets (
         id, account_id, provider, provider_wallet_id, near_account_id,
@@ -4151,7 +4172,7 @@ test("M2 Phase 5.3 Permanent durability: DELETE revoked and trigger prevents res
 
   // 1. Worker role CANNOT DELETE from flow.provider_compatibility_authorizations (42501)
   await assert.rejects(
-    workerPool.query(
+    legacyWorkerPool!.query(
       "DELETE FROM flow.provider_compatibility_authorizations WHERE id = $1",
       [auth.id],
     ),
@@ -6854,7 +6875,7 @@ test("m3 phase 3.2: authentication ticket and refresh lease privilege audit — 
     [legitimateSlot, victimEmail, legitimateDigest],
   );
 
-  const ticketRows = await workerPool.query<{
+  const ticketRows = await authTicketPool!.query<{
     issue_email_auth_ticket: string;
   }>(`SELECT flow.issue_email_auth_ticket($1, $2)`, [
     legitimateSlot,
@@ -6878,10 +6899,10 @@ test("m3 phase 3.2: authentication ticket and refresh lease privilege audit — 
   // Replay attempt by worker role must fail because intent is gone
   await assert.rejects(
     async () => {
-      await workerPool.query(`SELECT flow.issue_email_auth_ticket($1, $2)`, [
-        legitimateSlot,
-        legitimateDigest,
-      ]);
+      await authTicketPool!.query(
+        `SELECT flow.issue_email_auth_ticket($1, $2)`,
+        [legitimateSlot, legitimateDigest],
+      );
     },
     (err: unknown) => {
       const e = err as { code?: string; message?: string };
@@ -7178,7 +7199,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
   );
 
   const [ticketRow] = (
-    await workerPool.query<{ issue_email_auth_ticket: string }>(
+    await authTicketPool!.query<{ issue_email_auth_ticket: string }>(
       `SELECT flow.issue_email_auth_ticket($1, $2)`,
       [slot, digest],
     )

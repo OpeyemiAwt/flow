@@ -334,6 +334,11 @@ export async function securityServer() {
                 event: parsed.event,
                 requestId: fields.requestId,
                 category: fields.category,
+                sqlState:
+                  typeof fields.sqlState === "string" &&
+                  /^[0-9A-Z]{5}$/.test(fields.sqlState)
+                    ? fields.sqlState
+                    : undefined,
               });
             } catch {
               return "";
