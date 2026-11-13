@@ -88,11 +88,13 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
             </h1>
 
             <p className="mt-3 max-w-[400px] text-[14px] leading-[1.5] text-[#5A5A5A] sm:text-[15px]">
-              We sent an 8-digit code to your email{" "}
+              If email sign-in is available for this address, we&apos;ll send an
+              8-digit code to{" "}
               <span className="font-medium text-[#1F1F1F]">
                 {email || "hello@flow.com"}
               </span>
-              . Enter it below to continue.
+              . Check your spam folder if it doesn&apos;t arrive. Enter the code
+              below to continue.
             </p>
 
             <form className="mt-6" onSubmit={verify}>
