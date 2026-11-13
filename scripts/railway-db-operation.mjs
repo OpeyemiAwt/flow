@@ -891,9 +891,14 @@ async function testSecurityQaTwice() {
         "Railway deployment identity is required for idempotent QA database names.",
       );
     }
+    // Railway may restart a failed one-shot deployment with the same
+    // deployment ID. Give each process invocation fresh isolated databases so
+    // a retry never collides with, rotates credentials for, or mutates a prior
+    // QA run. These databases are intentionally retained for review.
+    const runId = randomBytes(5).toString("hex");
 
     for (let pass = 1; pass <= 2; pass++) {
-      const name = `flow_test_qa_${deploymentId.slice(0, 12).toLowerCase()}_${pass}`;
+      const name = `flow_test_qa_${deploymentId.slice(0, 12).toLowerCase()}_${runId}_${pass}`;
       const existingDatabase = await admin.query(
         "SELECT 1 FROM pg_database WHERE datname = $1",
         [name],
@@ -979,6 +984,7 @@ async function testSecurityQaTwice() {
           console.log(
             JSON.stringify({
               event: "qa_suite_start",
+              runId,
               pass,
               suite: label,
               database: name,
@@ -1020,6 +1026,7 @@ async function testSecurityQaTwice() {
       console.log(
         JSON.stringify({
           event: "qa_suite_pass",
+          runId,
           pass,
           database: name,
           result: "passed",
