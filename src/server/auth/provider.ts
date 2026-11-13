@@ -192,8 +192,8 @@ export function provider(
                     !ticketIdToUse &&
                     userId
                   ) {
-                    const workerDb = getPrismaClient("worker");
-                    const [ticket] = await workerDb.$queryRaw<{ id: string }[]>`
+                    const authDb = getPrismaClient("auth");
+                    const [ticket] = await authDb.$queryRaw<{ id: string }[]>`
                       SELECT flow.issue_google_auth_ticket(${verifiedGoogle.subject}, ${userId}, ${google.startOrder}) AS id
                     `;
                     ticketIdToUse = ticket?.id;
@@ -446,8 +446,8 @@ export function provider(
                 throw new ApiFailure(401, "INVALID_PROOF");
               }
               if (context.emailSlot && context.emailDigest) {
-                const workerDb = getPrismaClient("worker");
-                const [ticket] = await workerDb.$queryRaw<{ id: string }[]>`
+                const authDb = getPrismaClient("auth");
+                const [ticket] = await authDb.$queryRaw<{ id: string }[]>`
                   SELECT flow.issue_email_auth_ticket(${context.emailSlot}, ${context.emailDigest}) AS id
                 `;
                 if (ticket?.id) {
@@ -455,8 +455,8 @@ export function provider(
                 }
               }
             } else if (google && verifiedGoogle) {
-              const workerDb = getPrismaClient("worker");
-              const [ticket] = await workerDb.$queryRaw<{ id: string }[]>`
+              const authDb = getPrismaClient("auth");
+              const [ticket] = await authDb.$queryRaw<{ id: string }[]>`
                 SELECT flow.issue_google_auth_ticket(${verifiedGoogle.subject}, ${session.userId}, ${google.startOrder}) AS id
               `;
               if (ticket?.id) {

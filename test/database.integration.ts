@@ -84,16 +84,65 @@ const db = getPrismaClient("worker");
 const { database: operatorDbConfig } = readConfig(process.env, "operator");
 const operatorPool = createDatabasePool(operatorDbConfig);
 const operatorDb = getPrismaClient("operator");
+const authTicketPool = process.env.FLOW_AUTH_TICKET_DATABASE_URL
+  ? createDatabasePool(
+      readConfig(
+        {
+          FLOW_ENV: process.env.FLOW_ENV!,
+          FLOW_EXECUTION: process.env.FLOW_EXECUTION!,
+          FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+          FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+          FLOW_AUTH_TICKET_DATABASE_URL:
+            process.env.FLOW_AUTH_TICKET_DATABASE_URL,
+        },
+        "auth",
+      ).database,
+    )
+  : undefined;
 
 after(async () => {
   await pool.end();
   await workerPool.end();
   await operatorPool.end();
+  await authTicketPool?.end();
   try {
     await disconnectPrismaClients();
   } catch {
     // Ignore cleanup errors
   }
+});
+
+test("auth-ticket role can invoke only guarded ticket functions and cannot read account data", async (t) => {
+  if (!authTicketPool)
+    return t.skip(
+      "Dedicated auth-ticket role is not configured in this test environment.",
+    );
+  const { rows } = await authTicketPool.query<{
+    database_name: string;
+    role_name: string;
+    table_read: boolean;
+    table_write: boolean;
+    can_issue_email: boolean;
+    can_issue_google: boolean;
+    can_select_auth_users: boolean;
+    can_select_wallets: boolean;
+  }>(`
+    SELECT current_database() AS database_name, current_user AS role_name,
+      has_table_privilege(current_user, 'flow.auth_issuance_tickets', 'SELECT') AS table_read,
+      has_table_privilege(current_user, 'flow.auth_issuance_tickets', 'INSERT') AS table_write,
+      has_function_privilege(current_user, 'flow.issue_email_auth_ticket(text,text)', 'EXECUTE') AS can_issue_email,
+      has_function_privilege(current_user, 'flow.issue_google_auth_ticket(text,text,bigint)', 'EXECUTE') AS can_issue_google,
+      has_table_privilege(current_user, 'flow.auth_users', 'SELECT') AS can_select_auth_users,
+      has_table_privilege(current_user, 'flow.wallets', 'SELECT') AS can_select_wallets
+  `);
+  assert.equal(rows[0]?.database_name, appDbConfig.name);
+  assert.equal(rows[0]?.role_name, `${appDbConfig.name}_auth_worker`);
+  assert.equal(rows[0]?.table_read, false);
+  assert.equal(rows[0]?.table_write, false);
+  assert.equal(rows[0]?.can_issue_email, true);
+  assert.equal(rows[0]?.can_issue_google, true);
+  assert.equal(rows[0]?.can_select_auth_users, false);
+  assert.equal(rows[0]?.can_select_wallets, false);
 });
 
 async function createTestAccount(

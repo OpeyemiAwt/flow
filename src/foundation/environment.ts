@@ -6,15 +6,20 @@ const environmentSchema = z.object({
   FLOW_ENV: z.enum(["local", "test", "staging", "production"]),
   FLOW_EXECUTION: z.literal("disabled"),
   FLOW_TEST_DATABASE_REMOTE: z.literal("enabled").optional(),
-  FLOW_TEST_DATABASE_NAME: z.string().regex(/^flow_test_[a-z0-9_]+$/).optional(),
+  FLOW_TEST_DATABASE_NAME: z
+    .string()
+    .regex(/^flow_test_[a-z0-9_]+$/)
+    .optional(),
 });
 
 type EnvironmentInput = Readonly<Record<string, string | undefined>>;
-export type DatabasePurpose = "runtime" | "worker" | "operator" | "migration";
+export type DatabasePurpose =
+  "runtime" | "worker" | "auth" | "operator" | "migration";
 
 const databaseUrlKeys = {
   runtime: "FLOW_DATABASE_URL",
   worker: "FLOW_WORKER_DATABASE_URL",
+  auth: "FLOW_AUTH_TICKET_DATABASE_URL",
   operator: "FLOW_OPERATOR_DATABASE_URL",
   migration: "FLOW_MIGRATION_DATABASE_URL",
 } as const;
@@ -61,9 +66,16 @@ function assertCredentialScope(
       ? [
           "FLOW_DATABASE_URL",
           "FLOW_WORKER_DATABASE_URL",
+          "FLOW_AUTH_TICKET_DATABASE_URL",
           "FLOW_OPERATOR_DATABASE_URL",
         ]
-      : ["FLOW_MIGRATION_DATABASE_URL"];
+      : purpose === "auth"
+        ? [
+            "FLOW_MIGRATION_DATABASE_URL",
+            "FLOW_WORKER_DATABASE_URL",
+            "FLOW_OPERATOR_DATABASE_URL",
+          ]
+        : ["FLOW_MIGRATION_DATABASE_URL"];
   if (
     disallowedUrls.some((k) => source[k] !== undefined) ||
     otherDatabaseCredentialKeys.some((key) => source[key] !== undefined)
@@ -84,6 +96,11 @@ export function assertWebEnvironment(source: EnvironmentInput): void {
   if (source.FLOW_OPERATOR_DATABASE_URL !== undefined) {
     invalidConfig(
       "Supply only the FLOW web runtime credentials to this process. Privileged operator database credentials are strictly isolated.",
+    );
+  }
+  if (source.FLOW_WORKER_DATABASE_URL !== undefined) {
+    invalidConfig(
+      "Supply only FLOW_DATABASE_URL and the restricted FLOW_AUTH_TICKET_DATABASE_URL to the web process.",
     );
   }
 }
@@ -190,29 +207,31 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
   }
   if (
     source.FLOW_TEST_DATABASE_NAME !== undefined &&
-    (environment !== "test" ||
-      source.FLOW_TEST_DATABASE_REMOTE !== "enabled")
+    (environment !== "test" || source.FLOW_TEST_DATABASE_REMOTE !== "enabled")
   ) {
-    invalidConfig("Alternate database names are restricted to isolated remote QA.");
+    invalidConfig(
+      "Alternate database names are restricted to isolated remote QA.",
+    );
   }
   const tls =
     environment === "staging" ||
     environment === "production" ||
-    (environment === "test" &&
-      source.FLOW_TEST_DATABASE_REMOTE === "enabled");
+    (environment === "test" && source.FLOW_TEST_DATABASE_REMOTE === "enabled");
   const variable = databaseUrlKeys[purpose];
   const databaseName =
     environment === "test"
-      ? source.FLOW_TEST_DATABASE_NAME ?? "flow_test"
+      ? (source.FLOW_TEST_DATABASE_NAME ?? "flow_test")
       : `flow_${environment}`;
   const roleSuffix =
     purpose === "runtime"
       ? "app"
       : purpose === "worker"
         ? "worker"
-        : purpose === "operator"
-          ? "operator"
-          : "migrator";
+        : purpose === "auth"
+          ? "auth_worker"
+          : purpose === "operator"
+            ? "operator"
+            : "migrator";
   const role = `${databaseName}_${roleSuffix}`;
   const url = parseDatabaseUrl(source[variable], variable);
 
@@ -242,8 +261,7 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
       url,
       purpose,
       tls,
-      environment === "test" &&
-        source.FLOW_TEST_DATABASE_REMOTE === "enabled",
+      environment === "test" && source.FLOW_TEST_DATABASE_REMOTE === "enabled",
       environment === "staging" &&
         url.hostname.toLowerCase().endsWith(".railway.internal"),
     )

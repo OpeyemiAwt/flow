@@ -132,6 +132,7 @@ export async function securityServer() {
       googleSecret,
       mailKey,
       process.env.FLOW_DATABASE_URL,
+      process.env.FLOW_AUTH_TICKET_DATABASE_URL,
     ])
       secrets.add(value);
 
@@ -155,7 +156,8 @@ export async function securityServer() {
           FLOW_ENV: "test",
           FLOW_EXECUTION: "disabled",
           FLOW_DATABASE_URL: process.env.FLOW_DATABASE_URL,
-          FLOW_WORKER_DATABASE_URL: process.env.FLOW_WORKER_DATABASE_URL,
+          FLOW_AUTH_TICKET_DATABASE_URL:
+            process.env.FLOW_AUTH_TICKET_DATABASE_URL,
           FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
           FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
           FLOW_APP_ORIGIN: origin,

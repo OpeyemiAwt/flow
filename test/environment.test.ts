@@ -88,14 +88,14 @@ test("remote QA database mode requires test identity and strict TLS", () => {
   const migrationUrl =
     "postgresql://flow_test_migrator:fixture-only-password@db.flow.example:5432/flow_test?sslmode=require&uselibpqcompat=true";
   const remoteAppConfig = readConfig(
-      {
-        FLOW_ENV: "test",
-        FLOW_EXECUTION: "disabled",
-        FLOW_TEST_DATABASE_REMOTE: "enabled",
-        FLOW_DATABASE_URL: appUrl,
-      },
-      "runtime",
-    ).database;
+    {
+      FLOW_ENV: "test",
+      FLOW_EXECUTION: "disabled",
+      FLOW_TEST_DATABASE_REMOTE: "enabled",
+      FLOW_DATABASE_URL: appUrl,
+    },
+    "runtime",
+  ).database;
   assert.equal(remoteAppConfig.tls, true);
   assert.equal(remoteAppConfig.verifyTlsCertificate, false);
   assert.equal(
@@ -125,6 +125,53 @@ test("remote QA database mode requires test identity and strict TLS", () => {
         "runtime",
       ),
     /Remote test database mode is restricted to FLOW_ENV=test/,
+  );
+});
+
+test("auth ticket database purpose accepts only its dedicated restricted role", () => {
+  const authUrl =
+    "postgresql://flow_staging_auth_worker:fixture-only-password@postgres.internal.railway.internal:5432/flow_staging?sslmode=require&uselibpqcompat=true";
+  const config = readConfig(
+    {
+      FLOW_ENV: "staging",
+      FLOW_EXECUTION: "disabled",
+      FLOW_DATABASE_URL:
+        "postgresql://flow_staging_app:fixture-only-password@postgres.internal.railway.internal:5432/flow_staging?sslmode=require&uselibpqcompat=true",
+      FLOW_AUTH_TICKET_DATABASE_URL: authUrl,
+    },
+    "auth",
+  );
+  assert.equal(config.database.role, "flow_staging_auth_worker");
+  assert.throws(
+    () =>
+      readConfig(
+        {
+          FLOW_ENV: "staging",
+          FLOW_EXECUTION: "disabled",
+          FLOW_WORKER_DATABASE_URL:
+            "postgresql://flow_staging_worker:fixture-only-password@postgres.internal.railway.internal:5432/flow_staging?sslmode=require&uselibpqcompat=true",
+          FLOW_AUTH_TICKET_DATABASE_URL: authUrl,
+        },
+        "auth",
+      ),
+    invalid,
+  );
+});
+
+test("web process rejects broad worker credentials while allowing auth-ticket role", () => {
+  const source = {
+    ...remoteEnvironment("staging"),
+    FLOW_AUTH_TICKET_DATABASE_URL:
+      "postgresql://flow_staging_auth_worker:fixture-only-password@db.flow.example:5432/flow_staging?sslmode=verify-full",
+  };
+  assert.doesNotThrow(() => assertWebEnvironment(source));
+  assert.throws(
+    () =>
+      assertWebEnvironment({
+        ...source,
+        FLOW_WORKER_DATABASE_URL: "worker-credential-present",
+      }),
+    invalid,
   );
 });
 

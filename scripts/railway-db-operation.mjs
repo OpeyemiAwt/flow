@@ -214,6 +214,55 @@ async function migrateStaging() {
   });
 }
 
+async function provisionAuthTicketRole() {
+  if (process.env.FLOW_ENV !== "staging" || process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID || process.env.FLOW_DB_TARGET !== "staging-only" || process.env.FLOW_EXECUTION !== "disabled" || process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled") fail("Auth-ticket role provisioning is restricted to isolated staging.");
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  const password = process.env.FLOW_STAGING_AUTH_TICKET_PASSWORD;
+  if (!rawUrl || !password || !/^[a-f0-9]{64}$/.test(password)) fail("Isolated staging administrator URL and generated auth-ticket credential are required.");
+  const adminUrl = new URL(rawUrl);
+  if (!adminUrl.hostname.endsWith(".railway.internal") || adminUrl.pathname !== "/railway" || decodeURIComponent(adminUrl.username) !== "postgres") fail("Bootstrap URL does not identify the isolated Railway PostgreSQL service.");
+  const client = new pg.Client({ connectionString: rawUrl, connectionTimeoutMillis: 5000 });
+  await client.connect();
+  try {
+    const identity = await client.query("SELECT current_database() AS database, current_user AS role");
+    if (identity.rows[0]?.database !== "railway" || identity.rows[0]?.role !== "postgres") fail("Unexpected staging bootstrap identity.");
+    const roleName = "flow_staging_auth_worker";
+    const existing = await client.query("SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", [roleName]);
+    if (existing.rowCount) {
+      const role = existing.rows[0];
+      if (!role.rolcanlogin || role.rolsuper || role.rolcreatedb || role.rolcreaterole || role.rolreplication || role.rolbypassrls) fail("Existing auth-ticket role violates restricted-role policy; refusing to alter it.");
+    } else {
+      await client.query(`CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(password)}`);
+    }
+    const memberships = await client.query("SELECT 1 FROM pg_auth_members WHERE member = (SELECT oid FROM pg_roles WHERE rolname = $1)", [roleName]);
+    if (memberships.rowCount) fail("Auth-ticket role has role memberships; refusing inherited privileges.");
+    const stagingAdminUrl = new URL(rawUrl);
+    stagingAdminUrl.pathname = "/flow_staging";
+    const stagingAdmin = new pg.Client({ connectionString: stagingAdminUrl.toString(), connectionTimeoutMillis: 5000 });
+    await stagingAdmin.connect();
+    try {
+      await stagingAdmin.query(`REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA flow FROM "${roleName}"`);
+      await stagingAdmin.query(`REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA flow FROM "${roleName}"`);
+      await stagingAdmin.query(`REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA flow FROM "${roleName}"`);
+      await stagingAdmin.query(`GRANT USAGE ON SCHEMA flow TO "${roleName}"`);
+      await stagingAdmin.query(`GRANT EXECUTE ON FUNCTION flow.issue_email_auth_ticket(text, text) TO "${roleName}"`);
+      await stagingAdmin.query(`GRANT EXECUTE ON FUNCTION flow.issue_google_auth_ticket(text, text, bigint) TO "${roleName}"`);
+    } finally { await stagingAdmin.end(); }
+    const targetUrl = new URL(rawUrl);
+    targetUrl.pathname = "/flow_staging";
+    targetUrl.username = roleName;
+    targetUrl.password = password;
+    const probe = new pg.Client({ connectionString: targetUrl.toString(), connectionTimeoutMillis: 3000 });
+    await probe.connect();
+    try {
+      const { rows } = await probe.query(`SELECT current_database() = 'flow_staging' AS correct_database, current_user = $1 AS correct_role, NOT has_table_privilege(current_user, 'flow.auth_users', 'SELECT') AS no_auth_table_read, NOT has_table_privilege(current_user, 'flow.wallets', 'SELECT') AS no_wallet_read, NOT has_table_privilege(current_user, 'flow.auth_sessions', 'INSERT') AS no_session_write, has_function_privilege(current_user, 'flow.issue_email_auth_ticket(text,text)', 'EXECUTE') AS can_issue_email_ticket, has_function_privilege(current_user, 'flow.issue_google_auth_ticket(text,text,bigint)', 'EXECUTE') AS can_issue_google_ticket`, [roleName]);
+      const p = rows[0];
+      if (!p.correct_database || !p.correct_role || !p.no_auth_table_read || !p.no_wallet_read || !p.no_session_write || !p.can_issue_email_ticket || !p.can_issue_google_ticket) fail("Auth-ticket role privilege verification failed; application credentials were not changed.");
+    } finally { await probe.end(); }
+    console.log(JSON.stringify({ event: "staging_auth_ticket_role_verified", database: "flow_staging", role: roleName, table_access: "none", functions: "guarded_auth_ticket_issuance_only" }));
+  } finally { await client.end(); }
+}
+
 async function testQa() {
   if (
     process.env.FLOW_ENV !== "test" ||
@@ -261,6 +310,7 @@ async function testQa() {
   const testRoles = [
     ["FLOW_DATABASE_URL", "app", databaseName === "flow_test" ? "FLOW_TEST_APP_PASSWORD" : `${databaseName.toUpperCase()}_APP_PASSWORD`],
     ["FLOW_WORKER_DATABASE_URL", "worker", databaseName === "flow_test" ? "FLOW_TEST_LEGACY_WORKER_PASSWORD" : `${databaseName.toUpperCase()}_WORKER_PASSWORD`],
+    ["FLOW_AUTH_TICKET_DATABASE_URL", "auth_worker", databaseName === "flow_test" ? "FLOW_TEST_AUTH_TICKET_PASSWORD" : `${databaseName.toUpperCase()}_AUTH_TICKET_PASSWORD`],
     ["FLOW_OPERATOR_DATABASE_URL", "operator", databaseName === "flow_test" ? "FLOW_TEST_OPERATOR_PASSWORD" : `${databaseName.toUpperCase()}_OPERATOR_PASSWORD`],
   ];
   for (const [targetVariable, suffix, passwordVariable] of testRoles) {
@@ -308,7 +358,7 @@ async function createQaValidationDatabase() {
   await client.connect();
   try {
     const name = "flow_test_validation";
-    for (const suffix of ["app", "worker", "operator", "migrator"]) {
+    for (const suffix of ["app", "worker", "auth_worker", "operator", "migrator"]) {
       const roleName = `${name}_${suffix}`;
       const variable = `${name.toUpperCase()}_${suffix.toUpperCase()}_PASSWORD`;
       const password = process.env[variable];
@@ -332,8 +382,8 @@ async function createQaValidationDatabase() {
     if (!exists.rowCount) await client.query(`CREATE DATABASE "${name}" OWNER "${name}_migrator"`);
     else await client.query(`ALTER DATABASE "${name}" OWNER TO "${name}_migrator"`);
     await client.query(`REVOKE CREATE ON DATABASE "${name}" FROM PUBLIC`);
-    await client.query(`GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_operator"`);
-    console.log(JSON.stringify({ event: "qa_validation_roles_ready", database: name, roles: ["app", "worker", "operator", "migrator"].map((suffix) => `${name}_${suffix}`) }));
+    await client.query(`GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_auth_worker", "${name}_operator"`);
+    console.log(JSON.stringify({ event: "qa_validation_roles_ready", database: name, roles: ["app", "worker", "auth_worker", "operator", "migrator"].map((suffix) => `${name}_${suffix}`) }));
   } finally { await client.end(); }
 }
 
@@ -354,6 +404,7 @@ async function testSecurityQa() {
   const roles = [
     ["FLOW_DATABASE_URL", "flow_test_validation_app", process.env.FLOW_TEST_VALIDATION_APP_PASSWORD],
     ["FLOW_WORKER_DATABASE_URL", "flow_test_validation_worker", process.env.FLOW_TEST_VALIDATION_WORKER_PASSWORD],
+    ["FLOW_AUTH_TICKET_DATABASE_URL", "flow_test_validation_auth_worker", process.env.FLOW_TEST_VALIDATION_AUTH_TICKET_PASSWORD],
     ["FLOW_OPERATOR_DATABASE_URL", "flow_test_validation_operator", process.env.FLOW_TEST_VALIDATION_OPERATOR_PASSWORD],
   ];
   for (const [key, role, password] of roles) {
@@ -410,7 +461,7 @@ async function testSecurityQaTwice() {
       const name = `flow_test_qa_${deploymentId.slice(0, 12).toLowerCase()}_${pass}`;
       const existingDatabase = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [name]);
       if (existingDatabase.rowCount) fail(`QA database for pass ${pass} already exists; refusing to rerun the one-shot operation.`);
-      const roles = ["app", "worker", "operator", "migrator"];
+      const roles = ["app", "worker", "auth_worker", "operator", "migrator"];
       const credentials = new Map(roles.map((suffix) => [suffix, randomBytes(32).toString("hex")]));
       for (const suffix of roles) {
         const roleName = `${name}_${suffix}`;
@@ -422,7 +473,7 @@ async function testSecurityQaTwice() {
       }
       await admin.query(`CREATE DATABASE "${name}" OWNER "${name}_migrator"`);
       await admin.query(`REVOKE CREATE ON DATABASE "${name}" FROM PUBLIC`);
-      await admin.query(`GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_operator"`);
+      await admin.query(`GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_auth_worker", "${name}_operator"`);
 
       const databaseEnv = { ...process.env, FLOW_TEST_DATABASE_NAME: name };
       delete databaseEnv.FLOW_BOOTSTRAP_DATABASE_URL;
@@ -439,6 +490,7 @@ async function testSecurityQaTwice() {
       databaseEnv.FLOW_MIGRATION_DATABASE_URL = makeUrl("migrator");
       databaseEnv.FLOW_DATABASE_URL = makeUrl("app");
       databaseEnv.FLOW_WORKER_DATABASE_URL = makeUrl("worker");
+      databaseEnv.FLOW_AUTH_TICKET_DATABASE_URL = makeUrl("auth_worker");
       databaseEnv.FLOW_OPERATOR_DATABASE_URL = makeUrl("operator");
 
       const migrationEnv = {
@@ -517,6 +569,7 @@ function idle() {
 
 if (operation === "bootstrap-staging-and-qa") await bootstrap();
 else if (operation === "migrate-staging") await migrateStaging();
+else if (operation === "provision-auth-ticket-role") await provisionAuthTicketRole();
 else if (operation === "migrate-qa") await migrate();
 else if (operation === "test-qa") await testQa();
 else if (operation === "create-qa-validation") await createQaValidationDatabase();
