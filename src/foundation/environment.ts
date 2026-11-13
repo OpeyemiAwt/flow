@@ -213,7 +213,7 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
         : purpose === "operator"
           ? "operator"
           : "migrator";
-  const role = `${environment === "test" ? "flow_test" : databaseName}_${roleSuffix}`;
+  const role = `${databaseName}_${roleSuffix}`;
   const url = parseDatabaseUrl(source[variable], variable);
 
   if (

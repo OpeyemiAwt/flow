@@ -136,12 +136,12 @@ test("alternate QA database names require the remote test guard and keep test ro
       FLOW_TEST_DATABASE_REMOTE: "enabled",
       FLOW_TEST_DATABASE_NAME: "flow_test_validation",
       FLOW_DATABASE_URL:
-        "postgresql://flow_test_app:fixture-only-password@db.flow.example:5432/flow_test_validation?sslmode=require&uselibpqcompat=true",
+        "postgresql://flow_test_validation_app:fixture-only-password@db.flow.example:5432/flow_test_validation?sslmode=require&uselibpqcompat=true",
     },
     "runtime",
   );
   assert.equal(config.database.name, "flow_test_validation");
-  assert.equal(config.database.role, "flow_test_app");
+  assert.equal(config.database.role, "flow_test_validation_app");
   assert.throws(
     () =>
       readConfig(
