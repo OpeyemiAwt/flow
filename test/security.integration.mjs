@@ -1344,9 +1344,8 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     const page = await owner.newPage();
     await page.goto(`${app.origin}/sign-in`);
     await page.getByRole("button", { name: "Continue with Google" }).click();
-    await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
-    assert.ok(page.url().includes("/accounts/"));
-    assert.ok(await page.getByText("Wallet setup pending").first().isVisible());
+    await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
+    assert.equal(new URL(page.url()).pathname, "/onboarding");
     await page.goto(`${app.origin}/accounts`);
     await page.getByLabel("Business name").fill(businessName);
     await page.getByRole("button", { name: "Create business" }).click();
@@ -1371,7 +1370,8 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     );
     await visitor.getByLabel("Email code").fill(code);
     await visitor.getByRole("button", { name: /Verify and continue/i }).click();
-    await visitor.getByRole("heading", { name: /Welcome back\./i }).waitFor();
+    await visitor.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
+    assert.equal(new URL(visitor.url()).pathname, "/onboarding");
     const inaccessible = await visitor.goto(privateUrl);
     assert.equal(inaccessible.status(), 404);
     assert.equal(

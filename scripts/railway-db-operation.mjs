@@ -889,7 +889,7 @@ async function testSecurityQaTwice() {
       await admin.query(`CREATE DATABASE "${name}" OWNER "${name}_migrator"`);
       await admin.query(`REVOKE CREATE ON DATABASE "${name}" FROM PUBLIC`);
       await admin.query(
-        `GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_auth_worker", "${name}_operator"`,
+        `GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_custody_worker", "${name}_auth_worker", "${name}_operator"`,
       );
 
       const databaseEnv = { ...process.env, FLOW_TEST_DATABASE_NAME: name };
