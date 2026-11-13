@@ -41,6 +41,7 @@ export type DatabaseTarget = Readonly<{
   name: string;
   role: string;
   tls: boolean;
+  verifyTlsCertificate: boolean;
 }>;
 
 function invalidConfig(message: string): never {
@@ -243,6 +244,10 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
     name: databaseName,
     role,
     tls,
+    verifyTlsCertificate: !(
+      environment === "test" &&
+      source.FLOW_TEST_DATABASE_REMOTE === "enabled"
+    ),
   };
   return { environment, execution, database };
 }

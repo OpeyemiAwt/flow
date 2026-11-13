@@ -87,8 +87,7 @@ test("remote QA database mode requires test identity and strict TLS", () => {
     "postgresql://flow_test_app:fixture-only-password@db.flow.example:5432/flow_test?sslmode=require&uselibpqcompat=true";
   const migrationUrl =
     "postgresql://flow_test_migrator:fixture-only-password@db.flow.example:5432/flow_test?sslmode=require&uselibpqcompat=true";
-  assert.equal(
-    readConfig(
+  const remoteAppConfig = readConfig(
       {
         FLOW_ENV: "test",
         FLOW_EXECUTION: "disabled",
@@ -96,7 +95,12 @@ test("remote QA database mode requires test identity and strict TLS", () => {
         FLOW_DATABASE_URL: appUrl,
       },
       "runtime",
-    ).database.tls,
+    ).database;
+  assert.equal(remoteAppConfig.tls, true);
+  assert.equal(remoteAppConfig.verifyTlsCertificate, false);
+  assert.equal(
+    readConfig(remoteEnvironment("staging"), "runtime").database
+      .verifyTlsCertificate,
     true,
   );
   assert.equal(
