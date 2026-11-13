@@ -35,6 +35,7 @@ const authVariables = z.object({
     .regex(/^[\w-]+$/),
   FLOW_MAIL_API_KEY: z.string().regex(/^re_[\w-]{16,256}$/),
   FLOW_MAIL_FROM: senderDisplayAddress,
+  FLOW_PUBLIC_SIGNUP_ENABLED: z.enum(["enabled", "disabled"]).optional(),
   FLOW_CLIENT_IP_HEADER: z.enum(["x-real-ip", "cf-connecting-ip"]).optional(),
 });
 
@@ -94,6 +95,10 @@ export function readAuthConfig(
     googleSecret: values.FLOW_GOOGLE_CLIENT_SECRET,
     mailKey: values.FLOW_MAIL_API_KEY,
     mailFrom: values.FLOW_MAIL_FROM,
+    publicSignupEnabled:
+      values.FLOW_PUBLIC_SIGNUP_ENABLED === "enabled" ||
+      (values.FLOW_PUBLIC_SIGNUP_ENABLED === undefined &&
+        environment !== "production"),
     clientIpHeader: values.FLOW_CLIENT_IP_HEADER,
     cookies: {
       session: cookie("session"),

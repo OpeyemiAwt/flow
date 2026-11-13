@@ -53,6 +53,36 @@ test("deployed auth requires a canonical HTTPS origin and host-only cookie names
   }
 });
 
+test("public signup is closed by default in production and can be explicitly gated elsewhere", () => {
+  const deployed = { ...local(), FLOW_APP_ORIGIN: "https://flow.example" };
+  assert.equal(
+    readAuthConfig(deployed, "production").publicSignupEnabled,
+    false,
+  );
+  assert.equal(
+    readAuthConfig(
+      { ...deployed, FLOW_PUBLIC_SIGNUP_ENABLED: "enabled" },
+      "production",
+    ).publicSignupEnabled,
+    true,
+  );
+  assert.equal(
+    readAuthConfig(
+      { ...deployed, FLOW_PUBLIC_SIGNUP_ENABLED: "disabled" },
+      "production",
+    ).publicSignupEnabled,
+    false,
+  );
+  assert.equal(readAuthConfig(local(), "local").publicSignupEnabled, true);
+  assert.equal(
+    readAuthConfig(
+      { ...local(), FLOW_PUBLIC_SIGNUP_ENABLED: "disabled" },
+      "local",
+    ).publicSignupEnabled,
+    false,
+  );
+});
+
 test("test requires loopback and fixture credentials while every other environment rejects the fixture", () => {
   assert.equal(
     readAuthConfig(fixture(), "test").cookies.session,

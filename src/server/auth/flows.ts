@@ -163,6 +163,7 @@ async function sendCode(
     | "EMAIL_NOT_ENROLLED"
     | "MAILBOX_PAUSED"
     | "RECOVERY_ACCOUNT_NOT_FOUND"
+    | "PUBLIC_SIGNUP_DISABLED"
     | undefined;
   await transaction(async (tx) => {
     const session = security
@@ -199,6 +200,10 @@ async function sendCode(
     }
     if (login?.recovery && !user) {
       antiEnumerationReason = "RECOVERY_ACCOUNT_NOT_FOUND";
+      return;
+    }
+    if (login && !login.recovery && !user && !auth.publicSignupEnabled) {
+      antiEnumerationReason = "PUBLIC_SIGNUP_DISABLED";
       return;
     }
     const data = {

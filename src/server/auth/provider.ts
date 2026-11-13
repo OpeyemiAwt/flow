@@ -415,6 +415,15 @@ export function provider(
             if (context.emailLogin && user.email !== context.emailLogin) {
               throw new ApiFailure(401, "INVALID_PROOF");
             }
+            if (
+              google &&
+              verifiedGoogle &&
+              !verifiedGoogle.identity &&
+              !google.linkUserId &&
+              !config.publicSignupEnabled
+            ) {
+              throw new ApiFailure(403, "SIGNUP_UNAVAILABLE");
+            }
             return { data: { ...user, emailEnrolled: !!context.emailLogin } };
           },
         },
