@@ -53,7 +53,12 @@ type AuthContext = {
   emailLogin?: string;
   emailSlot?: string;
   emailDigest?: string;
-  google?: { nonceHash: string; startOrder: bigint; linkUserId?: string };
+  google?: {
+    nonceHash: string;
+    startOrder: bigint;
+    linkUserId?: string;
+    linkSessionToken?: string;
+  };
   captureOtp?: (email: string, code: string) => void;
 };
 
@@ -121,6 +126,52 @@ export function provider(
         if (authSession && typeof authSession === "object") {
           return new Proxy(authSession as Record<string, unknown>, {
             get(sTarget, sProp) {
+              if (sProp === "findFirst") {
+                return async (args: unknown) => {
+                  const tokenFilter =
+                    args && typeof args === "object" && "where" in args
+                      ? (args.where as { token?: unknown } | undefined)?.token
+                      : undefined;
+                  const token =
+                    typeof tokenFilter === "string"
+                      ? tokenFilter
+                      : tokenFilter &&
+                          typeof tokenFilter === "object" &&
+                          "equals" in tokenFilter &&
+                          typeof tokenFilter.equals === "string"
+                        ? tokenFilter.equals
+                        : undefined;
+                  const findDelegate = (
+                    sTarget as {
+                      findFirst?: (a: unknown) => Promise<unknown>;
+                    }
+                  ).findFirst;
+                  if (typeof findDelegate !== "function") return null;
+                  if (
+                    !google?.linkSessionToken ||
+                    token !== google.linkSessionToken
+                  ) {
+                    return await findDelegate(args);
+                  }
+
+                  const dbWithTx = target as {
+                    $transaction?: <T>(
+                      fn: (tx: FlowDb) => Promise<T>,
+                    ) => Promise<T>;
+                  };
+                  if (typeof dbWithTx.$transaction === "function") {
+                    return await dbWithTx.$transaction(async (tx) => {
+                      await tx.$executeRaw`
+                        SELECT set_config('flow.current_session_token', ${token}, true)
+                      `;
+                      return await tx.authSession.findFirst(
+                        args as Parameters<typeof tx.authSession.findFirst>[0],
+                      );
+                    });
+                  }
+                  throw new ApiFailure(503, "UNAVAILABLE");
+                };
+              }
               if (sProp === "create") {
                 return async (args: {
                   data?: { userId?: string; user_id?: string };

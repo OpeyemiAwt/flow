@@ -481,6 +481,7 @@ async function finishGoogle(request: Request): Promise<Response> {
         nonceHash: binding,
         startOrder,
         linkUserId: link ? current?.userId : undefined,
+        linkSessionToken: link ? (current?.token ?? undefined) : undefined,
       },
     }).handler(
       new Request(callback, { headers: authHeaders(request.headers) }),
