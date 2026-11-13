@@ -620,11 +620,17 @@ test("email provider failure does not report delivery or leave a usable challeng
   const before = (await app.mail()).length;
   await app.failMail(true);
   try {
-    const body = await post(client, "/api/auth/email/start", { email }, 503);
+    const failedResponse = await client.post("/api/auth/email/start", {
+      data: { email },
+    });
+    const diagnosticId = failedResponse.headers()["x-flow-diagnostic-id"];
+    const body = await result(failedResponse, 503);
     assert.equal(body.error, "DELIVERY_UNAVAILABLE");
     assert.equal((await app.mail()).length, before);
     assert.equal(
-      (await client.storageState()).cookies.some(({ name }) => name.endsWith("-email")),
+      (await client.storageState()).cookies.some(({ name }) =>
+        name.endsWith("-email"),
+      ),
       false,
     );
     const { rows } = await app.db.query(
@@ -632,6 +638,13 @@ test("email provider failure does not report delivery or leave a usable challeng
       [email],
     );
     assert.equal(rows[0].count, 0);
+    const diagnostics = app.otpDiagnostics(diagnosticId);
+    assert.ok(
+      diagnostics.some(({ outcome }) => outcome === "PROVIDER_REJECTED"),
+    );
+    assert.ok(
+      diagnostics.some(({ outcome }) => outcome === "PROVIDER_DELIVERY_FAILED"),
+    );
   } finally {
     await app.failMail(false);
   }
@@ -639,12 +652,64 @@ test("email provider failure does not report delivery or leave a usable challeng
   await status(client);
 });
 
+test("OTP delivery diagnostics correlate accepted and suppressed requests without exposing identity or code", async () => {
+  const email = `otp-diagnostic-${randomUUID()}@example.test`;
+  const client = await app.createClient();
+  const first = await client.post("/api/auth/email/start", { data: { email } });
+  await result(first, 202);
+  const firstId = first.headers()["x-flow-diagnostic-id"];
+  assert.match(firstId, /^[0-9a-f-]{36}$/i);
+  const firstEvents = app.otpDiagnostics(firstId);
+  for (const outcome of [
+    "REQUEST_RECEIVED",
+    "ORIGIN_VALIDATED",
+    "CHALLENGE_PERSISTED",
+    "ENQUEUED",
+    "PROVIDER_ACCEPTED",
+  ])
+    assert.ok(
+      firstEvents.some((event) => event.outcome === outcome),
+      outcome,
+    );
+  assert.ok(
+    firstEvents.some(
+      (event) =>
+        event.outcome === "PROVIDER_ACCEPTED" &&
+        event.providerMessageId === "fixture-delivery",
+    ),
+  );
+
+  const second = await client.post("/api/auth/email/start", {
+    data: { email },
+  });
+  await result(second, 202);
+  const secondId = second.headers()["x-flow-diagnostic-id"];
+  assert.notEqual(secondId, firstId);
+  assert.ok(
+    app
+      .otpDiagnostics(secondId)
+      .some(
+        ({ outcome, reason }) =>
+          outcome === "SUPPRESSED" && reason === "COOLDOWN",
+      ),
+  );
+  const telemetry = JSON.stringify([
+    ...firstEvents,
+    ...app.otpDiagnostics(secondId),
+  ]);
+  assert.ok(!telemetry.includes(email));
+  assert.ok(!telemetry.includes("otp"));
+});
+
 test("malformed session cookies fail closed without an internal error", async () => {
   const client = await app.createClient();
   for (const value of ["%ZZ", "%E0%A4%A"]) {
-    await result(await client.get("/api/me", {
-      headers: { cookie: `${sessionCookie}=${value}` },
-    }), 401);
+    await result(
+      await client.get("/api/me", {
+        headers: { cookie: `${sessionCookie}=${value}` },
+      }),
+      401,
+    );
   }
 });
 

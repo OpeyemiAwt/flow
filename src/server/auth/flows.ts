@@ -1,5 +1,5 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { runtime, transaction, type FlowDb } from "../../foundation/prisma.ts";
 import { log } from "../../foundation/logger.ts";
@@ -84,12 +84,40 @@ async function sendCode(
   security: boolean,
 ): Promise<Response> {
   const { auth } = runtime();
-  const login = security ? undefined : await input(request, emailStart);
-  const action = security ? await input(request, securityStart) : undefined;
+  const diagnosticId = randomUUID();
+  const operation = security ? "security" : "email";
+  log("info", "otp_diagnostic", {
+    diagnosticId,
+    operation,
+    outcome: "REQUEST_RECEIVED",
+  });
+  let login: z.infer<typeof emailStart> | undefined;
+  let action: z.infer<typeof securityStart> | undefined;
+  try {
+    login = security ? undefined : await input(request, emailStart);
+    action = security ? await input(request, securityStart) : undefined;
+  } catch (error) {
+    log("info", "otp_diagnostic", {
+      diagnosticId,
+      operation,
+      outcome: "SUPPRESSED",
+      reason:
+        error instanceof ApiFailure && error.code === "INVALID_ORIGIN"
+          ? "ORIGIN_REJECTED"
+          : "INPUT_REJECTED",
+    });
+    throw error;
+  }
+  log("info", "otp_diagnostic", {
+    diagnosticId,
+    operation,
+    outcome: "ORIGIN_VALIDATED",
+  });
   const secret = nonce();
   const key = security ? auth.cookies.security : auth.cookies.email;
   const accepted = (value: string) => {
     const headers = privateHeaders();
+    headers.set("X-FLOW-Diagnostic-ID", diagnosticId);
     headers.append("set-cookie", cookie(auth, key, value, otpSeconds));
     return reply(202, undefined, headers);
   };
@@ -107,19 +135,41 @@ async function sendCode(
     }));
   const channel = security ? "security-code" : "email-code";
   const slot = keyedDigest(auth.otpKey, channel, email);
-  if (
-    !(await clientBudget(request, channel)) ||
-    !(await withinBudget(`${channel}:global`, 240, 900)) ||
-    !(await withinBudget(`${channel}:cooldown:${email}`, 1, 60)) ||
-    !(await withinBudget(`${channel}:recipient:${email}`, 3, 900))
-  )
+  const suppressed = (reason: string) => {
+    log("info", "otp_diagnostic", {
+      diagnosticId,
+      operation,
+      outcome: "SUPPRESSED",
+      reason,
+    });
     return accepted(previous);
+  };
+  if (!(await clientBudget(request, channel))) {
+    return suppressed("CLIENT_RATE_LIMIT");
+  }
+  if (!(await withinBudget(`${channel}:global`, 240, 900))) {
+    return suppressed("GLOBAL_RATE_LIMIT");
+  }
+  if (!(await withinBudget(`${channel}:cooldown:${email}`, 1, 60))) {
+    return suppressed("COOLDOWN");
+  }
+  if (!(await withinBudget(`${channel}:recipient:${email}`, 3, 900))) {
+    return suppressed("RECIPIENT_RATE_LIMIT");
+  }
 
   const mails: { email: string; code: string }[] = [];
+  let challengePersisted = false;
+  let antiEnumerationSuppressed = false;
   await transaction(async (tx) => {
     const session = security
       ? await requireSession(tx, request.headers, true)
       : undefined;
+    if (security)
+      log("info", "otp_diagnostic", {
+        diagnosticId,
+        operation,
+        outcome: "SESSION_VALIDATED",
+      });
     const user = await tx.authUser.findUnique({ where: { email } });
     if (
       security &&
@@ -130,8 +180,14 @@ async function sendCode(
     ) {
       throw new ApiFailure(403, "MAILBOX_UNAVAILABLE");
     }
-    if (login && user && (!user.emailEnrolled || user.mailboxPaused)) return;
-    if (login?.recovery && !user) return;
+    if (login && user && (!user.emailEnrolled || user.mailboxPaused)) {
+      antiEnumerationSuppressed = true;
+      return;
+    }
+    if (login?.recovery && !user) {
+      antiEnumerationSuppressed = true;
+      return;
+    }
     const data = {
       digest: digest(secret),
       purpose:
@@ -151,6 +207,7 @@ async function sendCode(
       create: { slot, ...data },
       update: data,
     });
+    challengePersisted = true;
     await provider(tx, auth, {
       captureOtp: (destination, code) =>
         mails.push({ email: destination, code }),
@@ -158,6 +215,31 @@ async function sendCode(
       body: { email, type: security ? "email-verification" : "sign-in" },
     });
   });
+
+  if (antiEnumerationSuppressed) {
+    log("info", "otp_diagnostic", {
+      diagnosticId,
+      operation,
+      outcome: "SUPPRESSED",
+      reason: "ANTI_ENUMERATION",
+    });
+    return accepted(previous);
+  }
+  if (challengePersisted)
+    log("info", "otp_diagnostic", {
+      diagnosticId,
+      operation,
+      outcome: "CHALLENGE_PERSISTED",
+      expiresInSeconds: otpSeconds,
+    });
+
+  if (mails.length)
+    log("info", "otp_diagnostic", {
+      diagnosticId,
+      operation,
+      outcome: "ENQUEUED",
+      provider: "resend",
+    });
 
   for (const mail of mails) {
     const subject = security
@@ -168,15 +250,30 @@ async function sendCode(
       mail.email,
       subject,
       `Your FLOW code is ${mail.code}. It expires in five minutes. Enter it only in the FLOW window that requested it.`,
+      diagnosticId,
     );
     if (!delivered) {
       // Invalidate only this challenge, never a concurrent replacement resend.
       await runtime().db.authIntent.deleteMany({
         where: { slot, digest: digest(secret) },
       });
-      throw new ApiFailure(503, "DELIVERY_UNAVAILABLE");
+      log("error", "otp_diagnostic", {
+        diagnosticId,
+        operation,
+        outcome: "PROVIDER_DELIVERY_FAILED",
+      });
+      const headers = privateHeaders();
+      headers.set("X-FLOW-Diagnostic-ID", diagnosticId);
+      return reply(503, { error: "DELIVERY_UNAVAILABLE" }, headers);
     }
   }
+  if (!mails.length)
+    log("info", "otp_diagnostic", {
+      diagnosticId,
+      operation,
+      outcome: "SUPPRESSED",
+      reason: "NO_DELIVERY_CHALLENGE",
+    });
   return accepted(mails.length ? secret : previous);
 }
 

@@ -320,6 +320,19 @@ export async function securityServer() {
           )
           .join("\n");
       },
+      otpDiagnostics(diagnosticId) {
+        return serverLogs
+          .split("\n")
+          .filter((line) => {
+            if (!line.includes('"event":"otp_diagnostic"')) return false;
+            try {
+              return JSON.parse(line).fields?.diagnosticId === diagnosticId;
+            } catch {
+              return false;
+            }
+          })
+          .map((line) => JSON.parse(line).fields);
+      },
       assertNoCredentialLeaks() {
         const outputs = observed.join("\n") + serverLogs;
         for (const value of secrets)
