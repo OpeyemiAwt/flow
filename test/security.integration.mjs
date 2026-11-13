@@ -76,7 +76,11 @@ async function result(response, status) {
   assert.equal(
     response.status(),
     status,
-    `Unexpected HTTP status from ${new URL(response.url()).pathname}`,
+    `Unexpected HTTP status from ${new URL(response.url()).pathname}${
+      response.status() >= 500
+        ? `; sanitized server diagnostics: ${app.requestFailureDiagnostics()}`
+        : ""
+    }`,
   );
   return body ? JSON.parse(body) : undefined;
 }
@@ -1473,6 +1477,21 @@ test("m3 phase 3: authenticated portfolio API — authorization, cross-tenant is
   const stranger = await person("portfolio-stranger-p3@example.com");
   const unauth = await app.createClient();
 
+  // A new Personal account has no wallet while onboarding is asynchronous.
+  // This endpoint contract is specifically testing the authenticated refresh
+  // queue and its cooldown, so install an isolated, non-signing testnet wallet
+  // fixture through the fixture role first.
+  assert.ok(workerDb, "Fixture role required for portfolio sync fixture");
+  const walletId = randomUUID();
+  await workerDb.query(
+    `INSERT INTO flow.wallets (
+      id, account_id, provider, environment, provider_wallet_id, near_account_id,
+      controller_account_id, encrypted_credential, key_id, key_digest, status, policy_state
+    ) VALUES ($1::uuid, $2::uuid, 'OUTLAYER', 'testnet', $3, 'flow-portfolio.testnet',
+      'flow-portfolio.testnet', 'qa-fixture-only', 'qa-only', 'fixture-digest', 'ACTIVE', 'stored')`,
+    [walletId, owner.account.id, `qa-portfolio-${walletId}`],
+  );
+
   // 1. Unauthenticated GET returns 401
   const unauthRes = await unauth.get(
     `/api/accounts/${owner.account.id}/portfolio`,
@@ -1659,8 +1678,8 @@ test("m3 phase 4: authenticated activities API — authorization, cross-tenant i
   );
   assert.equal(ownerSync.status(), 200);
   const syncData = await ownerSync.json();
-  assert.ok(syncData.syncSummary);
-  assert.equal(typeof syncData.syncSummary.totalDiscovered, "number");
+  assert.equal(syncData.syncStatus, "queued");
+  assert.equal(typeof syncData.syncJobId, "string");
 });
 
 test("FLOW desktop brand UI: multi-chain routing, curated asset registry, workspace navigation, and truthfulness gates", async () => {
@@ -1779,7 +1798,7 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
         policy_state, controller_account_id
       ) VALUES ($1::uuid, $2::uuid, 'OUTLAYER', $3, 'flow-fixture.testnet',
         'qa-fixture-only', 'qa-only', 'fixture-digest', 'ACTIVE', 'testnet',
-        'stored', $2::uuid)`,
+        'stored', 'flow-fixture.testnet')`,
       [walletId, personalAccount.id, `qa-fixture-${walletId}`],
     );
     const testnetAddresses = [
@@ -2822,7 +2841,7 @@ test("security: wallet persistence across re-authentication, duplicate preventio
       controller_account_id, encrypted_credential, key_id, key_digest, status, policy_state
     ) VALUES (
       $1::uuid, $2::uuid, 'OUTLAYER', 'mainnet', 'pw-persist-01', $3,
-      'controller.near', 'enc:persistent-key-payload', 'v1', 'dig:persist-01', 'ACTIVE', 'stored'
+      'persist-controller.testnet', 'enc:persistent-key-payload', 'v1', 'dig:persist-01', 'ACTIVE', 'stored'
     )`,
     [walletId, accountId, nearAccount],
   );
@@ -2830,10 +2849,23 @@ test("security: wallet persistence across re-authentication, duplicate preventio
   await workerDb.query(
     `INSERT INTO flow.wallet_addresses (wallet_id, network, chain_id, address, public_key)
      VALUES
-       ($1::uuid, 'near', 'near:mainnet', $2, 'ed25519:persist-pub'),
-       ($1::uuid, 'base', 'eip155:8453', $3, 'secp256k1:persist-pub'),
-       ($1::uuid, 'solana', 'solana:mainnet', $4, 'ed25519:solana-pub')`,
+       ($1::uuid, 'near', 'near-mainnet', $2, 'ed25519:persist-pub'),
+       ($1::uuid, 'base', '8453', $3, 'secp256k1:persist-pub'),
+       ($1::uuid, 'ethereum', '1', $3, 'secp256k1:persist-eth-pub'),
+       ($1::uuid, 'solana', 'solana-mainnet', $4, 'ed25519:solana-pub')`,
     [walletId, nearAccount, baseAddress, solanaAddress],
+  );
+  await workerDb.query(
+    `INSERT INTO flow.wallet_capabilities (
+      id, wallet_id, network, can_derive_address, can_receive,
+      can_read_native_balance, can_read_intents_balance, can_sign_transfer,
+      broadcast_mode, can_rotate_credentials
+    ) VALUES
+      (gen_random_uuid(), $1::uuid, 'near', true, true, false, false, false, 'unsupported', false),
+      (gen_random_uuid(), $1::uuid, 'base', true, true, false, false, false, 'unsupported', false),
+      (gen_random_uuid(), $1::uuid, 'ethereum', true, true, false, false, false, 'unsupported', false),
+      (gen_random_uuid(), $1::uuid, 'solana', true, true, false, false, false, 'unsupported', false)`,
+    [walletId],
   );
 
   // 3. Verify /api/me reflects active wallet
@@ -4438,15 +4470,28 @@ async function quoteFixtureWallet(accountId) {
   const baseAddress = "0x" + randomBytes(20).toString("hex");
   const nearAddress = randomBytes(32).toString("hex");
   const ethAddress = "0x" + randomBytes(20).toString("hex");
+  const solanaAddress = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
   await workerDb.query(
     "INSERT INTO flow.wallets (id,account_id,provider,environment,provider_wallet_id,near_account_id,encrypted_credential,key_id,key_digest,status,policy_state) VALUES ($1,$2,'OUTLAYER','mainnet',$3,$4,'fixture-envelope','v1','fixture-digest','ACTIVE','stored')",
     [walletId, accountId, "fixture-" + walletId, nearAddress],
   );
   await workerDb.query(
-    "INSERT INTO flow.wallet_addresses (wallet_id,network,chain_id,address,public_key) VALUES ($1,'base','8453',$2,'fixture-pubkey'),($1,'near','near-mainnet',$3,'fixture-pubkey'),($1,'ethereum','1',$4,'fixture-pubkey')",
-    [walletId, baseAddress, nearAddress, ethAddress],
+    "INSERT INTO flow.wallet_addresses (wallet_id,network,chain_id,address,public_key) VALUES ($1,'base','8453',$2,'fixture-pubkey'),($1,'near','near-mainnet',$3,'fixture-pubkey'),($1,'ethereum','1',$4,'fixture-pubkey'),($1,'solana','solana-mainnet',$5,'fixture-pubkey')",
+    [walletId, baseAddress, nearAddress, ethAddress, solanaAddress],
   );
-  return { walletId, baseAddress, nearAddress, ethAddress };
+  await workerDb.query(
+    `INSERT INTO flow.wallet_capabilities (
+      id, wallet_id, network, can_derive_address, can_receive,
+      can_read_native_balance, can_read_intents_balance, can_sign_transfer,
+      broadcast_mode, can_rotate_credentials
+    ) VALUES
+      (gen_random_uuid(), $1, 'near', true, true, false, false, false, 'unsupported', false),
+      (gen_random_uuid(), $1, 'base', true, true, false, false, false, 'unsupported', false),
+      (gen_random_uuid(), $1, 'ethereum', true, true, false, false, false, 'unsupported', false),
+      (gen_random_uuid(), $1, 'solana', true, true, false, false, false, 'unsupported', false)`,
+    [walletId],
+  );
+  return { walletId, baseAddress, nearAddress, ethAddress, solanaAddress };
 }
 
 test("FLOW preview checkout and Add Money use bound dry quotes and hide expired payment controls", async () => {

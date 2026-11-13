@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import pg from "pg";
 
 const STAGING_ENVIRONMENT_ID = "a3c2b9e7-a102-4148-a69a-768103aa1016";
+const PRODUCTION_ENVIRONMENT_ID = "7b8f3541-d3c5-483c-831a-5c0fb335a288";
 const operation = process.env.FLOW_DB_OPERATION;
 
 function fail(message) {
@@ -124,6 +125,170 @@ async function bootstrap() {
   } finally {
     await client.end();
   }
+}
+
+async function bootstrapProduction() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "production-empty-only" ||
+    process.env.FLOW_PRODUCTION_BOOTSTRAP_APPROVED !== "enabled" ||
+    process.env.FLOW_PUBLIC_SIGNUP_ENABLED !== "disabled" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled" ||
+    process.env.FLOW_WALLET_REGISTRATION_ENABLED !== "disabled"
+  ) {
+    fail(
+      "Production bootstrap is gated to the isolated, explicitly approved production environment.",
+    );
+  }
+
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("FLOW_BOOTSTRAP_DATABASE_URL is required.");
+  const adminUrl = new URL(rawUrl);
+  if (
+    !["postgresql:", "postgres:"].includes(adminUrl.protocol) ||
+    !adminUrl.hostname.endsWith(".railway.internal") ||
+    adminUrl.pathname !== "/railway" ||
+    decodeURIComponent(adminUrl.username) !== "postgres"
+  ) {
+    fail(
+      "The production bootstrap URL must identify the Railway PostgreSQL administrator.",
+    );
+  }
+
+  const roleSuffixes = [
+    "app",
+    "auth_worker",
+    "custody_worker",
+    "payment_worker",
+    "indexer_worker",
+    "operator",
+    "migrator",
+  ];
+  const roleCredentials = roleSuffixes.map((suffix) => {
+    const variable = `FLOW_PRODUCTION_${suffix.toUpperCase()}_PASSWORD`;
+    const password = process.env[variable];
+    if (!password || !/^[a-f0-9]{64}$/.test(password)) {
+      fail(`${variable} must contain a generated 256-bit hex credential.`);
+    }
+    return { suffix, variable, password };
+  });
+
+  const admin = new pg.Client({
+    connectionString: rawUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    const identity = await admin.query(
+      "SELECT current_database() AS database, current_user AS role",
+    );
+    if (
+      identity.rows[0]?.database !== "railway" ||
+      identity.rows[0]?.role !== "postgres"
+    ) {
+      fail(
+        "Production bootstrap connection has an unexpected database identity.",
+      );
+    }
+
+    // Fail closed: production bootstrap is create-only. It never resets, alters,
+    // or adopts an existing database/role, including one with unfamiliar ownership.
+    const database = await admin.query(
+      "SELECT 1 FROM pg_database WHERE datname = 'flow_production'",
+    );
+    if (database.rowCount)
+      fail("flow_production already exists; refusing to mutate it.");
+    for (const { suffix } of roleCredentials) {
+      const role = `flow_production_${suffix}`;
+      const existing = await admin.query(
+        "SELECT 1 FROM pg_roles WHERE rolname = $1",
+        [role],
+      );
+      if (existing.rowCount)
+        fail(`Role ${role} already exists; refusing to alter it.`);
+    }
+
+    for (const { suffix, password } of roleCredentials) {
+      const role = `flow_production_${suffix}`;
+      await admin.query(
+        `CREATE ROLE "${role}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(password)}`,
+      );
+    }
+    await admin.query(
+      'CREATE DATABASE "flow_production" OWNER "flow_production_migrator"',
+    );
+    await admin.query(
+      'REVOKE CREATE ON DATABASE "flow_production" FROM PUBLIC',
+    );
+    await admin.query(
+      'GRANT CONNECT ON DATABASE "flow_production" TO "flow_production_app", "flow_production_auth_worker", "flow_production_custody_worker", "flow_production_payment_worker", "flow_production_indexer_worker", "flow_production_operator"',
+    );
+    console.log(
+      JSON.stringify({
+        event: "production_empty_database_created",
+        database: "flow_production",
+        roles: roleSuffixes.map((suffix) => `flow_production_${suffix}`),
+      }),
+    );
+  } finally {
+    await admin.end();
+  }
+}
+
+async function migrateProduction() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "production-empty-only" ||
+    process.env.FLOW_PRODUCTION_BOOTSTRAP_APPROVED !== "enabled" ||
+    process.env.FLOW_PUBLIC_SIGNUP_ENABLED !== "disabled" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled" ||
+    process.env.FLOW_WALLET_REGISTRATION_ENABLED !== "disabled"
+  ) {
+    fail(
+      "Production migrations require the gated isolated production environment.",
+    );
+  }
+  const migrationUrl = new URL(process.env.FLOW_MIGRATION_DATABASE_URL ?? "");
+  if (
+    migrationUrl.pathname !== "/flow_production" ||
+    decodeURIComponent(migrationUrl.username) !== "flow_production_migrator"
+  ) {
+    fail(
+      "The production migration URL must use the dedicated flow_production migrator role.",
+    );
+  }
+  const migrationEnv = { ...process.env };
+  delete migrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;
+  for (const key of Object.keys(migrationEnv)) {
+    if (/^FLOW_PRODUCTION_.*_PASSWORD$/.test(key)) delete migrationEnv[key];
+  }
+  const child = spawn(
+    "node",
+    [
+      "node_modules/prisma/build/index.js",
+      "migrate",
+      "deploy",
+      "--config",
+      "prisma.config.ts",
+    ],
+    { stdio: "inherit", env: migrationEnv },
+  );
+  const code = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (status) => resolve(status ?? 1));
+  });
+  if (code !== 0)
+    fail(`Production forward migrations failed with exit ${code}.`);
+  console.log(
+    JSON.stringify({
+      event: "production_forward_migrations_complete",
+      database: "flow_production",
+    }),
+  );
 }
 
 async function migrate() {
@@ -1087,6 +1252,9 @@ function idle() {
 }
 
 if (operation === "bootstrap-staging-and-qa") await bootstrap();
+else if (operation === "bootstrap-production-empty")
+  await bootstrapProduction();
+else if (operation === "migrate-production") await migrateProduction();
 else if (operation === "migrate-staging") await migrateStaging();
 else if (operation === "provision-auth-ticket-role")
   await provisionAuthTicketRole();

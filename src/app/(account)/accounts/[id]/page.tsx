@@ -31,7 +31,11 @@ export default async function AccountPage({
   const account = await pageData(() =>
     access(runtime().db, actor, accountId(id)),
   );
-  if (!account.provisioningComplete) {
+  // Business identity, membership and team administration are account
+  // functions, not custody actions. Keep those screens available while the
+  // owner's Personal wallet is still onboarding; financial APIs independently
+  // enforce wallet readiness before any execution path.
+  if (account.kind === "PERSONAL" && !account.provisioningComplete) {
     redirect("/onboarding?step=status");
   }
   const allAccounts = await pageData(() =>

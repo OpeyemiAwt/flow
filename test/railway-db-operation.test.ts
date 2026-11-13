@@ -28,6 +28,30 @@ test("staging database operations fail closed outside the designated staging env
   assert.ok(!result.stderr.includes(sentinel));
 });
 
+test("production database bootstrap refuses to run without explicit empty-database gates", () => {
+  const sentinel = "production-admin-secret-sentinel";
+  const result = spawnSync(process.execPath, [script.pathname], {
+    env: {
+      ...process.env,
+      FLOW_DB_OPERATION: "bootstrap-production-empty",
+      FLOW_ENV: "production",
+      RAILWAY_ENVIRONMENT_ID: "7b8f3541-d3c5-483c-831a-5c0fb335a288",
+      FLOW_DB_TARGET: "production-empty-only",
+      FLOW_PRODUCTION_BOOTSTRAP_APPROVED: "disabled",
+      FLOW_PUBLIC_SIGNUP_ENABLED: "disabled",
+      FLOW_WALLET_REGISTRATION_ENABLED: "disabled",
+      FLOW_EXECUTION: "disabled",
+      FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
+      FLOW_BOOTSTRAP_DATABASE_URL: `postgresql://postgres:${sentinel}@db.railway.internal:5432/railway`,
+    },
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 78);
+  assert.match(result.stderr, /explicitly approved production environment/);
+  assert.ok(!result.stderr.includes(sentinel));
+});
+
 test("QA migration operation refuses staging or production migration targets", () => {
   const sentinel = "migration-secret-sentinel";
   const result = spawnSync(process.execPath, [script.pathname], {

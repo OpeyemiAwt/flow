@@ -322,6 +322,26 @@ export async function securityServer() {
           )
           .join("\n");
       },
+      requestFailureDiagnostics() {
+        return serverLogs
+          .split("\n")
+          .filter((line) => line.includes('"event":"request_failed"'))
+          .map((line) => {
+            try {
+              const parsed = JSON.parse(line);
+              const fields = parsed.fields ?? {};
+              return JSON.stringify({
+                event: parsed.event,
+                requestId: fields.requestId,
+                category: fields.category,
+              });
+            } catch {
+              return "";
+            }
+          })
+          .filter(Boolean)
+          .join("\n");
+      },
       otpDiagnostics(diagnosticId) {
         return serverLogs
           .split("\n")
