@@ -493,7 +493,12 @@ async function finishGoogle(request: Request): Promise<Response> {
     ) {
       const responseLocation = response.headers.get("location");
       let safeLocation:
-        | { originMatches: boolean; pathname: string; queryKeys: string[] }
+        | {
+            originMatches: boolean;
+            pathname: string;
+            queryKeys: string[];
+            providerError?: string;
+          }
         | undefined;
       if (responseLocation) {
         try {
@@ -502,6 +507,11 @@ async function finishGoogle(request: Request): Promise<Response> {
             originMatches: parsedLocation.origin === auth.origin,
             pathname: parsedLocation.pathname,
             queryKeys: [...new Set(parsedLocation.searchParams.keys())].sort(),
+            providerError: /^[a-z][a-z0-9_]{0,63}$/.test(
+              parsedLocation.searchParams.get("error") ?? "",
+            )
+              ? parsedLocation.searchParams.get("error")!
+              : undefined,
           };
         } catch {
           safeLocation = {
