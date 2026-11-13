@@ -401,12 +401,21 @@ async function testSecurityQaTwice() {
       fail("QA bootstrap connection has an unexpected database identity.");
     }
 
+    const deploymentId = process.env.RAILWAY_DEPLOYMENT_ID?.replaceAll("-", "");
+    if (!deploymentId || !/^[a-f0-9]{32}$/i.test(deploymentId)) {
+      fail("Railway deployment identity is required for idempotent QA database names.");
+    }
+
     for (let pass = 1; pass <= 2; pass++) {
-      const name = `flow_test_qa_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
+      const name = `flow_test_qa_${deploymentId.slice(0, 12).toLowerCase()}_${pass}`;
+      const existingDatabase = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [name]);
+      if (existingDatabase.rowCount) fail(`QA database for pass ${pass} already exists; refusing to rerun the one-shot operation.`);
       const roles = ["app", "worker", "operator", "migrator"];
       const credentials = new Map(roles.map((suffix) => [suffix, randomBytes(32).toString("hex")]));
       for (const suffix of roles) {
         const roleName = `${name}_${suffix}`;
+        const existingRole = await admin.query("SELECT 1 FROM pg_roles WHERE rolname = $1", [roleName]);
+        if (existingRole.rowCount) fail(`QA role for pass ${pass} already exists; refusing to rotate it.`);
         await admin.query(
           `CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(credentials.get(suffix))}`,
         );

@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { runtime, transaction, type FlowDb } from "../../foundation/prisma.ts";
+import { log } from "../../foundation/logger.ts";
 import { audit } from "../audit.ts";
 import {
   api,
@@ -424,6 +425,7 @@ async function finishGoogle(request: Request): Promise<Response> {
   const code = query.get("code");
   const secret = readNonce(request.headers, auth.cookies.oauth);
   const headers = privateHeaders();
+  let failureStage = "callback-validation";
   headers.append("set-cookie", cookie(auth, auth.cookies.oauth, "", 0));
   if (
     !secret ||
@@ -455,6 +457,7 @@ async function finishGoogle(request: Request): Promise<Response> {
   const startOrder = intent.googleStartOrder;
   if (claimed.count !== 1 || startOrder === null)
     return authRedirect(fixedSignInError, headers);
+  failureStage = "session-proof";
   const link = intent.purpose === "link-google-callback";
   const binding = intent.nonceHash;
   try {
@@ -472,6 +475,7 @@ async function finishGoogle(request: Request): Promise<Response> {
     const callback = new URL("/api/auth/callback/google", auth.origin);
     callback.searchParams.set("state", state);
     callback.searchParams.set("code", code);
+    failureStage = "provider-callback";
     const response = await provider(db, auth, {
       google: {
         nonceHash: binding,
@@ -487,8 +491,13 @@ async function finishGoogle(request: Request): Promise<Response> {
       response.headers.get("location") !==
         new URL(providerRedirect, auth.origin).href
     ) {
+      log.error("google_oauth_provider_callback_rejected", {
+        status: response.status,
+        redirectMatched: response.headers.get("location") === new URL(providerRedirect, auth.origin).href,
+      });
       throw new ApiFailure(401, "INVALID_PROOF");
     }
+    failureStage = "session-finalization";
     if (link && current) {
       await db.authSession.deleteMany({ where: { userId: current.userId } });
       await audit(db, "google-linked", current.userId);
@@ -532,6 +541,11 @@ async function finishGoogle(request: Request): Promise<Response> {
     );
   } catch (error) {
     if (!(error instanceof ApiFailure)) throw error;
+    log.error("google_oauth_callback_rejected", {
+      stage: failureStage,
+      status: error.status,
+      error,
+    });
     return authRedirect(
       link ? "/security?issue=authentication" : fixedSignInError,
       headers,
