@@ -873,6 +873,16 @@ export function HomePageClient() {
                     Contact
                   </Link>
                 </li>
+                <li>
+                  <Link href="/privacy" className="hover:text-[#0B0B0B]">
+                    Privacy
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/terms" className="hover:text-[#0B0B0B]">
+                    Terms
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>

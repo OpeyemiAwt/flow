@@ -193,6 +193,17 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
                 </div>
               )}
             </form>
+            <nav
+              aria-label="Legal"
+              className="mt-6 flex justify-center gap-5 text-xs text-[#777777]"
+            >
+              <Link href="/privacy" className="hover:text-[#0B0B0B]">
+                Privacy
+              </Link>
+              <Link href="/terms" className="hover:text-[#0B0B0B]">
+                Terms
+              </Link>
+            </nav>
           </div>
         </main>
 
@@ -376,6 +387,17 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
               Sign in
             </button>
           </p>
+          <nav
+            aria-label="Legal"
+            className="mt-6 flex justify-center gap-5 text-xs text-[#777777]"
+          >
+            <Link href="/privacy" className="hover:text-[#0B0B0B]">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-[#0B0B0B]">
+              Terms
+            </Link>
+          </nav>
         </div>
       </main>
 
