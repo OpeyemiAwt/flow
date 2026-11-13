@@ -532,8 +532,11 @@ async function finishGoogle(request: Request): Promise<Response> {
     }
     failureStage = "session-finalization";
     if (link && current) {
-      await db.authSession.deleteMany({ where: { userId: current.userId } });
-      await audit(db, "google-linked", current.userId);
+      await transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${current.token}, true)`;
+        await tx.authSession.deleteMany({ where: { userId: current.userId } });
+        await audit(tx, "google-linked", current.userId);
+      });
     } else {
       const nextCookie = response.headers
         .getSetCookie()
@@ -546,12 +549,23 @@ async function finishGoogle(request: Request): Promise<Response> {
         : null;
       if (!session) throw new ApiFailure(401, "INVALID_PROOF");
       if (intent.purpose === "recover-google") {
-        await db.authSession.deleteMany({
-          where: { userId: session.userId, id: { not: session.id } },
+        await transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${session.token}, true)`;
+          await tx.authSession.deleteMany({
+            where: { userId: session.userId, id: { not: session.id } },
+          });
         });
       }
-      if (current && current.id !== session.id)
-        await db.authSession.deleteMany({ where: { id: current.id } });
+      if (
+        current &&
+        current.id !== session.id &&
+        current.userId !== session.userId
+      ) {
+        await transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${current.token}, true)`;
+          await tx.authSession.deleteMany({ where: { id: current.id } });
+        });
+      }
       await audit(
         db,
         intent.purpose === "recover-google" ? "recovery" : "sign-in",
