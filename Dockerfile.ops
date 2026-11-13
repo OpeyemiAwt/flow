@@ -10,6 +10,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
+COPY .env.example .env.integration.example ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./prisma.config.ts
 COPY prisma.generate.config.ts ./prisma.generate.config.ts
