@@ -7,6 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 import type { AuthConfig } from "../../foundation/auth-environment.ts";
 import { getPrismaClient, type FlowDb } from "../../foundation/prisma.ts";
+import { log } from "../../foundation/logger.ts";
 import { ApiFailure } from "../http.ts";
 
 export const emailAddress = z
@@ -250,7 +251,12 @@ export function provider(
         disableIdTokenSignIn: true,
         includeGrantedScopes: false,
         async getUserInfo(tokens) {
-          if (!tokens.idToken || !google) return null;
+          const rejectGoogleIdentity = (reason: string) => {
+            log("warn", "google_identity_proof_rejected", { reason });
+            return null;
+          };
+          if (!tokens.idToken || !google)
+            return rejectGoogleIdentity("missing_context_or_id_token");
           const proof = await jwtVerify(tokens.idToken, googleKeys, {
             issuer: googleIssuer,
             audience: config.googleId,
@@ -258,7 +264,7 @@ export function provider(
             maxTokenAge: "10 minutes",
             requiredClaims: ["sub", "iat", "exp", "nonce"],
           }).catch(() => null);
-          if (!proof) return null;
+          if (!proof) return rejectGoogleIdentity("id_token_verification");
           const claims = proof.payload;
           const subject = claims.sub;
           if (
@@ -269,7 +275,7 @@ export function provider(
             typeof claims.nonce !== "string" ||
             digest(claims.nonce) !== google.nonceHash
           )
-            return null;
+            return rejectGoogleIdentity("subject_or_nonce_binding");
 
           const email = emailAddress.safeParse(claims.email);
           const domain = email.success
@@ -310,7 +316,7 @@ export function provider(
           });
           const linkUserId = google.linkUserId;
           if (linkUserId && identity && identity.userId !== linkUserId)
-            return null;
+            return rejectGoogleIdentity("subject_bound_to_another_user");
           verifiedGoogle = {
             subject,
             identity: identity && { id: identity.id, userId: identity.userId },
@@ -338,7 +344,8 @@ export function provider(
               data,
             };
           }
-          if (!authoritative || !email.success) return null;
+          if (!authoritative || !email.success)
+            return rejectGoogleIdentity("email_not_authoritative");
           return {
             user: {
               email: email.data,
