@@ -1354,7 +1354,10 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     await page.getByRole("heading", { name: "Confirm wallet setup" }).waitFor();
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Confirm and continue" }).click();
-    await page.getByRole("heading", { name: "Setup is waiting to start" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Setup is waiting to start" })
+      .first()
+      .waitFor();
     const createdBusiness = await page.evaluate(async (name) => {
       const response = await fetch("/api/accounts", {
         method: "POST",
@@ -1400,7 +1403,10 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     await visitor.getByRole("button", { name: "Continue" }).click();
     await visitor.getByRole("checkbox").check();
     await visitor.getByRole("button", { name: "Confirm and continue" }).click();
-    await visitor.getByRole("heading", { name: "Setup is waiting to start" }).waitFor();
+    await visitor
+      .getByRole("heading", { name: "Setup is waiting to start" })
+      .first()
+      .waitFor();
     const inaccessible = await visitor.goto(privateUrl);
     assert.equal(inaccessible.status(), 404);
     assert.equal(
@@ -1729,7 +1735,10 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
     await captureRecoveryScreen(page, "onboarding-04-confirmation");
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Confirm and continue" }).click();
-    await page.getByRole("heading", { name: "Setup is waiting to start" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Setup is waiting to start" })
+      .first()
+      .waitFor();
     await captureRecoveryScreen(page, "onboarding-05-provisioning-status");
 
     const personal = await page.evaluate(async () => {
