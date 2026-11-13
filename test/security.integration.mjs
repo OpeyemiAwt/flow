@@ -293,6 +293,7 @@ test("returning Google user restores the same Personal account without duplicate
   const subject = "google-returning-subject";
   const firstClient = await app.createClient();
   await completeGoogle(firstClient, google(email, subject));
+  const originalAccount = await onboard(firstClient);
   const firstStatus = await status(firstClient);
   const { rows: before } = await app.db.query(
     `SELECT u.id AS auth_user_id, f.id AS flow_user_id, a.id AS account_id
@@ -307,6 +308,7 @@ test("returning Google user restores the same Personal account without duplicate
 
   const returningClient = await app.createClient();
   await completeGoogle(returningClient, google(email, subject));
+  const restoredAccount = await onboard(returningClient);
   const returningStatus = await status(returningClient);
   const { rows: after } = await app.db.query(
     `SELECT u.id AS auth_user_id, f.id AS flow_user_id, a.id AS account_id
@@ -317,6 +319,7 @@ test("returning Google user restores the same Personal account without duplicate
     [email, subject],
   );
   assert.deepEqual(after, before);
+  assert.equal(restoredAccount.id, originalAccount.id);
   assert.equal(returningStatus.email, email);
   assert.equal(returningStatus.googleLinked, true);
   assert.equal(returningStatus.sessions.length, 1);
