@@ -227,6 +227,16 @@ async function testQa() {
 
   const migrationUrl = new URL(process.env.FLOW_MIGRATION_DATABASE_URL ?? "");
   const databaseName = process.env.FLOW_TEST_DATABASE_NAME ?? "flow_test";
+  if (migrationUrl.pathname !== "/flow_test" || decodeURIComponent(migrationUrl.username) !== "flow_test_migrator") {
+    fail("The QA migration URL must begin scoped to flow_test.");
+  }
+  if (databaseName !== "flow_test") {
+    const password = process.env[`${databaseName.toUpperCase()}_MIGRATOR_PASSWORD`];
+    if (!password || !/^[a-f0-9]{64}$/.test(password)) fail("Validation migrator credential is missing.");
+    migrationUrl.username = `${databaseName}_migrator`;
+    migrationUrl.password = password;
+  }
+  migrationUrl.pathname = `/${databaseName}`;
   if (
     !/^flow_test_[a-z0-9_]+$/.test(databaseName) ||
     migrationUrl.pathname !== `/${databaseName}` ||
