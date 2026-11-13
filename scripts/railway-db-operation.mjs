@@ -960,16 +960,9 @@ async function testSecurityQaTwice() {
         ],
         migrationEnv,
       );
-      const authSecurityPattern =
-        "Google authorization code, signed identity, nonce and PKCE|returning Google user|Google rejects forged claims|matching email cannot use an OTP for a Google-only identity|pending email registration cannot enter a Google identity|explicit Google linking|revoking the linking session|session recovery and explicit revocation|expired sessions and attempts to revoke another user's session|Chromium enforces host-only HttpOnly cookies|Chromium follows the Google redirect";
       await run(
-        "Google and session security integration",
-        [
-          "--test",
-          "--test-name-pattern",
-          authSecurityPattern,
-          "test/security.integration.mjs",
-        ],
+        "complete security integration",
+        ["--test", "test/security.integration.mjs"],
         integrationEnv,
       );
       await run(

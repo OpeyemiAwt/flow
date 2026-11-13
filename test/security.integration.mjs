@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
@@ -1346,6 +1346,15 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     await page.getByRole("button", { name: "Continue with Google" }).click();
     await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
     assert.equal(new URL(page.url()).pathname, "/onboarding");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("heading", { name: "Your Personal account" }).waitFor();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("heading", { name: "Your wallet, carefully set up" }).waitFor();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("heading", { name: "Confirm wallet setup" }).waitFor();
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Confirm and continue" }).click();
+    await page.getByRole("heading", { name: "Setup is waiting to start" }).waitFor();
     const createdBusiness = await page.evaluate(async (name) => {
       const response = await fetch("/api/accounts", {
         method: "POST",
@@ -1357,7 +1366,11 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
       });
       return { status: response.status, result: await response.json() };
     }, businessName);
-    assert.equal(createdBusiness.status, 201);
+    assert.equal(
+      createdBusiness.status,
+      201,
+      `Business creation failed with ${String(createdBusiness.result?.error ?? "unknown")}`,
+    );
     const id = createdBusiness.result.account.id;
     const privateUrl = `${app.origin}/accounts/${id}`;
     const teamUrl = `${privateUrl}/team`;
@@ -1382,6 +1395,12 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     await visitor.getByRole("button", { name: /Verify and continue/i }).click();
     await visitor.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
     assert.equal(new URL(visitor.url()).pathname, "/onboarding");
+    await visitor.getByRole("button", { name: "Continue" }).click();
+    await visitor.getByRole("button", { name: "Continue" }).click();
+    await visitor.getByRole("button", { name: "Continue" }).click();
+    await visitor.getByRole("checkbox").check();
+    await visitor.getByRole("button", { name: "Confirm and continue" }).click();
+    await visitor.getByRole("heading", { name: "Setup is waiting to start" }).waitFor();
     const inaccessible = await visitor.goto(privateUrl);
     assert.equal(inaccessible.status(), 404);
     assert.equal(
@@ -1627,6 +1646,10 @@ test("m3 phase 4: authenticated activities API — authorization, cross-tenant i
 });
 
 test("FLOW desktop brand UI: multi-chain routing, curated asset registry, workspace navigation, and truthfulness gates", async () => {
+  const previousOnboardingScreenshotDir = process.env.FLOW_TEST_SCREENSHOT_DIR;
+  process.env.FLOW_TEST_SCREENSHOT_DIR ??=
+    `/tmp/flow-onboarding-qa-${process.pid}`;
+  mkdirSync(process.env.FLOW_TEST_SCREENSHOT_DIR, { recursive: true });
   const ctx = await app.browser.newContext({
     ignoreHTTPSErrors: true,
     viewport: { width: 1440, height: 900 },
@@ -1636,6 +1659,9 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
   const screenshotDir =
     process.env.FLOW_CAPTURE_SCREENSHOTS_DIR ||
     (existsSync(brainArtifactDir) ? brainArtifactDir : null);
+  if (process.env.FLOW_TEST_SCREENSHOT_DIR) {
+    mkdirSync(process.env.FLOW_TEST_SCREENSHOT_DIR, { recursive: true });
+  }
   const snap = async (page, filename) => {
     if (!screenshotDir) return;
     await page.waitForTimeout(250);
@@ -1690,36 +1716,83 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
 
     await page.getByLabel("Email code").fill(otpCode);
     await page.getByRole("button", { name: /Verify and continue/i }).click();
+    await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
+    await captureRecoveryScreen(page, "onboarding-01-welcome");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("heading", { name: "Your Personal account" }).waitFor();
+    await captureRecoveryScreen(page, "onboarding-02-personal-details");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("heading", { name: "Your wallet, carefully set up" }).waitFor();
+    await captureRecoveryScreen(page, "onboarding-03-security");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("heading", { name: "Confirm wallet setup" }).waitFor();
+    await captureRecoveryScreen(page, "onboarding-04-confirmation");
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Confirm and continue" }).click();
+    await page.getByRole("heading", { name: "Setup is waiting to start" }).waitFor();
+    await captureRecoveryScreen(page, "onboarding-05-provisioning-status");
 
-    // 3. Personal Dashboard (/accounts/[id])
+    const personal = await page.evaluate(async () => {
+      const response = await fetch("/api/me");
+      return { status: response.status, body: await response.json() };
+    });
+    assert.equal(personal.status, 200);
+    const personalAccount = personal.body.accounts.find(
+      (candidate) => candidate.kind === "PERSONAL",
+    );
+    assert.ok(personalAccount, "Onboarding should create one Personal account");
+    assert.equal(personalAccount.walletStatus, "setup_pending");
+    assert.equal(personalAccount.provisioningComplete, false);
+
+    // This isolated testnet wallet is a fixture only. It exercises address
+    // verification and the ready/dashboard screens without calling OutLayer.
+    assert.ok(workerDb, "Worker role required for isolated wallet fixtures");
+    const walletId = randomUUID();
+    await workerDb.query(
+      `INSERT INTO flow.wallets (
+        id, account_id, provider, provider_wallet_id, near_account_id,
+        encrypted_credential, key_id, key_digest, status, environment,
+        policy_state, controller_account_id
+      ) VALUES ($1::uuid, $2::uuid, 'OUTLAYER', $3, 'flow-fixture.testnet',
+        'qa-fixture-only', 'qa-only', 'fixture-digest', 'ACTIVE', 'testnet',
+        'stored', $2::uuid)`,
+      [walletId, personalAccount.id, `qa-fixture-${walletId}`],
+    );
+    const testnetAddresses = [
+      ["near", "near-testnet", "flow-fixture.testnet", "ed25519:fixture-near"],
+      ["base", "84532", "0x1111111111111111111111111111111111111111", "secp256k1:fixture-base"],
+      ["ethereum", "1", "0x1111111111111111111111111111111111111111", "secp256k1:fixture-eth"],
+      ["solana", "solana-devnet", "11111111111111111111111111111111", "ed25519:fixture-solana"],
+    ];
+    for (const [network, chainId, address, publicKey] of testnetAddresses) {
+      await workerDb.query(
+        `INSERT INTO flow.wallet_addresses (id, wallet_id, network, chain_id, address, public_key)
+         VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5)`,
+        [walletId, network, chainId, address, publicKey],
+      );
+      await workerDb.query(
+        `INSERT INTO flow.wallet_capabilities (
+          id, wallet_id, network, can_derive_address, can_receive,
+          can_read_native_balance, can_read_intents_balance, can_sign_transfer,
+          broadcast_mode, can_rotate_credentials
+        ) VALUES (gen_random_uuid(), $1::uuid, $2, true, true, false, false,
+          false, 'unsupported', false)`,
+        [walletId, network],
+      );
+    }
+    await page.getByRole("heading", { name: "Four verified networks" }).waitFor();
+    await captureRecoveryScreen(page, "onboarding-06-wallet-ready");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("heading", { name: "Wallet verified and ready" }).waitFor();
+    await captureRecoveryScreen(page, "onboarding-07-dashboard-entry");
+    await page.getByRole("button", { name: "Enter dashboard" }).click();
     await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
     const personalDashboardUrl = page.url();
-    assert.ok(await page.getByText("Wallet setup pending").first().isVisible());
     await snap(page, "04-personal-dashboard.png");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await snap(page, "04-personal-dashboard-mobile.png");
     await page.setViewportSize({ width: 1440, height: 900 });
-
-    // Capture the 3 Onboarding reference screens (/onboarding?step=type, profile, ready)
-    await page.goto(`${app.origin}/onboarding?step=type`);
-    await page
-      .getByRole("heading", { name: /How will you use Flow\?/i })
-      .waitFor();
-    await snap(page, "03b-onboarding-type.png");
-    await page.goto(`${app.origin}/onboarding?step=profile`);
-    await page
-      .getByRole("heading", { name: /Complete your profile\./i })
-      .waitFor();
-    await snap(page, "03c-onboarding-profile.png");
-    await page.goto(`${app.origin}/onboarding?step=ready`);
-    await page
-      .getByRole("heading", { name: /You’re all set\.|You're all set\./i })
-      .waitFor();
-    await snap(page, "03d-onboarding-ready.png");
-
-    await page.goto(personalDashboardUrl);
-    await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
 
     assert.equal(
       await page.getByRole("button", { name: "Wallets & Assets" }).count(),
@@ -1828,6 +1901,11 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
     await snap(page, "13-security-dark-theme.png");
   } finally {
     await ctx.close();
+    if (previousOnboardingScreenshotDir === undefined) {
+      delete process.env.FLOW_TEST_SCREENSHOT_DIR;
+    } else {
+      process.env.FLOW_TEST_SCREENSHOT_DIR = previousOnboardingScreenshotDir;
+    }
   }
 });
 
