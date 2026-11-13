@@ -20,6 +20,6 @@ COPY src ./src
 COPY scripts ./scripts
 COPY test ./test
 RUN node_modules/.bin/prisma generate --config prisma.generate.config.ts
-RUN FLOW_ENV=test FLOW_EXECUTION=disabled npm run build
+RUN env -i PATH="$PATH" HOME=/root NODE_ENV=production FLOW_ENV=test FLOW_EXECUTION=disabled NEXT_TELEMETRY_DISABLED=1 npm run build
 ENV NODE_ENV=production FLOW_ENV=staging FLOW_EXECUTION=disabled
 CMD ["node", "scripts/railway-db-operation.mjs"]
