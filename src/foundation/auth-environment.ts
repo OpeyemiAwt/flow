@@ -5,6 +5,22 @@ import { FlowError } from "./errors.ts";
 type FlowEnvironment = "local" | "test" | "staging" | "production";
 
 const fixtureGoogleId = "000000-flow-fixture.apps.googleusercontent.com";
+const senderMailbox = z.email();
+const senderDisplayAddress = z
+  .string()
+  .min(3)
+  .max(320)
+  .refine((value) => {
+    if (/[\r\n]/.test(value)) return false;
+    if (senderMailbox.safeParse(value).success) return true;
+    const match = /^(?:"([^"\r\n]+)"|([^<>\r\n]+))\s+<([^<>\s]+)>$/.exec(value);
+    const displayName = (match?.[1] ?? match?.[2] ?? "").trim();
+    return (
+      displayName.length > 0 &&
+      displayName.length <= 80 &&
+      senderMailbox.safeParse(match?.[3]).success
+    );
+  });
 const authVariables = z.object({
   FLOW_APP_ORIGIN: z.url(),
   FLOW_AUTH_SECRET: z.string().regex(/^[a-f0-9]{64}$/),
@@ -18,7 +34,7 @@ const authVariables = z.object({
     .max(256)
     .regex(/^[\w-]+$/),
   FLOW_MAIL_API_KEY: z.string().regex(/^re_[\w-]{16,256}$/),
-  FLOW_MAIL_FROM: z.email().max(254),
+  FLOW_MAIL_FROM: senderDisplayAddress,
   FLOW_CLIENT_IP_HEADER: z.enum(["x-real-ip", "cf-connecting-ip"]).optional(),
 });
 

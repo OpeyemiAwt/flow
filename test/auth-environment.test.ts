@@ -101,3 +101,33 @@ test("absent, reused and placeholder authentication secrets fail without exposin
     },
   );
 });
+
+test("Resend sender accepts bare and display-name mailbox forms but rejects header injection", () => {
+  const source = local();
+  const displayFrom = "FLOW <auth@mail.devhub.forum>";
+  assert.equal(
+    readAuthConfig({ ...source, FLOW_MAIL_FROM: displayFrom }, "local")
+      .mailFrom,
+    displayFrom,
+  );
+  assert.equal(
+    readAuthConfig(
+      { ...source, FLOW_MAIL_FROM: '"FLOW Payments" <auth@mail.devhub.forum>' },
+      "local",
+    ).mailFrom,
+    '"FLOW Payments" <auth@mail.devhub.forum>',
+  );
+  for (const sender of [
+    "FLOW <auth@mail.devhub.forum>\r\nBcc: attacker@example.com",
+    "FLOW auth@mail.devhub.forum",
+    "FLOW <not-an-address>",
+  ]) {
+    assert.throws(
+      () => readAuthConfig({ ...source, FLOW_MAIL_FROM: sender }, "local"),
+      {
+        code: "INVALID_CONFIGURATION",
+        message: "Invalid authentication settings: FLOW_MAIL_FROM.",
+      },
+    );
+  }
+});
