@@ -288,6 +288,40 @@ test("Google authorization code, signed identity, nonce and PKCE establish one d
   assert.deepEqual(rows, [{ empty: true }]);
 });
 
+test("returning Google user restores the same Personal account without duplicate onboarding", async () => {
+  const email = "google-returning@example.test";
+  const subject = "google-returning-subject";
+  const firstClient = await app.createClient();
+  await completeGoogle(firstClient, google(email, subject));
+  const firstStatus = await status(firstClient);
+  const { rows: before } = await app.db.query(
+    `SELECT u.id AS auth_user_id, f.id AS flow_user_id, a.id AS account_id
+     FROM flow.auth_users u JOIN flow.users f ON f.auth_user_id = u.id
+     JOIN flow.accounts a ON a.personal_owner_id = f.id
+     JOIN flow.google_subject_bindings g ON g.user_id = u.id
+     WHERE u.email = $1 AND g.subject = $2`,
+    [email, subject],
+  );
+  assert.equal(before.length, 1);
+  assert.equal(firstStatus.email, email);
+
+  const returningClient = await app.createClient();
+  await completeGoogle(returningClient, google(email, subject));
+  const returningStatus = await status(returningClient);
+  const { rows: after } = await app.db.query(
+    `SELECT u.id AS auth_user_id, f.id AS flow_user_id, a.id AS account_id
+     FROM flow.auth_users u JOIN flow.users f ON f.auth_user_id = u.id
+     JOIN flow.accounts a ON a.personal_owner_id = f.id
+     JOIN flow.google_subject_bindings g ON g.user_id = u.id
+     WHERE u.email = $1 AND g.subject = $2`,
+    [email, subject],
+  );
+  assert.deepEqual(after, before);
+  assert.equal(returningStatus.email, email);
+  assert.equal(returningStatus.googleLinked, true);
+  assert.equal(returningStatus.sessions.length, 1);
+});
+
 test("Google rejects forged claims, non-authoritative email and cross-browser state", async () => {
   const client = await app.createClient();
   const identity = google("forged@gmail.com", "forged-subject");

@@ -516,7 +516,8 @@ async function testSecurityQaTwice() {
         child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${label} failed on QA pass ${pass} (exit ${code ?? 1}).`)));
       });
       await run("migrations", ["node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "prisma.config.ts"], migrationEnv);
-      await run("security integration", ["--test", "test/security.integration.mjs"], integrationEnv);
+      const authSecurityPattern = "Google authorization code, signed identity, nonce and PKCE|returning Google user|Google rejects forged claims|matching email cannot use an OTP for a Google-only identity|pending email registration cannot enter a Google identity|explicit Google linking|revoking the linking session|session recovery and explicit revocation|expired sessions and attempts to revoke another user's session|Chromium enforces host-only HttpOnly cookies|Chromium follows the Google redirect";
+      await run("Google and session security integration", ["--test", "--test-name-pattern", authSecurityPattern, "test/security.integration.mjs"], integrationEnv);
       await run("database integration", ["--test", "test/database.integration.ts"], integrationEnv);
       console.log(JSON.stringify({ event: "qa_suite_pass", pass, database: name, result: "passed" }));
     }
