@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FlowLogo } from "../../../components/flow-logo.tsx";
 import { ThemeToggle } from "../../../components/theme-toggle.tsx";
+import { FloatingNav } from "../../../components/floating-nav.tsx";
 import { UserAvatar } from "../../../components/user-avatar.tsx";
 import {
   readProfilePreference,
@@ -185,81 +185,17 @@ export function SecurityPanel({
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0B0B] text-neutral-950 dark:text-white pb-20 selection:bg-red-100 selection:text-red-900">
-      {/* Top Navigation Bar matching media_1794481849606_6993ee54.jpg */}
-      <header className="sticky top-0 z-40 w-full px-4 sm:px-8 pt-4 pb-3">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-          <Link
-            href={backHref}
-            aria-label="FLOW Home"
-            className="flex items-center gap-2"
-          >
-            <FlowLogo size={28} />
-          </Link>
-
-          <nav
-            aria-label="Primary navigation"
-            className="hidden md:flex items-center p-1 rounded-full bg-white/90 dark:bg-[#141414]/90 backdrop-blur-md border border-neutral-200/80 dark:border-neutral-800/80 shadow-xs"
-          >
-            <Link
-              href={backHref}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50 transition-colors"
-            >
-              <span>⌂</span>
-              <span>Home</span>
-            </Link>
-            <Link
-              href={`${backHref}?view=send`}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50 transition-colors"
-            >
-              <span>↗</span>
-              <span>Send</span>
-            </Link>
-            <Link
-              href={`${backHref}?view=receive`}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50 transition-colors"
-            >
-              <span>+</span>
-              <span>Add Money</span>
-            </Link>
-            <Link
-              href={`${backHref}?view=request`}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50 transition-colors"
-            >
-              <span>⚲</span>
-              <span>Payment Links</span>
-            </Link>
-            <Link
-              href={`${backHref}?view=activity`}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50 transition-colors"
-            >
-              <span>◷</span>
-              <span>Activity</span>
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/security"
-              aria-label="Settings"
-              className="p-2 rounded-full text-neutral-950 dark:text-white bg-neutral-200/60 dark:bg-neutral-800 transition-colors"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <FloatingNav
+        activeTab="settings"
+        onTabChange={(tab) => {
+          window.location.assign(
+            tab === "dashboard" ? backHref : `${backHref}?view=${tab}`,
+          );
+        }}
+        userEmail={email}
+        userName={primaryAccount?.name ?? "Personal"}
+        profileId={profileId}
+      />
 
       {/* Main Settings Page Container */}
       <main className="mx-auto max-w-5xl px-4 sm:px-8 pt-6">

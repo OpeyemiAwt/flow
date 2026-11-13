@@ -4,6 +4,7 @@ import { runtime } from "../../foundation/prisma.ts";
 import { accessibleAccounts, principal } from "../../server/accounts.ts";
 import { readSession } from "../../server/auth/session.ts";
 import { ApiFailure } from "../../server/http.ts";
+import { authenticatedEntryPath } from "../../server/onboarding/routing.ts";
 import { SignIn } from "./sign-in.tsx";
 
 export const metadata = { title: "Sign in | FLOW", robots: { index: false } };
@@ -23,9 +24,10 @@ export default async function SignInPage({
     if (session) {
       const actor = await principal(runtime().db, reqHeaders);
       const accounts = await accessibleAccounts(runtime().db, actor);
-      if (accounts.length > 0 && accounts[0]?.id) {
-        targetAccountId = accounts[0].id;
-      }
+      const entryPath = authenticatedEntryPath(accounts);
+      if (entryPath.startsWith("/accounts/"))
+        targetAccountId = entryPath.slice("/accounts/".length);
+      else needsOnboarding = true;
     }
   } catch (error) {
     if (error instanceof ApiFailure && error.code === "ONBOARDING_REQUIRED") {

@@ -8,6 +8,7 @@ import { getAccountBalances } from "../../../../server/assets/asset-service.ts";
 import { pageData, pagePrincipal } from "../../../../server/pages.ts";
 import { serializePortfolio } from "../../../../server/portfolio.ts";
 import { PortfolioView, type WorkspaceTab } from "./portfolio-view.tsx";
+import { redirect } from "next/navigation";
 
 const VALID_VIEWS: ReadonlySet<WorkspaceTab> = new Set([
   "dashboard",
@@ -30,6 +31,9 @@ export default async function AccountPage({
   const account = await pageData(() =>
     access(runtime().db, actor, accountId(id)),
   );
+  if (!account.provisioningComplete) {
+    redirect("/onboarding?step=status");
+  }
   const allAccounts = await pageData(() =>
     accessibleAccounts(runtime().db, actor),
   );

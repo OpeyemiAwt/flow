@@ -206,11 +206,15 @@ export async function onboard(request: Request): Promise<Response> {
       select: summarySelect(user.id),
     });
     if (personal) {
-      await ensureProvisioningJobForAccount(
-        tx,
-        personal.id,
-        accountProvisioningKey(personal.id),
-      );
+      // A completed wallet is a terminal onboarding state. Do not enqueue a
+      // fresh provisioning job on login or refresh for an existing wallet.
+      if (!summary(personal).provisioningComplete) {
+        await ensureProvisioningJobForAccount(
+          tx,
+          personal.id,
+          accountProvisioningKey(personal.id),
+        );
+      }
       return summary(personal);
     }
     const auth = await tx.authUser.findUniqueOrThrow({

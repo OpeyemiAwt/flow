@@ -4,6 +4,7 @@ import { runtime } from "../foundation/prisma.ts";
 import { accessibleAccounts, principal } from "../server/accounts.ts";
 import { readSession } from "../server/auth/session.ts";
 import { ApiFailure } from "../server/http.ts";
+import { authenticatedEntryPath } from "../server/onboarding/routing.ts";
 import { HomePageClient } from "./home-client.tsx";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +19,10 @@ export default async function HomePage() {
     if (session) {
       const actor = await principal(runtime().db, reqHeaders);
       const accounts = await accessibleAccounts(runtime().db, actor);
-      if (accounts.length > 0 && accounts[0]?.id) {
-        targetAccountId = accounts[0].id;
-      }
+      const entryPath = authenticatedEntryPath(accounts);
+      if (entryPath.startsWith("/accounts/"))
+        targetAccountId = entryPath.slice("/accounts/".length);
+      else needsOnboarding = true;
     }
   } catch (error) {
     if (error instanceof ApiFailure && error.code === "ONBOARDING_REQUIRED") {

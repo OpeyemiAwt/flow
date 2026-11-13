@@ -10,7 +10,7 @@ import {
 } from "./profile-preferences.ts";
 
 export type NavTabId =
-  "dashboard" | "send" | "receive" | "request" | "activity";
+  "dashboard" | "send" | "receive" | "request" | "activity" | "settings";
 
 export interface FloatingNavProps {
   activeTab: NavTabId;
@@ -468,7 +468,7 @@ export function FloatingNav({
           <Link
             href="/security"
             aria-label="Settings"
-            className="p-2 rounded-full text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            className={`p-2 rounded-full transition-colors ${activeTab === "settings" ? "bg-neutral-200/60 text-neutral-950 dark:bg-neutral-800 dark:text-white" : "text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
           >
             <svg
               width="18"

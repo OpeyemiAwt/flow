@@ -6,581 +6,358 @@ import Link from "next/link";
 import { FlowLogo } from "../../components/flow-logo.tsx";
 import { describe, Feedback, send } from "../controls.tsx";
 
-type OnboardingStep = "type" | "profile" | "ready";
+type WalletStatus =
+  | "active"
+  | "setup_pending"
+  | "provisioning"
+  | "setup_failed"
+  | "frozen"
+  | "recovery_pending";
+
+type OnboardingAccount = {
+  id: string;
+  walletStatus: WalletStatus;
+  provisioningComplete: boolean;
+};
+
+const statusCopy: Record<WalletStatus, { title: string; detail: string }> = {
+  active: { title: "Wallet verified", detail: "Your wallet is ready." },
+  setup_pending: {
+    title: "Setup is waiting to start",
+    detail:
+      "Your request is saved. Wallet registration has not been confirmed yet.",
+  },
+  provisioning: {
+    title: "Wallet setup is in progress",
+    detail:
+      "FLOW is waiting for the custody provider to derive and verify your network addresses.",
+  },
+  setup_failed: {
+    title: "Wallet setup needs attention",
+    detail:
+      "The existing setup did not complete. Your account and any existing wallet remain unchanged.",
+  },
+  frozen: {
+    title: "Wallet access is restricted",
+    detail: "Contact FLOW support before taking further action.",
+  },
+  recovery_pending: {
+    title: "Wallet recovery is in progress",
+    detail:
+      "FLOW is checking the existing wallet. Do not start another wallet setup.",
+  },
+};
 
 export function CompleteOnboarding({
   initialStep,
   userEmail,
   userName,
+  initialAccount,
 }: {
   initialStep?: string;
   userEmail: string;
   userName: string;
+  initialAccount?: OnboardingAccount | null;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState<OnboardingStep>(
-    initialStep === "profile"
-      ? "profile"
-      : initialStep === "ready"
-        ? "ready"
-        : "type",
+  const [account, setAccount] = useState<OnboardingAccount | null>(
+    initialAccount ?? null,
   );
-  const [accountType, setAccountType] = useState<"personal" | "business">(
-    "personal",
-  );
-  const [fullName, setFullName] = useState(userName || "Amara Nolan");
-  const [username, setUsername] = useState(
-    (userEmail.split("@")[0] || "amara").replace(/[^a-zA-Z0-9_]/g, ""),
-  );
-  const [accountId, setAccountId] = useState<string | null>(null);
+  const [step, setStep] = useState<
+    "welcome" | "security" | "confirm" | "status"
+  >(initialStep === "status" || initialAccount ? "status" : "welcome");
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const isManualStep = Boolean(initialStep);
 
   useEffect(() => {
+    if (account?.provisioningComplete)
+      router.replace(`/accounts/${account.id}`);
+  }, [account, router]);
+
+  useEffect(() => {
+    if (
+      step !== "status" ||
+      !account ||
+      (account.walletStatus !== "setup_pending" &&
+        account.walletStatus !== "provisioning")
+    )
+      return;
     let active = true;
-    send<{ account: { id: string } }>("/api/onboarding/complete")
-      .then(({ account }) => {
-        if (!active) return;
-        setAccountId(account.id);
-        if (!isManualStep) {
-          router.replace(`/accounts/${account.id}`);
-        }
-      })
-      .catch((error) => {
-        if (active) setMessage(describe(error));
-      });
+    const refresh = async () => {
+      try {
+        const response = await send<{ accounts: OnboardingAccount[] }>(
+          "/api/me",
+          {},
+          "GET",
+        );
+        const latest = response.accounts.find((item) => item.id === account.id);
+        if (active && latest) setAccount(latest);
+      } catch {
+        // A polling error is transient. The page keeps showing the last persisted status.
+      }
+    };
+    const timer = window.setInterval(refresh, 5000);
     return () => {
       active = false;
+      window.clearInterval(timer);
     };
-  }, [isManualStep, router]);
+  }, [account, step]);
 
-  function goToDashboard() {
-    if (accountId) {
-      router.replace(`/accounts/${accountId}`);
-    } else {
-      router.replace("/accounts");
+  async function beginProvisioning() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await send<{ account: OnboardingAccount }>(
+        "/api/onboarding/complete",
+      );
+      setAccount(response.account);
+      setStep("status");
+    } catch (error) {
+      setMessage(describe(error));
+    } finally {
+      setBusy(false);
     }
   }
 
-  // SCREEN 6: Account Ready ("You're all set.") — Matches 08_26_11 PM-4.png
-  if (step === "ready") {
-    return (
-      <div className="relative min-h-screen w-full overflow-hidden bg-white text-[#0B0B0B] lg:grid lg:grid-cols-12">
-        <main className="relative z-10 flex min-h-screen flex-col justify-between px-6 py-10 sm:px-14 lg:col-span-6 lg:px-20">
-          <div>
-            <Link href="/" aria-label="FLOW Home" className="inline-block">
-              <FlowLogo className="h-8 w-auto sm:h-9" />
-            </Link>
+  const status = account
+    ? account.walletStatus === "active" && !account.provisioningComplete
+      ? {
+          title: "Wallet verification is incomplete",
+          detail:
+            "FLOW has not confirmed all required custody and policy checks. Dashboard access remains unavailable until verification completes.",
+        }
+      : statusCopy[account.walletStatus]
+    : null;
+
+  return (
+    <div className="min-h-screen bg-[#FAF8F5] px-5 py-8 text-[#0B0B0B] sm:px-8 sm:py-12">
+      <header className="mx-auto flex max-w-6xl items-center justify-between">
+        <Link href="/" aria-label="FLOW Home">
+          <FlowLogo className="h-8 w-auto" />
+        </Link>
+        <span className="rounded-full border border-[#E8E4DC] bg-white px-4 py-2 text-sm text-[#555]">
+          Personal account
+        </span>
+      </header>
+
+      <main className="mx-auto mt-10 grid max-w-6xl gap-8 lg:mt-16 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+        <section className="max-w-xl">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E92935]">
+            FLOW WALLET SETUP
+          </p>
+          <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">
+            {step === "status"
+              ? status?.title
+              : step === "welcome"
+                ? "Welcome to FLOW"
+                : step === "security"
+                  ? "Your wallet, carefully set up"
+                  : "Confirm wallet setup"}
+          </h1>
+          <p className="mt-4 text-base leading-7 text-[#5A5A5A]">
+            {step === "status"
+              ? status?.detail
+              : "Set up your Personal FLOW account and verify its wallet before entering the dashboard."}
+          </p>
+          <div className="mt-8 flex flex-wrap gap-2" aria-label="Setup steps">
+            {["Welcome", "Security", "Confirm", "Wallet status"].map(
+              (label, index) => {
+                const current = [
+                  "welcome",
+                  "security",
+                  "confirm",
+                  "status",
+                ].indexOf(step);
+                const passed = index < current;
+                return (
+                  <span
+                    key={label}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${index === current ? "bg-[#0B0B0B] text-white" : passed ? "bg-[#E9F8F1] text-[#137A50]" : "border border-[#E3DED7] bg-white text-[#777]"}`}
+                  >
+                    {label}
+                  </span>
+                );
+              },
+            )}
           </div>
+        </section>
 
-          <div className="my-auto max-w-[440px] py-12 text-center sm:text-left">
-            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] border border-[#F0EAE6] bg-[#FFFDFC] shadow-[0_18px_40px_rgba(255,26,26,0.12)] sm:mx-0">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#FF1A1A] text-[#FF1A1A]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  className="h-6 w-6"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </div>
+        <section className="rounded-[28px] border border-[#E8E4DC] bg-white p-6 shadow-[0_12px_36px_rgba(20,15,10,0.05)] sm:p-10">
+          <div className="flex items-start justify-between gap-4 border-b border-[#F0EDE6] pb-6">
+            <div>
+              <p className="text-sm font-semibold">
+                {userName.trim() || "Your FLOW profile"}
+              </p>
+              <p className="mt-1 text-sm text-[#777]">{userEmail}</p>
             </div>
-
-            <h1 className="mt-8 font-serif text-[44px] font-normal leading-[1.06] tracking-[-0.025em] text-[#0B0B0B] sm:text-[56px]">
-              You&apos;re all set.
-            </h1>
-
-            <p className="mt-4 text-[16px] leading-[1.6] text-[#5A5A5A]">
-              Your account is ready. You can now send, receive, and manage
-              payments with Flow.
-            </p>
-
-            <button
-              type="button"
-              onClick={goToDashboard}
-              className="mt-8 inline-flex h-14 w-full max-w-[340px] items-center justify-center gap-2.5 rounded-full bg-[#0B0B0B] px-8 text-[15px] font-semibold text-white transition hover:bg-[#1F1F1F]"
-            >
-              <span>Go to dashboard</span>
-              <span aria-hidden="true">→</span>
-            </button>
-
-            {message && (
-              <div className="mt-4">
-                <Feedback text={message} />
-              </div>
+            {account && (
+              <span className="rounded-full bg-[#F7F5F1] px-3 py-1 text-xs text-[#555]">
+                {account.walletStatus.replaceAll("_", " ")}
+              </span>
             )}
           </div>
 
-          <div />
-        </main>
-
-        <aside className="relative hidden min-h-screen overflow-hidden bg-white lg:col-span-6 lg:flex lg:items-end lg:justify-end">
-          <img
-            src="/assets/ready-phone-rock.png"
-            alt="FLOW account ready on smartphone"
-            className="h-full w-full object-cover object-right-bottom"
-          />
-        </aside>
-      </div>
-    );
-  }
-
-  // SCREEN 5: Complete Your Profile — Matches 08_26_10 PM-3.png & 08_56_21 PM-3.png
-  if (step === "profile") {
-    return (
-      <div className="relative min-h-screen w-full overflow-hidden bg-[#FAF8F5] text-[#0B0B0B]">
-        {/* Bottom-left red wave accent */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-24 -left-24 h-[340px] w-[360px] rounded-tr-full bg-gradient-to-tr from-[#FF1A1A] via-[#FF1A1A]/75 to-transparent opacity-90"
-        />
-
-        {/* Header */}
-        <header className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-6 sm:px-10">
-          <Link href="/" aria-label="FLOW Home">
-            <FlowLogo className="h-8 w-auto" />
-          </Link>
-          <nav className="hidden items-center gap-8 text-[14px] font-medium text-[#1F1F1F] md:flex">
-            <span>Product</span>
-            <span>Use Cases</span>
-            <span>Resources</span>
-            <span>Pricing</span>
-          </nav>
-          <div className="flex items-center gap-3">
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#E5E2DC] bg-white text-[#0B0B0B]">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                className="h-5 w-5"
-              >
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#FF1A1A]" />
-            </span>
-            <img
-              src="/assets/amara-avatar.png"
-              alt="Profile avatar"
-              className="h-10 w-10 rounded-full object-cover"
-            />
-          </div>
-        </header>
-
-        <main className="relative z-10 mx-auto grid max-w-[1240px] items-start gap-10 px-6 pb-20 pt-4 sm:px-10 lg:grid-cols-12">
-          {/* Left Column */}
-          <div className="lg:col-span-5 lg:pt-8">
-            <div className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
-              GETTING STARTED
-            </div>
-            <h1 className="mt-3 font-serif text-[44px] font-normal leading-[1.06] tracking-[-0.025em] text-[#0B0B0B] sm:text-[54px]">
-              Complete <br />
-              <span className="relative inline-block">
-                your profile.
-                <svg
-                  viewBox="0 0 240 12"
-                  fill="none"
-                  className="mt-1 w-full text-[#FF1A1A]"
-                  preserveAspectRatio="none"
-                >
-                  <path
-                    d="M3 9C70 3 165 3 237 9"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
-            </h1>
-            <p className="mt-4 max-w-[380px] text-[15px] leading-[1.6] text-[#555555]">
-              Help us personalize your Flow experience so you can get paid, your
-              way.
-            </p>
-
-            <div className="mt-10 hidden space-y-6 lg:block">
-              <div className="flex items-start gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EFECE6] text-[#0B0B0B]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="h-5 w-5"
-                  >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                </span>
-                <div>
-                  <div className="text-[15px] font-semibold text-[#0B0B0B]">
-                    Build your identity
-                  </div>
-                  <div className="text-[13px] text-[#666666]">
-                    Set up your name and how you&apos;ll appear to others.
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EFECE6] text-[#0B0B0B]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="h-5 w-5"
-                  >
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                  </svg>
-                </span>
-                <div>
-                  <div className="text-[15px] font-semibold text-[#0B0B0B]">
-                    Get paid faster
-                  </div>
-                  <div className="text-[13px] text-[#666666]">
-                    Ensure your account details are accurate and secure.
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EFECE6] text-[#0B0B0B]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="h-5 w-5"
-                  >
-                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                    <polyline points="2 12 12 17 22 12" />
-                    <polyline points="2 17 12 22 22 17" />
-                  </svg>
-                </span>
-                <div>
-                  <div className="text-[15px] font-semibold text-[#0B0B0B]">
-                    Unlock more features
-                  </div>
-                  <div className="text-[13px] text-[#666666]">
-                    Access all of Flow with a complete profile.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Form Card */}
-          <div className="rounded-[28px] border border-[#E8E4DC] bg-white p-6 shadow-sm sm:p-10 lg:col-span-7">
-            {/* Stepper Header */}
-            <div className="flex items-center justify-between border-b border-[#F0EDE6] pb-6">
-              <span className="text-[14px] font-semibold text-[#0B0B0B]">
-                Step 1 of 3
-              </span>
-              <div className="flex items-center gap-6 text-[12px]">
-                <div className="flex flex-col items-center gap-1">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FF1A1A] text-white">
-                    ✓
-                  </span>
-                  <span className="font-semibold text-[#0B0B0B]">Profile</span>
-                </div>
-                <div className="h-px w-10 bg-[#E0DCD4]" />
-                <div className="flex flex-col items-center gap-1">
-                  <span className="h-6 w-6 rounded-full border border-[#CCCCCC]" />
-                  <span className="text-[#666666]">Account</span>
-                </div>
-                <div className="h-px w-10 bg-[#E0DCD4]" />
-                <div className="flex flex-col items-center gap-1">
-                  <span className="h-6 w-6 rounded-full border border-[#CCCCCC]" />
-                  <span className="text-[#666666]">Finish</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Profile Preview Banner */}
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-[#F7F5F1] p-4 sm:p-5">
-              <div className="flex items-center gap-4">
-                <img
-                  src="/assets/amara-avatar.png"
-                  alt={fullName}
-                  className="h-16 w-16 rounded-full object-cover"
-                />
-                <div>
-                  <div className="text-[11px] text-[#666666]">
-                    Profile preview
-                  </div>
-                  <div className="font-serif text-[22px] text-[#0B0B0B]">
-                    {fullName}
-                  </div>
-                  <div className="text-[13px] text-[#666666]">@{username}</div>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E2DED6] bg-white px-3.5 py-1.5 text-[12px] font-medium text-[#1F1F1F]">
-                <span>👁</span>
-                <span>How others see you</span>
-              </span>
-            </div>
-
-            {/* Inputs */}
-            <div className="mt-6 space-y-5">
-              <div>
-                <label className="block text-[13px] font-semibold text-[#0B0B0B]">
-                  Full name <span className="text-[#FF1A1A]">*</span>
-                </label>
-                <div className="mt-1.5 flex h-12 items-center rounded-xl border border-[#E2DED6] bg-white px-4">
-                  <span className="mr-3 text-[#666666]">👤</span>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full bg-transparent text-[14px] text-[#0B0B0B] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-semibold text-[#0B0B0B]">
-                  Display name / Username{" "}
-                  <span className="text-[#FF1A1A]">*</span>
-                </label>
-                <div className="mt-1.5 flex h-12 items-center justify-between rounded-xl border border-[#E2DED6] bg-white px-4">
-                  <div className="flex flex-1 items-center">
-                    <span className="mr-3 font-semibold text-[#666666]">@</span>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="w-full bg-transparent text-[14px] text-[#0B0B0B] focus:outline-none"
-                    />
-                  </div>
-                  <span className="rounded-full bg-[#E8F8F0] px-2.5 py-1 text-[11px] font-semibold text-[#0D9458]">
-                    ✓ Available
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-semibold text-[#0B0B0B]">
-                  Email
-                </label>
-                <div className="mt-1.5 flex h-12 items-center justify-between rounded-xl border border-[#E2DED6] bg-[#F7F5F1] px-4">
-                  <div className="flex items-center text-[14px] text-[#4A4A4A]">
-                    <span className="mr-3">✉️</span>
-                    <span>{userEmail}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-[#E8F8F0] px-2.5 py-1 text-[11px] font-semibold text-[#0D9458]">
-                      ✓ Verified
-                    </span>
-                    <span className="text-[#666666]">🔒</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="font-serif text-[20px] text-[#0B0B0B]">
-                  Account details
-                </div>
-                <div className="mt-2.5 grid grid-cols-3 divide-x divide-[#E6E2DA] rounded-2xl bg-[#F7F5F1] p-4 text-[12px]">
-                  <div className="pr-3">
-                    <div className="text-[#666666]">Account type</div>
-                    <div className="mt-0.5 font-semibold capitalize text-[#0B0B0B]">
-                      {accountType}
-                    </div>
-                  </div>
-                  <div className="px-3">
-                    <div className="text-[#666666]">Country / Region</div>
-                    <div className="mt-0.5 font-semibold text-[#0B0B0B]">
-                      United States
-                    </div>
-                  </div>
-                  <div className="pl-3">
-                    <div className="text-[#666666]">Currency</div>
-                    <div className="mt-0.5 font-semibold text-[#0B0B0B]">
-                      USD (US Dollar)
-                    </div>
-                  </div>
-                </div>
-              </div>
-
+          {step === "welcome" && (
+            <div className="pt-6">
+              <h2 className="font-serif text-2xl">
+                One account for your FLOW wallet
+              </h2>
+              <p className="mt-3 leading-6 text-[#5A5A5A]">
+                FLOW will create or resume one Personal account for this
+                signed-in identity. You can return here later without creating
+                another wallet.
+              </p>
               <button
                 type="button"
-                onClick={() => setStep("ready")}
-                className="mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#0B0B0B] text-[15px] font-semibold text-white transition hover:bg-[#1F1F1F]"
+                onClick={() => setStep("security")}
+                className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
               >
-                <span>Continue</span>
-                <span aria-hidden="true">→</span>
+                Continue
               </button>
             </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
+          )}
 
-  // SCREEN 4: Choose Account Type ("How will you use Flow?") — Matches 08_26_08 PM-2.png & 08_56_19 PM-2.png
-  return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-white text-[#0B0B0B]">
-      {/* Top-right and bottom-left red wave accents */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-12 h-[380px] w-[380px] rounded-bl-full bg-gradient-to-bl from-[#FF1A1A] via-[#FF1A1A]/75 to-transparent opacity-90"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-24 -left-24 h-[260px] w-[280px] rounded-tr-full bg-gradient-to-tr from-[#FF1A1A]/70 via-[#FF1A1A]/30 to-transparent"
-      />
+          {step === "security" && (
+            <div className="pt-6">
+              <h2 className="font-serif text-2xl">
+                Provider-managed wallet setup
+              </h2>
+              <p className="mt-3 leading-6 text-[#5A5A5A]">
+                FLOW requests wallet registration through its custody provider.
+                The app will show addresses only after the provider returns them
+                and FLOW verifies their association.
+              </p>
+              <p className="mt-4 rounded-2xl bg-[#FFF8E8] p-4 text-sm leading-6 text-[#76521A]">
+                Wallet recovery depends on the provider configuration. Do not
+                assume a recovery method is available until FLOW confirms it for
+                your account.
+              </p>
+              <button
+                type="button"
+                onClick={() => setStep("confirm")}
+                className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+              >
+                Continue
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("welcome")}
+                className="mt-3 w-full py-2 text-sm text-[#666]"
+              >
+                Back
+              </button>
+            </div>
+          )}
 
-      <header className="relative z-10 mx-auto flex max-w-[1200px] items-center justify-between px-6 py-8 sm:px-10">
-        <Link href="/" aria-label="FLOW Home">
-          <FlowLogo className="h-8 w-auto sm:h-9" />
-        </Link>
-      </header>
-
-      <main className="relative z-10 mx-auto flex max-w-[880px] flex-col items-center px-6 pb-20 pt-4 text-center">
-        {/* 3-Dot Stepper */}
-        <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0B0B0B] text-[12px] text-white">
-            ✓
-          </span>
-          <div className="h-[2px] w-14 bg-[#0B0B0B]" />
-          <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#FF1A1A] p-1">
-            <span className="h-full w-full rounded-full bg-[#FF1A1A]" />
-          </span>
-          <div className="h-[2px] w-14 bg-[#E0E0E0]" />
-          <span className="h-7 w-7 rounded-full border border-[#CCCCCC]" />
-        </div>
-
-        <h1 className="mt-8 font-serif text-[42px] font-normal leading-[1.08] tracking-[-0.025em] text-[#0B0B0B] sm:text-[56px]">
-          How will you{" "}
-          <span className="relative inline-block">
-            use Flow?
-            <svg
-              viewBox="0 0 240 12"
-              fill="none"
-              className="mt-1 w-full text-[#FF1A1A]"
-              preserveAspectRatio="none"
-            >
-              <path
-                d="M3 9C75 3 165 3 237 9"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-        </h1>
-
-        <p className="mt-4 text-[16px] text-[#5A5A5A]">
-          Choose the account type that best fits your needs.
-        </p>
-
-        {/* Two Selection Cards */}
-        <div className="mt-10 grid w-full gap-5 sm:grid-cols-2">
-          {/* Personal Card */}
-          <button
-            type="button"
-            onClick={() => setAccountType("personal")}
-            className={`relative overflow-hidden rounded-[26px] bg-white p-7 text-left transition sm:p-8 ${
-              accountType === "personal"
-                ? "border-2 border-[#FF1A1A] shadow-[0_16px_40px_rgba(255,26,26,0.08)]"
-                : "border border-[#E5E5E5]"
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F6F4F0] text-[#0B0B0B]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  className="h-7 w-7"
-                >
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </span>
-              {accountType === "personal" ? (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FF1A1A] text-xs text-white">
-                  ✓
+          {step === "confirm" && (
+            <div className="pt-6">
+              <h2 className="font-serif text-2xl">Start wallet setup?</h2>
+              <p className="mt-3 leading-6 text-[#5A5A5A]">
+                This saves a Personal account and an idempotent provisioning
+                request. It does not guarantee a wallet is active; setup remains
+                pending until the custody worker completes verification.
+              </p>
+              <label className="mt-6 flex items-start gap-3 rounded-2xl border border-[#E8E4DC] p-4 text-sm leading-6">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(event) => setConfirmed(event.target.checked)}
+                  className="mt-1 accent-[#E92935]"
+                />
+                <span>
+                  I want FLOW to create or resume one wallet setup for this
+                  Personal account.
                 </span>
+              </label>
+              <button
+                type="button"
+                disabled={!confirmed || busy}
+                onClick={beginProvisioning}
+                className="mt-6 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#9B9B9B]"
+              >
+                {busy ? "Saving request…" : "Confirm and continue"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("security")}
+                className="mt-3 w-full py-2 text-sm text-[#666]"
+              >
+                Back
+              </button>
+            </div>
+          )}
+
+          {step === "status" && (
+            <div className="pt-6">
+              {status ? (
+                <>
+                  <h2 className="font-serif text-2xl">{status.title}</h2>
+                  <p className="mt-3 leading-6 text-[#5A5A5A]">
+                    {status.detail}
+                  </p>
+                  <p className="mt-5 rounded-2xl bg-[#F7F5F1] p-4 text-sm leading-6 text-[#555]">
+                    This status comes from FLOW&apos;s saved account record. No
+                    wallet address or balance is shown until it has been
+                    returned and verified.
+                  </p>
+                  {account?.walletStatus === "setup_failed" && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMessage(
+                          "The existing provisioning job requires support review. No replacement wallet was requested.",
+                        )
+                      }
+                      className="mt-5 h-12 w-full rounded-full border border-[#E8E4DC] font-semibold"
+                    >
+                      Review recovery options
+                    </button>
+                  )}
+                  {(account?.walletStatus === "setup_pending" ||
+                    account?.walletStatus === "provisioning") && (
+                    <>
+                      {account.walletStatus === "setup_pending" && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={beginProvisioning}
+                          className="mt-5 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white disabled:bg-[#999]"
+                        >
+                          {busy ? "Resuming…" : "Resume wallet setup"}
+                        </button>
+                      )}
+                      <p className="mt-3 text-center text-xs text-[#777]">
+                        Status refreshes automatically while this page is open.
+                      </p>
+                    </>
+                  )}
+                </>
               ) : (
-                <span className="h-7 w-7 rounded-full border border-[#CCCCCC]" />
+                <>
+                  <h2 className="font-serif text-2xl">
+                    Continue your wallet setup
+                  </h2>
+                  <p className="mt-3 leading-6 text-[#5A5A5A]">
+                    Your Personal account and wallet state will be reused.
+                    Review the custody information, then confirm to start or
+                    resume setup.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setStep("security")}
+                    className="mt-6 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+                  >
+                    Review setup
+                  </button>
+                </>
               )}
             </div>
-
-            <div className="mt-6 font-serif text-[28px] text-[#0B0B0B]">
-              Personal
-            </div>
-            <p className="mt-2 max-w-[260px] text-[14px] leading-[1.55] text-[#555555]">
-              Send, receive, and manage payments for your personal needs.
-            </p>
-
-            {/* Bottom-right red wave inside card */}
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -bottom-10 -right-10 h-28 w-36 rounded-tl-full bg-gradient-to-tl from-[#8B0000] via-[#FF1A1A] to-transparent opacity-90"
-            />
-          </button>
-
-          {/* Business Card */}
-          <button
-            type="button"
-            onClick={() => setAccountType("business")}
-            className={`relative overflow-hidden rounded-[26px] bg-[#FAF9F7] p-7 text-left transition sm:p-8 ${
-              accountType === "business"
-                ? "border-2 border-[#FF1A1A] bg-white shadow-[0_16px_40px_rgba(255,26,26,0.08)]"
-                : "border border-[#E5E5E5]"
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F0EEEA] text-[#0B0B0B]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  className="h-7 w-7"
-                >
-                  <rect x="2" y="7" width="20" height="14" rx="2" />
-                  <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
-                  <line x1="2" y1="13" x2="22" y2="13" />
-                </svg>
-              </span>
-              {accountType === "business" ? (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FF1A1A] text-xs text-white">
-                  ✓
-                </span>
-              ) : (
-                <span className="h-7 w-7 rounded-full border border-[#CCCCCC]" />
-              )}
-            </div>
-
-            <div className="mt-6 font-serif text-[28px] text-[#0B0B0B]">
-              Business
-            </div>
-            <p className="mt-2 max-w-[260px] text-[14px] leading-[1.55] text-[#555555]">
-              Accept payments, send payouts, and manage money for your business.
-            </p>
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setStep("profile")}
-          className="mt-10 inline-flex h-14 w-full max-w-[380px] items-center justify-center gap-2.5 rounded-full bg-[#0B0B0B] text-[15px] font-semibold text-white transition hover:bg-[#1F1F1F]"
-        >
-          <span>Continue</span>
-          <span aria-hidden="true">→</span>
-        </button>
-
-        {message && (
-          <div className="mt-4">
+          )}
+          <div className="mt-5">
             <Feedback text={message} />
           </div>
-        )}
+        </section>
       </main>
     </div>
   );
