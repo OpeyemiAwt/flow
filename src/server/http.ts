@@ -52,19 +52,30 @@ export async function api(action: () => Promise<Response>): Promise<Response> {
       const err = error as ApiFailure;
       return reply(err.status, { error: err.code, requestId });
     }
+    const errorRecord =
+      typeof error === "object" && error !== null
+        ? (error as Record<string, unknown>)
+        : null;
+    const errorMeta =
+      errorRecord?.meta && typeof errorRecord.meta === "object"
+        ? (errorRecord.meta as Record<string, unknown>)
+        : null;
+    const directCode = errorRecord?.code;
+    const metaCode = errorMeta?.code;
     log("error", "request_failed", {
       requestId,
       code: "INTERNAL_ERROR",
       category: diagnosticCategory(error),
-      // SQLSTATE is a fixed five-character protocol code. It helps diagnose
-      // role/schema drift without logging query text, values, or provider data.
-      ...(typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      typeof (error as { code?: unknown }).code === "string" &&
-      /^[0-9A-Z]{5}$/.test((error as { code: string }).code)
-        ? { sqlState: (error as { code: string }).code }
+      // Only fixed protocol identifiers are logged. Never include the Prisma
+      // message/meta payload, which may contain SQL, parameters or provider data.
+      ...(typeof directCode === "string" && /^P\d{4}$/.test(directCode)
+        ? { databaseCode: directCode }
         : {}),
+      ...(typeof directCode === "string" && /^[0-9A-Z]{5}$/.test(directCode)
+        ? { sqlState: directCode }
+        : typeof metaCode === "string" && /^[0-9A-Z]{5}$/.test(metaCode)
+          ? { sqlState: metaCode }
+          : {}),
     });
     return reply(503, { error: "UNAVAILABLE", requestId });
   }
