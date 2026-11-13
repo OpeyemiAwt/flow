@@ -156,6 +156,8 @@ export async function securityServer() {
           FLOW_EXECUTION: "disabled",
           FLOW_DATABASE_URL: process.env.FLOW_DATABASE_URL,
           FLOW_WORKER_DATABASE_URL: process.env.FLOW_WORKER_DATABASE_URL,
+          FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+          FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
           FLOW_APP_ORIGIN: origin,
           FLOW_AUTH_SECRET: authSecret,
           FLOW_OTP_KEY: otpKey,
