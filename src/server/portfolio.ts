@@ -72,6 +72,9 @@ export async function refreshPortfolio(
     actor.session.token,
     "BALANCE_REFRESH",
   );
+  if (job?.job_status === "RATE_LIMITED") {
+    throw new ApiFailure(429, "RATE_LIMIT_EXCEEDED");
+  }
   const projection = await getAccountBalances(db, accountId, {
     sessionToken: actor.session.token,
   });

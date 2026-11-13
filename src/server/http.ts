@@ -56,6 +56,15 @@ export async function api(action: () => Promise<Response>): Promise<Response> {
       requestId,
       code: "INTERNAL_ERROR",
       category: diagnosticCategory(error),
+      // SQLSTATE is a fixed five-character protocol code. It helps diagnose
+      // role/schema drift without logging query text, values, or provider data.
+      ...(typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string" &&
+      /^[0-9A-Z]{5}$/.test((error as { code: string }).code)
+        ? { sqlState: (error as { code: string }).code }
+        : {}),
     });
     return reply(503, { error: "UNAVAILABLE", requestId });
   }

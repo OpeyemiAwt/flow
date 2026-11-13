@@ -63,6 +63,11 @@ export interface RunTestnetRehearsalOptions {
   readonly customAdapter?: OutLayerAdapter;
   readonly offlineTestMode?: boolean;
   readonly env?: Record<string, string | undefined>;
+  /** Test-only dependency injection; live CLI invocations always use isolated process roles. */
+  readonly databaseClients?: {
+    readonly operator: ReturnType<typeof getPrismaClient>;
+    readonly worker: ReturnType<typeof getPrismaClient>;
+  };
 }
 
 export function resolveOperatorProof(
@@ -363,6 +368,13 @@ export async function runTestnetRehearsal(
   const dryRun = options?.dryRun ?? false;
   const missingPrerequisites: string[] = [];
 
+  if (options?.databaseClients && env.FLOW_ENV !== "test") {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "Injected database clients are restricted to isolated test environments.",
+    );
+  }
+
   // 1. Environment & strict execution guard
   const { environment, execution } = readConfig(env, "operator");
   if (environment !== "local" && environment !== "test") {
@@ -413,8 +425,10 @@ export async function runTestnetRehearsal(
     );
   }
 
-  const operatorDb = getPrismaClient("operator");
-  const workerDb = getPrismaClient("worker");
+  const operatorDb =
+    options?.databaseClients?.operator ?? getPrismaClient("operator");
+  const workerDb =
+    options?.databaseClients?.worker ?? getPrismaClient("worker");
 
   // 3. Authenticate and derive operator context (Requirements 4, 5, 6)
   const operatorAuthId =

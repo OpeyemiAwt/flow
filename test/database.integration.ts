@@ -59,7 +59,7 @@ import {
   createRehearsalAuthorization,
   formatSanitizedCliError,
   isJobPristineInitial,
-  runTestnetRehearsal,
+  runTestnetRehearsal as runTestnetRehearsalWithClients,
 } from "../scripts/rehearse-testnet-registration.ts";
 import { prepareIsolatedTestnetAccount } from "../scripts/prepare-testnet-account.ts";
 import {
@@ -100,6 +100,20 @@ const fixtureConfig = readConfig(
 const { database: workerDbConfig } = fixtureConfig;
 const workerPool = createDatabasePool(workerDbConfig);
 const db = getPrismaClient("fixture");
+const legacyWorkerPool = process.env.FLOW_WORKER_DATABASE_URL
+  ? createDatabasePool(
+      readConfig(
+        {
+          FLOW_ENV: process.env.FLOW_ENV!,
+          FLOW_EXECUTION: process.env.FLOW_EXECUTION!,
+          FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+          FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+          FLOW_WORKER_DATABASE_URL: process.env.FLOW_WORKER_DATABASE_URL,
+        },
+        "worker",
+      ).database,
+    )
+  : undefined;
 
 const paymentPool = process.env.FLOW_PAYMENT_DATABASE_URL
   ? createDatabasePool(
@@ -152,9 +166,22 @@ const authTicketPool = process.env.FLOW_AUTH_TICKET_DATABASE_URL
     )
   : undefined;
 
+// Rehearsal unit/integration cases must use their injected test-role clients;
+// the Railway QA runner intentionally exposes several distinct role URLs to
+// this test process, which production CLI code must reject if it reads them as
+// one ambient process environment.
+const runTestnetRehearsal = (
+  options: Parameters<typeof runTestnetRehearsalWithClients>[0],
+) =>
+  runTestnetRehearsalWithClients({
+    ...options,
+    databaseClients: { operator: operatorDb, worker: db },
+  });
+
 after(async () => {
   await pool.end();
   await workerPool.end();
+  await legacyWorkerPool?.end();
   await paymentPool?.end();
   await indexerPool?.end();
   await operatorPool.end();
@@ -282,6 +309,7 @@ test("account sync enqueue is account-scoped, idempotent, and lease-completable"
   assert.equal(first?.job_status, "QUEUED");
   const repeated = await enqueue(ownerToken, owner.accountId);
   assert.equal(repeated?.job_id, first?.job_id);
+  assert.equal(repeated?.job_status, "RATE_LIMITED");
   await assert.rejects(
     enqueue(otherToken, owner.accountId),
     (error: unknown) => (error as { code?: string }).code === "42501",
@@ -483,7 +511,11 @@ async function createTestSession(
        VALUES ($1, $2, 'sign-in-email', $3, $4, now(), now() + interval '5 minutes')`,
       [slot, nonceDigest, email, authUserId],
     );
-    const ticketRes = await workerPool.query<{ id: string }>(
+    assert.ok(
+      authTicketPool,
+      "Dedicated auth-ticket role is required for test sessions",
+    );
+    const ticketRes = await authTicketPool.query<{ id: string }>(
       `SELECT flow.issue_email_auth_ticket($1, $2) AS id`,
       [slot, nonceDigest],
     );
@@ -543,8 +575,9 @@ test("account ownership: enforces single wallet per account and preserves accoun
   );
 
   // Attempt to insert duplicate wallet for personal account -> violates wallets_account_id_key (23505)
+  assert.ok(legacyWorkerPool, "Legacy worker role fixture is required");
   await assert.rejects(
-    workerPool.query(
+    legacyWorkerPool.query(
       `
       INSERT INTO flow.wallets (
         id, account_id, provider, provider_wallet_id, near_account_id,
@@ -1032,7 +1065,19 @@ test("credential isolation: encrypted envelope at rest, plaintext never stored, 
 });
 
 test("execution safeguards remain strictly disabled after wallet activation", async () => {
-  const config = readConfig(process.env, "runtime");
+  // Deliberately validate a web-only environment even though the integration
+  // runner itself also has isolated fixture, worker, operator and auth URLs.
+  const config = readConfig(
+    {
+      FLOW_ENV: "test",
+      FLOW_EXECUTION: process.env.FLOW_EXECUTION,
+      FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+      FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+      FLOW_DATABASE_URL: process.env.FLOW_DATABASE_URL,
+      FLOW_AUTH_TICKET_DATABASE_URL: process.env.FLOW_AUTH_TICKET_DATABASE_URL,
+    },
+    "runtime",
+  );
   assert.equal(
     config.execution,
     "disabled",
