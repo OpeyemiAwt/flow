@@ -128,6 +128,35 @@ test("remote QA database mode requires test identity and strict TLS", () => {
   );
 });
 
+test("alternate QA database names require the remote test guard and keep test roles", () => {
+  const config = readConfig(
+    {
+      FLOW_ENV: "test",
+      FLOW_EXECUTION: "disabled",
+      FLOW_TEST_DATABASE_REMOTE: "enabled",
+      FLOW_TEST_DATABASE_NAME: "flow_test_validation",
+      FLOW_DATABASE_URL:
+        "postgresql://flow_test_app:fixture-only-password@db.flow.example:5432/flow_test_validation?sslmode=require&uselibpqcompat=true",
+    },
+    "runtime",
+  );
+  assert.equal(config.database.name, "flow_test_validation");
+  assert.equal(config.database.role, "flow_test_app");
+  assert.throws(
+    () =>
+      readConfig(
+        {
+          FLOW_ENV: "staging",
+          FLOW_EXECUTION: "disabled",
+          FLOW_TEST_DATABASE_NAME: "flow_test_validation",
+          FLOW_DATABASE_URL: "unused",
+        },
+        "runtime",
+      ),
+    invalid,
+  );
+});
+
 test("staging permits encrypted Railway private Postgres with its self-signed certificate", () => {
   const app = readConfig(
     {

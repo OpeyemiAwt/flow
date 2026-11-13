@@ -99,11 +99,22 @@ async function migrate() {
     process.env.FLOW_ENV !== "test" ||
     process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
     process.env.FLOW_DB_TARGET !== "qa-only" ||
-    process.env.FLOW_EXECUTION !== "disabled"
+    process.env.FLOW_TEST_DATABASE_REMOTE !== "enabled" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
   ) {
     fail("Migration is restricted to the isolated flow_test QA database first.");
   }
   const migrationEnv = { ...process.env };
+  const databaseName = process.env.FLOW_TEST_DATABASE_NAME ?? "flow_test";
+  if (!/^flow_test_[a-z0-9_]+$/.test(databaseName)) fail("Invalid isolated QA database name.");
+  const migrationUrl = new URL(migrationEnv.FLOW_MIGRATION_DATABASE_URL ?? "");
+  if (migrationUrl.pathname !== "/flow_test" || decodeURIComponent(migrationUrl.username) !== "flow_test_migrator") {
+    fail("The QA migration credential must begin scoped to the isolated flow_test database.");
+  }
+  migrationUrl.pathname = `/${databaseName}`;
+  migrationEnv.FLOW_MIGRATION_DATABASE_URL = migrationUrl.toString();
+  migrationEnv.FLOW_TEST_DATABASE_NAME = databaseName;
   delete migrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;
   for (const key of Object.keys(migrationEnv)) {
     if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) {
@@ -184,8 +195,10 @@ async function testQa() {
   }
 
   const migrationUrl = new URL(process.env.FLOW_MIGRATION_DATABASE_URL ?? "");
+  const databaseName = process.env.FLOW_TEST_DATABASE_NAME ?? "flow_test";
   if (
-    migrationUrl.pathname !== "/flow_test" ||
+    !/^flow_test_[a-z0-9_]+$/.test(databaseName) ||
+    migrationUrl.pathname !== `/${databaseName}` ||
     decodeURIComponent(migrationUrl.username) !== "flow_test_migrator" ||
     migrationUrl.searchParams.size !== 2 ||
     migrationUrl.searchParams.get("sslmode") !== "require" ||
@@ -219,6 +232,7 @@ async function testQa() {
     databaseEnv[targetVariable] = url.toString();
   }
   databaseEnv.FLOW_TEST_DATABASE_REMOTE = "enabled";
+  databaseEnv.FLOW_TEST_DATABASE_NAME = databaseName;
 
   const child = spawn("node", ["--test", "test/database.integration.ts"], {
     stdio: "inherit",
@@ -231,6 +245,65 @@ async function testQa() {
   child.once("exit", (code) => {
     if (code !== 0) process.exitCode = code ?? 1;
   });
+}
+
+async function createQaValidationDatabase() {
+  if (
+    process.env.FLOW_ENV !== "test" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "qa-only" ||
+    process.env.FLOW_TEST_DATABASE_REMOTE !== "enabled" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) fail("QA validation database creation is restricted to isolated remote tests.");
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("Isolated Railway PostgreSQL bootstrap URL is required.");
+  const adminUrl = new URL(rawUrl);
+  if (!adminUrl.hostname.endsWith(".railway.internal") || adminUrl.pathname !== "/railway" || decodeURIComponent(adminUrl.username) !== "postgres") {
+    fail("QA database admin URL does not identify isolated Railway PostgreSQL.");
+  }
+  const client = new pg.Client({ connectionString: rawUrl, connectionTimeoutMillis: 5000 });
+  await client.connect();
+  try {
+    const exists = await client.query("SELECT 1 FROM pg_database WHERE datname = 'flow_test_validation'");
+    if (exists.rowCount) fail("Validation database already exists; refusing to alter or reset it.");
+    const role = await client.query("SELECT 1 FROM pg_roles WHERE rolname = 'flow_test_migrator'");
+    if (!role.rowCount) fail("Isolated QA migrator role is missing.");
+    await client.query('CREATE DATABASE "flow_test_validation" OWNER "flow_test_migrator"');
+    await client.query('REVOKE CREATE ON DATABASE "flow_test_validation" FROM PUBLIC');
+    await client.query('GRANT CONNECT ON DATABASE "flow_test_validation" TO "flow_test_app", "flow_test_worker", "flow_test_operator"');
+    console.log(JSON.stringify({ event: "qa_validation_database_created", database: "flow_test_validation" }));
+  } finally { await client.end(); }
+}
+
+async function testSecurityQa() {
+  if (process.env.FLOW_ENV !== "test" || process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID || process.env.FLOW_DB_TARGET !== "qa-only" || process.env.FLOW_TEST_DATABASE_REMOTE !== "enabled" || process.env.FLOW_TEST_DATABASE_NAME !== "flow_test_validation" || process.env.FLOW_EXECUTION !== "disabled" || process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled") {
+    fail("Security integration tests require the fresh isolated validation database.");
+  }
+  const migrationUrl = new URL(process.env.FLOW_MIGRATION_DATABASE_URL ?? "");
+  migrationUrl.pathname = "/flow_test_validation";
+  if (decodeURIComponent(migrationUrl.username) !== "flow_test_migrator") fail("Invalid isolated QA migrator role.");
+  const databaseEnv = { ...process.env };
+  delete databaseEnv.FLOW_BOOTSTRAP_DATABASE_URL;
+  delete databaseEnv.FLOW_MIGRATION_DATABASE_URL;
+  for (const key of Object.keys(databaseEnv)) if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) delete databaseEnv[key];
+  const roles = [
+    ["FLOW_DATABASE_URL", "flow_test_app", process.env.FLOW_TEST_APP_PASSWORD],
+    ["FLOW_WORKER_DATABASE_URL", "flow_test_worker", process.env.FLOW_TEST_LEGACY_WORKER_PASSWORD],
+    ["FLOW_OPERATOR_DATABASE_URL", "flow_test_operator", process.env.FLOW_TEST_OPERATOR_PASSWORD],
+  ];
+  for (const [key, role, password] of roles) {
+    if (!password || !/^[a-f0-9]{64}$/.test(password)) fail("Isolated QA role credential is missing.");
+    const url = new URL(migrationUrl);
+    url.username = role;
+    url.password = password;
+    databaseEnv[key] = url.toString();
+  }
+  databaseEnv.FLOW_TEST_DATABASE_REMOTE = "enabled";
+  databaseEnv.FLOW_TEST_DATABASE_NAME = "flow_test_validation";
+  const child = spawn("node", ["--test", "test/security.integration.mjs"], { stdio: "inherit", env: databaseEnv });
+  child.once("error", (error) => { console.error(JSON.stringify({ event: "qa_security_tests_start_failed", error: error.message })); process.exit(1); });
+  child.once("exit", (code) => { if (code !== 0) process.exitCode = code ?? 1; });
 }
 
 async function testUnit() {
@@ -278,6 +351,8 @@ if (operation === "bootstrap-staging-and-qa") await bootstrap();
 else if (operation === "migrate-staging") await migrateStaging();
 else if (operation === "migrate-qa") await migrate();
 else if (operation === "test-qa") await testQa();
+else if (operation === "create-qa-validation") await createQaValidationDatabase();
+else if (operation === "test-security-qa") await testSecurityQa();
 else if (operation === "test-unit") await testUnit();
 else if (operation === "idle") idle();
 else fail("FLOW_DB_OPERATION is unsupported.");

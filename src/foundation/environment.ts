@@ -6,6 +6,7 @@ const environmentSchema = z.object({
   FLOW_ENV: z.enum(["local", "test", "staging", "production"]),
   FLOW_EXECUTION: z.literal("disabled"),
   FLOW_TEST_DATABASE_REMOTE: z.literal("enabled").optional(),
+  FLOW_TEST_DATABASE_NAME: z.string().regex(/^flow_test_[a-z0-9_]+$/).optional(),
 });
 
 type EnvironmentInput = Readonly<Record<string, string | undefined>>;
@@ -187,13 +188,23 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
   ) {
     invalidConfig("Remote test database mode is restricted to FLOW_ENV=test.");
   }
+  if (
+    source.FLOW_TEST_DATABASE_NAME !== undefined &&
+    (environment !== "test" ||
+      source.FLOW_TEST_DATABASE_REMOTE !== "enabled")
+  ) {
+    invalidConfig("Alternate database names are restricted to isolated remote QA.");
+  }
   const tls =
     environment === "staging" ||
     environment === "production" ||
     (environment === "test" &&
       source.FLOW_TEST_DATABASE_REMOTE === "enabled");
   const variable = databaseUrlKeys[purpose];
-  const databaseName = `flow_${environment}`;
+  const databaseName =
+    environment === "test"
+      ? source.FLOW_TEST_DATABASE_NAME ?? "flow_test"
+      : `flow_${environment}`;
   const roleSuffix =
     purpose === "runtime"
       ? "app"
@@ -202,7 +213,7 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
         : purpose === "operator"
           ? "operator"
           : "migrator";
-  const role = `${databaseName}_${roleSuffix}`;
+  const role = `${environment === "test" ? "flow_test" : databaseName}_${roleSuffix}`;
   const url = parseDatabaseUrl(source[variable], variable);
 
   if (
