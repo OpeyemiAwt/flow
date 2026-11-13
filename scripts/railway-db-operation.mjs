@@ -432,15 +432,30 @@ async function testSecurityQaTwice() {
       databaseEnv.FLOW_WORKER_DATABASE_URL = makeUrl("worker");
       databaseEnv.FLOW_OPERATOR_DATABASE_URL = makeUrl("operator");
 
+      const migrationEnv = {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        NODE_ENV: "production",
+        FLOW_ENV: "test",
+        FLOW_EXECUTION: "disabled",
+        FLOW_TEST_DATABASE_REMOTE: "enabled",
+        FLOW_TEST_DATABASE_NAME: name,
+        FLOW_MIGRATION_DATABASE_URL: databaseEnv.FLOW_MIGRATION_DATABASE_URL,
+      };
+      const integrationEnv = { ...databaseEnv };
+      delete integrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;
+      delete integrationEnv.FLOW_MIGRATION_DATABASE_URL;
+      delete integrationEnv.FLOW_DB_OPERATION;
+
       const run = (label, args, env) => new Promise((resolve, reject) => {
         console.log(JSON.stringify({ event: "qa_suite_start", pass, suite: label, database: name }));
         const child = spawn("node", args, { stdio: "inherit", env });
         child.once("error", reject);
         child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${label} failed on QA pass ${pass} (exit ${code ?? 1}).`)));
       });
-      await run("migrations", ["node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "prisma.config.ts"], databaseEnv);
-      await run("security integration", ["--test", "test/security.integration.mjs"], databaseEnv);
-      await run("database integration", ["--test", "test/database.integration.ts"], databaseEnv);
+      await run("migrations", ["node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "prisma.config.ts"], migrationEnv);
+      await run("security integration", ["--test", "test/security.integration.mjs"], integrationEnv);
+      await run("database integration", ["--test", "test/database.integration.ts"], integrationEnv);
       console.log(JSON.stringify({ event: "qa_suite_pass", pass, database: name, result: "passed" }));
     }
   } catch (error) {
