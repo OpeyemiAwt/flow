@@ -322,7 +322,11 @@ test("returning Google user restores the same Personal account without duplicate
   assert.equal(restoredAccount.id, originalAccount.id);
   assert.equal(returningStatus.email, email);
   assert.equal(returningStatus.googleLinked, true);
-  assert.equal(returningStatus.sessions.length, 1);
+  assert.equal(returningStatus.sessions.length, 2);
+  assert.equal(
+    returningStatus.sessions.filter((session) => session.current).length,
+    1,
+  );
 });
 
 test("Google rejects forged claims, non-authoritative email and cross-browser state", async () => {
