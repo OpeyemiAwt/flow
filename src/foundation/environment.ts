@@ -137,9 +137,19 @@ function hasExpectedTls(
   url: URL,
   purpose: DatabasePurpose,
   tls: boolean,
+  remoteTestDatabase: boolean,
 ): boolean {
   if (!tls) {
     return url.search === "";
+  }
+
+  // Railway's private Postgres certificate is self-signed. Permit encrypted
+  // transport without chain validation only for the isolated flow_test DB.
+  if (remoteTestDatabase) {
+    return (
+      url.searchParams.size === 1 &&
+      url.searchParams.get("sslmode") === "require"
+    );
   }
 
   if (purpose !== "migration") {
@@ -212,7 +222,16 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
       /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(url.hostname) &&
       !url.hostname.toLowerCase().endsWith(".localhost")
     : url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-  if (!validHost || !hasExpectedTls(url, purpose, tls)) {
+  if (
+    !validHost ||
+    !hasExpectedTls(
+      url,
+      purpose,
+      tls,
+      environment === "test" &&
+        source.FLOW_TEST_DATABASE_REMOTE === "enabled",
+    )
+  ) {
     return invalidConfig(
       `${variable} has an invalid host or TLS configuration for ${environment}.`,
     );
