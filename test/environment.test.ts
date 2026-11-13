@@ -82,6 +82,48 @@ for (const environment of ["staging", "production"] as const) {
   });
 }
 
+test("remote QA database mode requires test identity and strict TLS", () => {
+  const appUrl =
+    "postgresql://flow_test_app:fixture-only-password@db.flow.example:5432/flow_test?sslmode=verify-full";
+  const migrationUrl =
+    "postgresql://flow_test_migrator:fixture-only-password@db.flow.example:5432/flow_test?sslmode=require&sslaccept=strict";
+  assert.equal(
+    readConfig(
+      {
+        FLOW_ENV: "test",
+        FLOW_EXECUTION: "disabled",
+        FLOW_TEST_DATABASE_REMOTE: "enabled",
+        FLOW_DATABASE_URL: appUrl,
+      },
+      "runtime",
+    ).database.tls,
+    true,
+  );
+  assert.equal(
+    readConfig(
+      {
+        FLOW_ENV: "test",
+        FLOW_EXECUTION: "disabled",
+        FLOW_TEST_DATABASE_REMOTE: "enabled",
+        FLOW_MIGRATION_DATABASE_URL: migrationUrl,
+      },
+      "migration",
+    ).database.role,
+    "flow_test_migrator",
+  );
+  assert.throws(
+    () =>
+      readConfig(
+        {
+          ...remoteEnvironment("staging"),
+          FLOW_TEST_DATABASE_REMOTE: "enabled",
+        },
+        "runtime",
+      ),
+    /Remote test database mode is restricted to FLOW_ENV=test/,
+  );
+});
+
 test("rejects unset or unknown environments and live execution", () => {
   const source = localEnvironment("local");
   assert.throws(() => readConfig({}, "runtime"), invalid);

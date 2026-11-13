@@ -5,6 +5,7 @@ import { FlowError } from "./errors.ts";
 const environmentSchema = z.object({
   FLOW_ENV: z.enum(["local", "test", "staging", "production"]),
   FLOW_EXECUTION: z.literal("disabled"),
+  FLOW_TEST_DATABASE_REMOTE: z.literal("enabled").optional(),
 });
 
 type EnvironmentInput = Readonly<Record<string, string | undefined>>;
@@ -167,7 +168,17 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
   }
 
   const { FLOW_ENV: environment, FLOW_EXECUTION: execution } = result.data;
-  const tls = environment === "staging" || environment === "production";
+  if (
+    source.FLOW_TEST_DATABASE_REMOTE !== undefined &&
+    environment !== "test"
+  ) {
+    invalidConfig("Remote test database mode is restricted to FLOW_ENV=test.");
+  }
+  const tls =
+    environment === "staging" ||
+    environment === "production" ||
+    (environment === "test" &&
+      source.FLOW_TEST_DATABASE_REMOTE === "enabled");
   const variable = databaseUrlKeys[purpose];
   const databaseName = `flow_${environment}`;
   const roleSuffix =
