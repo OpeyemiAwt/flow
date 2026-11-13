@@ -289,7 +289,7 @@ test("Google authorization code, signed identity, nonce and PKCE establish one d
 });
 
 test("returning Google user restores the same Personal account without duplicate onboarding", async () => {
-  const email = "google-returning@example.test";
+  const email = "google-returning@gmail.com";
   const subject = "google-returning-subject";
   const firstClient = await app.createClient();
   await completeGoogle(firstClient, google(email, subject));
