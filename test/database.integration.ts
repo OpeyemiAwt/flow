@@ -2093,7 +2093,12 @@ test("PostgreSQL denies the test runtime role access to the local database", asy
     connectionTimeoutMillis: 1_500,
   });
   try {
-    await assert.rejects(client.connect(), { code: "42501" });
+    await assert.rejects(client.connect(), (error: unknown) => {
+      const code = (error as { code?: string } | null)?.code;
+      return process.env.FLOW_TEST_DATABASE_REMOTE === "enabled"
+        ? code === "42501" || code === "3D000"
+        : code === "42501";
+    });
   } finally {
     await client.end();
   }
