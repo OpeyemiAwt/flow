@@ -16,5 +16,6 @@ COPY prisma.generate.config.ts ./prisma.generate.config.ts
 COPY src ./src
 COPY scripts ./scripts
 COPY test ./test
+RUN node_modules/.bin/prisma generate --config prisma.generate.config.ts
 ENV NODE_ENV=production FLOW_ENV=staging FLOW_EXECUTION=disabled
 CMD ["node", "scripts/railway-db-operation.mjs"]
