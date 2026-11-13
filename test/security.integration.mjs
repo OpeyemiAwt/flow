@@ -334,7 +334,19 @@ test("matching email cannot use an OTP for a Google-only identity without enroll
   const email = "enroll@gmail.com";
   await completeGoogle(client, google(email, "enroll-subject"));
   const guest = await app.createClient();
-  await post(guest, "/api/auth/email/start", { email }, 202);
+  const response = await guest.post("/api/auth/email/start", {
+    data: { email },
+  });
+  await result(response, 202);
+  const diagnosticId = response.headers()["x-flow-diagnostic-id"];
+  assert.ok(
+    app
+      .otpDiagnostics(diagnosticId)
+      .some(
+        ({ outcome, reason }) =>
+          outcome === "SUPPRESSED" && reason === "EMAIL_NOT_ENROLLED",
+      ),
+  );
   assert.ok(!(await app.mail()).some((mail) => mail.to.includes(email)));
   await post(guest, "/api/auth/email/verify", { code: "00000000" }, 401);
   await status(guest, 401);
@@ -345,6 +357,73 @@ test("matching email cannot use an OTP for a Google-only identity without enroll
   await emailLogin(guest, email);
   assert.equal((await status(guest)).googleLinked, true);
   assert.equal((await status(guest)).emailEnrolled, true);
+});
+
+test("new email signup creates an enrolled identity only after OTP verification", async () => {
+  const email = `new-signup-${randomUUID()}@example.test`;
+  const client = await app.createClient();
+  const code = await codeFor(email, () =>
+    post(client, "/api/auth/email/start", { email }, 202),
+  );
+  const { rows: before } = await app.db.query(
+    "SELECT count(*)::int AS count FROM flow.auth_users WHERE email = $1",
+    [email],
+  );
+  assert.equal(
+    before[0].count,
+    0,
+    "requesting an OTP must not create an account",
+  );
+  await post(client, "/api/auth/email/verify", { code });
+  const account = await status(client);
+  assert.equal(account.email, email);
+  assert.equal(account.emailEnrolled, true);
+  assert.equal(account.googleLinked, false);
+  assert.equal(account.sessions.length, 1);
+  const { rows } = await app.db.query(
+    "SELECT count(*)::int AS count FROM flow.wallets w JOIN flow.accounts a ON a.id = w.account_id JOIN flow.users u ON u.id = a.personal_owner_id JOIN flow.auth_users au ON au.id = u.auth_user_id WHERE au.email = $1",
+    [email],
+  );
+  assert.equal(
+    rows[0].count,
+    0,
+    "email-only authentication must not provision a wallet",
+  );
+});
+
+test("paused mailbox and unknown-account recovery are suppressed with fixed internal reasons", async () => {
+  const pausedEmail = "paused-mailbox@gmail.com";
+  const owner = await app.createClient();
+  await completeGoogle(owner, google(pausedEmail, "paused-mailbox-subject"));
+  await app.db.query(
+    "UPDATE flow.auth_users SET mailbox_paused = true WHERE email = $1",
+    [pausedEmail],
+  );
+
+  for (const [email, recovery, expectedReason] of [
+    [pausedEmail, false, "MAILBOX_PAUSED"],
+    ["absent-recovery@example.test", true, "RECOVERY_ACCOUNT_NOT_FOUND"],
+  ]) {
+    const client = await app.createClient();
+    const response = await client.post("/api/auth/email/start", {
+      data: { email, recovery },
+    });
+    await result(response, 202);
+    assert.ok(
+      app
+        .otpDiagnostics(response.headers()["x-flow-diagnostic-id"])
+        .some(
+          ({ outcome, reason }) =>
+            outcome === "SUPPRESSED" && reason === expectedReason,
+        ),
+    );
+    assert.ok(!(await app.mail()).some((mail) => mail.to.includes(email)));
+    const { rows } = await app.db.query(
+      "SELECT count(*)::int AS count FROM flow.auth_intents WHERE email = $1",
+      [email],
+    );
+    assert.equal(rows[0].count, 0);
+  }
 });
 
 test("a pending email registration cannot enter a Google identity created during the race", async () => {

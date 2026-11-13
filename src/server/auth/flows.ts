@@ -159,7 +159,11 @@ async function sendCode(
 
   const mails: { email: string; code: string }[] = [];
   let challengePersisted = false;
-  let antiEnumerationSuppressed = false;
+  let antiEnumerationReason:
+    | "EMAIL_NOT_ENROLLED"
+    | "MAILBOX_PAUSED"
+    | "RECOVERY_ACCOUNT_NOT_FOUND"
+    | undefined;
   await transaction(async (tx) => {
     const session = security
       ? await requireSession(tx, request.headers, true)
@@ -180,12 +184,21 @@ async function sendCode(
     ) {
       throw new ApiFailure(403, "MAILBOX_UNAVAILABLE");
     }
-    if (login && user && (!user.emailEnrolled || user.mailboxPaused)) {
-      antiEnumerationSuppressed = true;
+    // A Google-only account must not be claimable through a fresh email OTP
+    // merely because its email string matches. The owner can explicitly enroll
+    // email OTP after authenticating with Google and completing fresh proof.
+    // New addresses still receive a generic signup OTP; account creation only
+    // occurs after the provider verifies that challenge.
+    if (login && user?.mailboxPaused) {
+      antiEnumerationReason = "MAILBOX_PAUSED";
+      return;
+    }
+    if (login && user && !user.emailEnrolled) {
+      antiEnumerationReason = "EMAIL_NOT_ENROLLED";
       return;
     }
     if (login?.recovery && !user) {
-      antiEnumerationSuppressed = true;
+      antiEnumerationReason = "RECOVERY_ACCOUNT_NOT_FOUND";
       return;
     }
     const data = {
@@ -216,12 +229,12 @@ async function sendCode(
     });
   });
 
-  if (antiEnumerationSuppressed) {
+  if (antiEnumerationReason) {
     log("info", "otp_diagnostic", {
       diagnosticId,
       operation,
       outcome: "SUPPRESSED",
-      reason: "ANTI_ENUMERATION",
+      reason: antiEnumerationReason,
     });
     return accepted(previous);
   }
