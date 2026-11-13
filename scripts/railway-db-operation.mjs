@@ -147,6 +147,7 @@ async function testQa() {
 
   const databaseEnv = { ...process.env };
   delete databaseEnv.FLOW_BOOTSTRAP_DATABASE_URL;
+  delete databaseEnv.FLOW_MIGRATION_DATABASE_URL;
   for (const key of Object.keys(databaseEnv)) {
     if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) {
       delete databaseEnv[key];
