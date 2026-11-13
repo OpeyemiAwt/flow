@@ -139,8 +139,9 @@ async function testQa() {
   if (
     migrationUrl.pathname !== "/flow_test" ||
     decodeURIComponent(migrationUrl.username) !== "flow_test_migrator" ||
-    migrationUrl.searchParams.size !== 1 ||
-    migrationUrl.searchParams.get("sslmode") !== "require"
+    migrationUrl.searchParams.size !== 2 ||
+    migrationUrl.searchParams.get("sslmode") !== "require" ||
+    migrationUrl.searchParams.get("uselibpqcompat") !== "true"
   ) {
     fail("The QA migration URL must target flow_test over encrypted TLS.");
   }

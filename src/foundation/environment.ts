@@ -147,8 +147,9 @@ function hasExpectedTls(
   // transport without chain validation only for the isolated flow_test DB.
   if (remoteTestDatabase) {
     return (
-      url.searchParams.size === 1 &&
-      url.searchParams.get("sslmode") === "require"
+      url.searchParams.size === 2 &&
+      url.searchParams.get("sslmode") === "require" &&
+      url.searchParams.get("uselibpqcompat") === "true"
     );
   }
 

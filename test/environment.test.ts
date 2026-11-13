@@ -84,9 +84,9 @@ for (const environment of ["staging", "production"] as const) {
 
 test("remote QA database mode requires test identity and strict TLS", () => {
   const appUrl =
-    "postgresql://flow_test_app:fixture-only-password@db.flow.example:5432/flow_test?sslmode=require";
+    "postgresql://flow_test_app:fixture-only-password@db.flow.example:5432/flow_test?sslmode=require&uselibpqcompat=true";
   const migrationUrl =
-    "postgresql://flow_test_migrator:fixture-only-password@db.flow.example:5432/flow_test?sslmode=require";
+    "postgresql://flow_test_migrator:fixture-only-password@db.flow.example:5432/flow_test?sslmode=require&uselibpqcompat=true";
   assert.equal(
     readConfig(
       {
