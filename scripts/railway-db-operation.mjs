@@ -103,9 +103,16 @@ async function migrate() {
   ) {
     fail("Migration is restricted to the isolated flow_test QA database first.");
   }
+  const migrationEnv = { ...process.env };
+  delete migrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;
+  for (const key of Object.keys(migrationEnv)) {
+    if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) {
+      delete migrationEnv[key];
+    }
+  }
   const child = spawn("node", ["node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "prisma.config.ts"], {
     stdio: "inherit",
-    env: process.env,
+    env: migrationEnv,
   });
   child.once("error", (error) => {
     console.error(JSON.stringify({ event: "qa_migration_start_failed", error: error.message }));
