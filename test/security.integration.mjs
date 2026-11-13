@@ -591,6 +591,62 @@ test("OTP is browser-bound, hashed at rest, limited to five guesses and consumed
   for (const reply of replies) await app.inspect(reply);
 });
 
+test("security OTP guesses remain consumed after rejected verification", async () => {
+  const email = "security-guesses@example.test";
+  const client = await app.createClient();
+  await emailLogin(client, email);
+  const code = await codeFor(email, () =>
+    post(client, "/api/security/code/start", { purpose: "revoke-all" }, 202),
+  );
+  const wrong = code === "00000000" ? "00000001" : "00000000";
+  for (let index = 0; index < 5; index++) {
+    await post(client, "/api/security/code/verify", { code: wrong }, 401);
+  }
+  const { rows } = await app.db.query(
+    "SELECT attempts, verified FROM flow.auth_intents WHERE email = $1 AND purpose = 'revoke-all'",
+    [email],
+  );
+  assert.equal(rows[0]?.attempts, 5);
+  assert.equal(rows[0]?.verified, false);
+  await post(client, "/api/security/code/verify", { code }, 401);
+  await post(client, "/api/security/sessions/revoke-all", {}, 403);
+  await status(client);
+});
+
+test("email provider failure does not report delivery or leave a usable challenge", async () => {
+  const email = "delivery-failure@example.test";
+  const client = await app.createClient();
+  const before = (await app.mail()).length;
+  await app.failMail(true);
+  try {
+    const body = await post(client, "/api/auth/email/start", { email }, 503);
+    assert.equal(body.error, "DELIVERY_UNAVAILABLE");
+    assert.equal((await app.mail()).length, before);
+    assert.equal(
+      (await client.storageState()).cookies.some(({ name }) => name.endsWith("-email")),
+      false,
+    );
+    const { rows } = await app.db.query(
+      "SELECT count(*)::int AS count FROM flow.auth_intents WHERE email = $1",
+      [email],
+    );
+    assert.equal(rows[0].count, 0);
+  } finally {
+    await app.failMail(false);
+  }
+  await emailLogin(client, email);
+  await status(client);
+});
+
+test("malformed session cookies fail closed without an internal error", async () => {
+  const client = await app.createClient();
+  for (const value of ["%ZZ", "%E0%A4%A"]) {
+    await result(await client.get("/api/me", {
+      headers: { cookie: `${sessionCookie}=${value}` },
+    }), 401);
+  }
+});
+
 test("session recovery and explicit revocation deny copied cookies", async () => {
   const email = "recovery@example.test";
   const client = await app.createClient();

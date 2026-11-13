@@ -299,6 +299,9 @@ export async function securityServer() {
             throw error;
           });
       },
+      async failMail(enabled) {
+        await writeFile(path.join(dir, "mail-failure"), enabled ? "failed" : "");
+      },
       assertNoCredentialLeaks() {
         const outputs = observed.join("\n") + serverLogs;
         for (const value of secrets)

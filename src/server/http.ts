@@ -51,7 +51,6 @@ export async function api(action: () => Promise<Response>): Promise<Response> {
       const err = error as ApiFailure;
       return reply(err.status, { error: err.code, requestId });
     }
-    console.error("API 503 INTERNAL ERROR:", error);
     log("error", "request_failed", { requestId, code: "INTERNAL_ERROR" });
     return reply(503, { error: "UNAVAILABLE", requestId });
   }

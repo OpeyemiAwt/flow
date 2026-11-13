@@ -41,12 +41,15 @@ export function extractCookieSessionToken(
   if (!cookieHeader) return null;
   const parts = cookieHeader.split(";").map((part) => part.trim());
   const prefix = `${cookieName}=`;
-  const match = parts.find((part) => part.startsWith(prefix));
-  if (!match) return null;
-  const raw = match.slice(prefix.length);
-  const decoded = decodeURIComponent(raw);
-  const token = decoded.split(".")[0];
-  return token && token.length > 0 ? token : null;
+  const matches = parts.filter((part) => part.startsWith(prefix));
+  if (matches.length !== 1) return null;
+  try {
+    const decoded = decodeURIComponent(matches[0]!.slice(prefix.length));
+    const token = decoded.split(".")[0];
+    return token && token.length <= 512 ? token : null;
+  } catch {
+    return null;
+  }
 }
 
 export function readNonce(headers: Headers, name: string): string | undefined {

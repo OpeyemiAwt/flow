@@ -1,6 +1,5 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { after } from "next/server";
 import { z } from "zod";
 import { runtime, transaction, type FlowDb } from "../../foundation/prisma.ts";
 import { audit } from "../audit.ts";
@@ -163,14 +162,19 @@ async function sendCode(
     const subject = security
       ? "Confirm a FLOW security change"
       : "Your FLOW sign-in code";
-    after(async () => {
-      await sendMail(
-        auth,
-        mail.email,
-        subject,
-        `Your FLOW code is ${mail.code}. It expires in five minutes. Enter it only in the FLOW window that requested it.`,
-      );
-    });
+    const delivered = await sendMail(
+      auth,
+      mail.email,
+      subject,
+      `Your FLOW code is ${mail.code}. It expires in five minutes. Enter it only in the FLOW window that requested it.`,
+    );
+    if (!delivered) {
+      // Invalidate only this challenge, never a concurrent replacement resend.
+      await runtime().db.authIntent.deleteMany({
+        where: { slot, digest: digest(secret) },
+      });
+      throw new ApiFailure(503, "DELIVERY_UNAVAILABLE");
+    }
   }
   return accepted(mails.length ? secret : previous);
 }
@@ -189,7 +193,7 @@ async function verifyCode(
   const headers = privateHeaders();
 
   if (security) {
-    await transaction(async (tx) => {
+    const verified = await transaction(async (tx) => {
       const session = await requireSession(tx, request.headers, true);
       const changed = await tx.authIntent.updateMany({
         where: {
@@ -222,14 +226,18 @@ async function verifyCode(
           body: { email: intent.email, otp: code },
         });
       } catch (error) {
-        if (rejectedCode(error)) throw new ApiFailure(401, "INVALID_PROOF");
+        // A rejected guess must commit its attempt counters. Throwing inside
+        // this transaction would restore both counters and allow unlimited guesses.
+        if (rejectedCode(error)) return false;
         throw error;
       }
       await tx.authIntent.update({
         where: { slot: intent.slot },
         data: { verified: true, expiresAt: expiry() },
       });
+      return true;
     });
+    if (!verified) throw new ApiFailure(401, "INVALID_PROOF");
     return reply(204, undefined, headers);
   }
 
@@ -270,25 +278,32 @@ async function verifyCode(
       headers: authHeaders(request.headers),
       returnHeaders: true,
     });
-    await db.$executeRaw`SELECT set_config('flow.current_session_token', ${result.response.token}, false)`;
-    const created = await db.authSession.findUniqueOrThrow({
-      where: { token: result.response.token },
-    });
-    if (intent.purpose === "recover-email") {
-      await db.authSession.deleteMany({
-        where: { userId: created.userId, id: { not: created.id } },
+    await transaction(async (tx) => {
+      // All session reads/revocations share one connection and transaction-local
+      // identity. Never leave a bearer token set on a pooled connection.
+      await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${result.response.token}, true)`;
+      const created = await tx.authSession.findUniqueOrThrow({
+        where: { token: result.response.token },
       });
-    }
-    if (previous && previous.id !== created.id)
-      await db.authSession.deleteMany({ where: { id: previous.id } });
-    await db.authIntent.deleteMany({ where: { slot: intent.slot } });
-    await audit(
-      db,
-      intent.purpose === "recover-email" ? "recovery" : "sign-in",
-      created.userId,
-      undefined,
-      created.id,
-    );
+      await lockAuthUser(tx, created.userId);
+      if (intent.purpose === "recover-email") {
+        await tx.authSession.deleteMany({
+          where: { userId: created.userId, id: { not: created.id } },
+        });
+      }
+      if (previous && previous.id !== created.id)
+        await tx.authSession.deleteMany({ where: { id: previous.id } });
+      await tx.authIntent.deleteMany({
+        where: { slot: intent.slot, digest: intent.digest },
+      });
+      await audit(
+        tx,
+        intent.purpose === "recover-email" ? "recovery" : "sign-in",
+        created.userId,
+        undefined,
+        created.id,
+      );
+    });
     forwardCookies(headers, result.headers, auth.cookies.session);
     headers.append("set-cookie", cookie(auth, auth.cookies.email, "", 0));
     return reply(204, undefined, headers);
