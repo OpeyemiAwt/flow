@@ -198,6 +198,7 @@ async function migrateStaging() {
   const migrationEnv = { ...process.env, FLOW_MIGRATION_DATABASE_URL: migrationUrl.toString() };
   delete migrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;
   delete migrationEnv.FLOW_TEST_DATABASE_REMOTE;
+  delete migrationEnv.FLOW_TEST_DATABASE_NAME;
   for (const key of Object.keys(migrationEnv)) {
     if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) delete migrationEnv[key];
   }
