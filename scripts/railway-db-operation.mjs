@@ -123,6 +123,67 @@ async function migrate() {
   });
 }
 
+async function testQa() {
+  if (
+    process.env.FLOW_ENV !== "test" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "qa-only" ||
+    process.env.FLOW_TEST_DATABASE_REMOTE !== "enabled" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail("Database integration tests are restricted to the isolated Railway flow_test database.");
+  }
+
+  const migrationUrl = new URL(process.env.FLOW_MIGRATION_DATABASE_URL ?? "");
+  if (
+    migrationUrl.pathname !== "/flow_test" ||
+    decodeURIComponent(migrationUrl.username) !== "flow_test_migrator" ||
+    migrationUrl.searchParams.size !== 1 ||
+    migrationUrl.searchParams.get("sslmode") !== "require"
+  ) {
+    fail("The QA migration URL must target flow_test over encrypted TLS.");
+  }
+
+  const databaseEnv = { ...process.env };
+  delete databaseEnv.FLOW_BOOTSTRAP_DATABASE_URL;
+  for (const key of Object.keys(databaseEnv)) {
+    if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) {
+      delete databaseEnv[key];
+    }
+  }
+
+  const testRoles = [
+    ["FLOW_DATABASE_URL", "app", "FLOW_TEST_APP_PASSWORD"],
+    ["FLOW_WORKER_DATABASE_URL", "worker", "FLOW_TEST_LEGACY_WORKER_PASSWORD"],
+    ["FLOW_OPERATOR_DATABASE_URL", "operator", "FLOW_TEST_OPERATOR_PASSWORD"],
+  ];
+  for (const [targetVariable, suffix, passwordVariable] of testRoles) {
+    const password = process.env[passwordVariable];
+    if (!password || !/^[a-f0-9]{64}$/.test(password)) {
+      fail(`${passwordVariable} must contain the generated isolated QA credential.`);
+    }
+    const url = new URL(migrationUrl);
+    url.username = `flow_test_${suffix}`;
+    url.password = password;
+    databaseEnv[targetVariable] = url.toString();
+  }
+  databaseEnv.FLOW_TEST_DATABASE_REMOTE = "enabled";
+
+  const child = spawn("node", ["--test", "test/database.integration.ts"], {
+    stdio: "inherit",
+    env: databaseEnv,
+  });
+  child.once("error", (error) => {
+    console.error(JSON.stringify({ event: "qa_database_tests_start_failed", error: error.message }));
+    process.exit(1);
+  });
+  child.once("exit", (code) => {
+    if (code !== 0) process.exitCode = code ?? 1;
+  });
+}
+
 if (operation === "bootstrap-staging-and-qa") await bootstrap();
 else if (operation === "migrate-qa") await migrate();
+else if (operation === "test-qa") await testQa();
 else fail("FLOW_DB_OPERATION is unsupported.");
