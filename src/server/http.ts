@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import type { AuthConfig } from "../foundation/auth-environment.ts";
+import { diagnosticCategory } from "../foundation/errors.ts";
 import { log } from "../foundation/logger.ts";
 import { runtime } from "../foundation/prisma.ts";
 
@@ -51,7 +52,11 @@ export async function api(action: () => Promise<Response>): Promise<Response> {
       const err = error as ApiFailure;
       return reply(err.status, { error: err.code, requestId });
     }
-    log("error", "request_failed", { requestId, code: "INTERNAL_ERROR" });
+    log("error", "request_failed", {
+      requestId,
+      code: "INTERNAL_ERROR",
+      category: diagnosticCategory(error),
+    });
     return reply(503, { error: "UNAVAILABLE", requestId });
   }
 }

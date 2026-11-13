@@ -65,3 +65,53 @@ export class FlowError extends Error {
 export function errorCode(error: unknown): FlowErrorCode | "INTERNAL_ERROR" {
   return error instanceof FlowError ? error.code : "INTERNAL_ERROR";
 }
+
+/**
+ * Fixed, non-sensitive categories for correlating unexpected request failures.
+ * Never include provider messages, SQL, identifiers, or arbitrary error codes.
+ */
+export type DiagnosticCategory =
+  | "CONFIGURATION"
+  | "DATABASE_NOT_READY"
+  | "DATABASE_CONNECTION"
+  | "DATABASE_SCHEMA"
+  | "DATABASE_PERMISSION"
+  | "DATABASE_CONSTRAINT"
+  | "DATABASE_QUERY"
+  | "AUTH_PROVIDER"
+  | "UNCLASSIFIED";
+
+export function diagnosticCategory(error: unknown): DiagnosticCategory {
+  if (error instanceof FlowError) {
+    if (error.code === "INVALID_CONFIGURATION") return "CONFIGURATION";
+    if (error.code === "DATABASE_UNAVAILABLE") return "DATABASE_CONNECTION";
+    if (error.code === "DATABASE_NOT_READY") return "DATABASE_NOT_READY";
+  }
+  if (!error || typeof error !== "object") return "UNCLASSIFIED";
+
+  const candidate = error as { code?: unknown; name?: unknown };
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+  if (
+    /^(?:ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|EAI_AGAIN|P1001|P1002|P1003|P1017)$/.test(
+      code,
+    )
+  ) {
+    return "DATABASE_CONNECTION";
+  }
+  if (/^(?:P2021|P2022|42P01|42703)$/.test(code)) {
+    return "DATABASE_SCHEMA";
+  }
+  if (/^(?:P1010|P1011|42501)$/.test(code)) {
+    return "DATABASE_PERMISSION";
+  }
+  if (/^(?:P2002|P2003|23505|23503)$/.test(code)) {
+    return "DATABASE_CONSTRAINT";
+  }
+  if (/^P\d{4}$/.test(code) || /^08/.test(code)) {
+    return "DATABASE_QUERY";
+  }
+  if (candidate.name === "APIError" || candidate.name === "BetterAuthError") {
+    return "AUTH_PROVIDER";
+  }
+  return "UNCLASSIFIED";
+}
