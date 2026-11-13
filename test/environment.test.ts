@@ -128,6 +128,34 @@ test("remote QA database mode requires test identity and strict TLS", () => {
   );
 });
 
+test("staging permits encrypted Railway private Postgres with its self-signed certificate", () => {
+  const app = readConfig(
+    {
+      FLOW_ENV: "staging",
+      FLOW_EXECUTION: "disabled",
+      FLOW_DATABASE_URL:
+        "postgresql://flow_staging_app:fixture-only-password@postgres.internal.railway.internal:5432/flow_staging?sslmode=require&uselibpqcompat=true",
+    },
+    "runtime",
+  ).database;
+  assert.equal(app.tls, true);
+  assert.equal(app.verifyTlsCertificate, false);
+
+  assert.throws(
+    () =>
+      readConfig(
+        {
+          FLOW_ENV: "staging",
+          FLOW_EXECUTION: "disabled",
+          FLOW_DATABASE_URL:
+            "postgresql://flow_staging_app:fixture-only-password@db.flow.example:5432/flow_staging?sslmode=require&uselibpqcompat=true",
+        },
+        "runtime",
+      ),
+    invalid,
+  );
+});
+
 test("rejects unset or unknown environments and live execution", () => {
   const source = localEnvironment("local");
   assert.throws(() => readConfig({}, "runtime"), invalid);

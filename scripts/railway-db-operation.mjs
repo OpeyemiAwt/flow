@@ -150,7 +150,7 @@ async function migrateStaging() {
   migrationUrl.pathname = "/flow_staging";
   migrationUrl.username = "flow_staging_migrator";
   migrationUrl.password = password;
-  migrationUrl.search = "?sslmode=require&sslaccept=strict";
+  migrationUrl.search = "?sslmode=require&uselibpqcompat=true";
 
   const migrationEnv = { ...process.env, FLOW_MIGRATION_DATABASE_URL: migrationUrl.toString() };
   delete migrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;

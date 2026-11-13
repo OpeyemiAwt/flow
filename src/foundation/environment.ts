@@ -139,6 +139,7 @@ function hasExpectedTls(
   purpose: DatabasePurpose,
   tls: boolean,
   remoteTestDatabase: boolean,
+  stagingRailwayDatabase: boolean,
 ): boolean {
   if (!tls) {
     return url.search === "";
@@ -146,7 +147,7 @@ function hasExpectedTls(
 
   // Railway's private Postgres certificate is self-signed. Permit encrypted
   // transport without chain validation only for the isolated flow_test DB.
-  if (remoteTestDatabase) {
+  if (remoteTestDatabase || stagingRailwayDatabase) {
     return (
       url.searchParams.size === 2 &&
       url.searchParams.get("sslmode") === "require" &&
@@ -232,6 +233,8 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
       tls,
       environment === "test" &&
         source.FLOW_TEST_DATABASE_REMOTE === "enabled",
+      environment === "staging" &&
+        url.hostname.toLowerCase().endsWith(".railway.internal"),
     )
   ) {
     return invalidConfig(
@@ -245,8 +248,10 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
     role,
     tls,
     verifyTlsCertificate: !(
-      environment === "test" &&
-      source.FLOW_TEST_DATABASE_REMOTE === "enabled"
+      (environment === "test" &&
+        source.FLOW_TEST_DATABASE_REMOTE === "enabled") ||
+      (environment === "staging" &&
+        url.hostname.toLowerCase().endsWith(".railway.internal"))
     ),
   };
   return { environment, execution, database };
