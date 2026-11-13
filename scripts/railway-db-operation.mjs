@@ -135,6 +135,16 @@ async function migrate() {
     try {
       const schema = await admin.query("SELECT 1 FROM pg_namespace WHERE nspname = 'flow'");
       if (schema.rowCount) fail("Validation migration left the flow schema present; refusing automatic repair.");
+      const history = await admin.query("SELECT table_schema FROM information_schema.tables WHERE table_name = '_prisma_migrations'");
+      if (history.rowCount > 1) fail("Validation database has unexpected Prisma history tables.");
+      if (history.rowCount === 1) {
+        if (history.rows[0].table_schema !== "public") fail("Validation migration history is outside the expected public schema.");
+        const entries = await admin.query("SELECT migration_name, finished_at, rolled_back_at FROM public._prisma_migrations");
+        if (entries.rowCount !== 1 || entries.rows[0].migration_name !== "20261106000000_flow_namespace" || entries.rows[0].finished_at !== null || entries.rows[0].rolled_back_at !== null) {
+          fail("Validation migration history differs from the single expected failed first migration.");
+        }
+        await admin.query('ALTER TABLE public._prisma_migrations OWNER TO "flow_test_validation_migrator"');
+      }
     } finally { await admin.end(); }
     await new Promise((resolve, reject) => {
       const recovery = spawn("node", ["node_modules/prisma/build/index.js", "migrate", "resolve", "--rolled-back", "20261106000000_flow_namespace", "--config", "prisma.config.ts"], { stdio: "inherit", env: migrationEnv });
