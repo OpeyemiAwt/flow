@@ -18,6 +18,7 @@ export default function nextConfig(phase: string): NextConfig {
   }
 
   return {
+    output: "standalone",
     poweredByHeader: false,
     logging: {
       incomingRequests: { ignore: [/^\/api\/(auth|security)(?:[/?]|$)/] },

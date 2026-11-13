@@ -1,0 +1,41 @@
+import { log } from "../src/foundation/logger.ts";
+import { getPrismaClient } from "../src/foundation/prisma.ts";
+import { PaymentMonitoringWorker } from "../src/server/payments/payment-monitoring-worker.ts";
+
+async function main(): Promise<void> {
+  if (process.env.FLOW_EXECUTION !== "disabled") {
+    throw new Error("Payment worker requires FLOW_EXECUTION=disabled in staging.");
+  }
+  if (process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled") {
+    throw new Error("Payment worker requires provider compatibility to be disabled.");
+  }
+
+  const workerId = process.env.FLOW_PAYMENT_WORKER_ID ?? `payment-${process.pid}`;
+  const signal = new AbortController();
+  const shutdown = (name: string) => {
+    log("info", "payment_worker_shutdown_requested", { workerId, signal: name });
+    signal.abort();
+  };
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+
+  log("info", "payment_worker_ready", { workerId, execution: "disabled" });
+  try {
+    await new PaymentMonitoringWorker({ workerId }).runLoop({
+      pollIntervalMs: Number(process.env.FLOW_MONITORING_POLL_INTERVAL_MS ?? 5000),
+      batchSize: Number(process.env.FLOW_MONITORING_BATCH_SIZE ?? 10),
+      leaseSeconds: Number(process.env.FLOW_MONITORING_LEASE_SECONDS ?? 30),
+      signal: signal.signal,
+    });
+  } catch (error) {
+    log("error", "payment_worker_crashed", {
+      workerId,
+      error: error instanceof Error ? error.message : "unknown error",
+    });
+    process.exitCode = 1;
+  } finally {
+    await getPrismaClient("worker").$disconnect();
+  }
+}
+
+void main();
