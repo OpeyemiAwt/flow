@@ -1061,6 +1061,7 @@ async function testSecurityQaTwice() {
     // a retry never collides with, rotates credentials for, or mutates a prior
     // QA run. These databases are intentionally retained for review.
     const runId = randomBytes(5).toString("hex");
+    const failedSuites = [];
 
     for (let pass = 1; pass <= 2; pass++) {
       const name = `flow_test_qa_${deploymentId.slice(0, 12).toLowerCase()}_${runId}_${pass}`;
@@ -1145,7 +1146,7 @@ async function testSecurityQaTwice() {
       delete integrationEnv.FLOW_DB_OPERATION;
 
       const run = (label, args, env) =>
-        new Promise((resolve, reject) => {
+        new Promise((resolve) => {
           console.log(
             JSON.stringify({
               event: "qa_suite_start",
@@ -1156,18 +1157,10 @@ async function testSecurityQaTwice() {
             }),
           );
           const child = spawn("node", args, { stdio: "inherit", env });
-          child.once("error", reject);
-          child.once("exit", (code) =>
-            code === 0
-              ? resolve()
-              : reject(
-                  new Error(
-                    `${label} failed on QA pass ${pass} (exit ${code ?? 1}).`,
-                  ),
-                ),
-          );
+          child.once("error", () => resolve(false));
+          child.once("exit", (code) => resolve(code === 0));
         });
-      await run(
+      const migrationsReady = await run(
         "migrations",
         [
           "node_modules/prisma/build/index.js",
@@ -1178,26 +1171,56 @@ async function testSecurityQaTwice() {
         ],
         migrationEnv,
       );
-      await run(
-        "complete security integration",
-        ["--test", "test/security.integration.mjs"],
-        integrationEnv,
-      );
-      await run(
-        "database integration",
-        ["--test", "test/database.integration.ts"],
-        integrationEnv,
-      );
+      if (!migrationsReady) failedSuites.push({ pass, suite: "migrations" });
+      if (migrationsReady) {
+        const securityPassed = await run(
+          "complete security integration",
+          ["--test", "test/security.integration.mjs"],
+          integrationEnv,
+        );
+        if (!securityPassed)
+          failedSuites.push({ pass, suite: "complete security integration" });
+        const databasePassed = await run(
+          "database integration",
+          ["--test", "test/database.integration.ts"],
+          integrationEnv,
+        );
+        if (!databasePassed)
+          failedSuites.push({ pass, suite: "database integration" });
+      } else {
+        failedSuites.push(
+          { pass, suite: "complete security integration (not run)" },
+          { pass, suite: "database integration (not run)" },
+        );
+      }
       console.log(
         JSON.stringify({
           event: "qa_suite_pass",
           runId,
           pass,
           database: name,
-          result: "passed",
+          result: failedSuites.some((failure) => failure.pass === pass)
+            ? "failed"
+            : "passed",
         }),
       );
     }
+    if (failedSuites.length) {
+      console.error(
+        JSON.stringify({
+          event: "qa_twice_summary",
+          runId,
+          result: "failed",
+          failures: failedSuites,
+        }),
+      );
+      fail(
+        "One or more complete isolated QA pass suites failed; review the per-suite summaries.",
+      );
+    }
+    console.log(
+      JSON.stringify({ event: "qa_twice_summary", runId, result: "passed" }),
+    );
   } catch (error) {
     fail(`Repeatable QA suite stopped safely: ${error.message}`);
   } finally {
