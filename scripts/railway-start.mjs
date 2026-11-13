@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 const role = process.env.FLOW_SERVICE_ROLE;
 const commands = {
-  web: ["node_modules/next/dist/bin/next", ["start", "--hostname", "0.0.0.0", "--port", process.env.PORT || "3000"]],
+  web: ["node", ["server.js"]],
   payments: ["node", ["scripts/run-payment-worker.ts"]],
 };
 

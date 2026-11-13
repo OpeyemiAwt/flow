@@ -1,7 +1,10 @@
 # Pin both toolchain versions independently of Railway's builder image.
 FROM node:24.22.2-bookworm-slim AS base
 
-RUN npm install --global npm@11.19.1 \
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install --global npm@11.19.1 \
   && test "$(node --version)" = "v24.22.2" \
   && test "$(npm --version)" = "11.19.1"
 
