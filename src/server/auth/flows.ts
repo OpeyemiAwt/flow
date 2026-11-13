@@ -491,7 +491,7 @@ async function finishGoogle(request: Request): Promise<Response> {
       response.headers.get("location") !==
         new URL(providerRedirect, auth.origin).href
     ) {
-      log.error("google_oauth_provider_callback_rejected", {
+      log("error", "google_oauth_provider_callback_rejected", {
         status: response.status,
         redirectMatched: response.headers.get("location") === new URL(providerRedirect, auth.origin).href,
       });
@@ -541,7 +541,7 @@ async function finishGoogle(request: Request): Promise<Response> {
     );
   } catch (error) {
     if (!(error instanceof ApiFailure)) throw error;
-    log.error("google_oauth_callback_rejected", {
+    log("error", "google_oauth_callback_rejected", {
       stage: failureStage,
       status: error.status,
       error,
