@@ -2487,13 +2487,13 @@ test("M2 Phase 3 worker: provider failures, unverified policy rejection, and gra
     mockServer.setOptions({ multiWalletMode: true, policyState: "stored" });
     const accBg = await createTestAccount(pool, "BUSINESS", "worker-bg-poll");
     await ensureProvisioningJobForAccount(db, accBg.accountId, randomUUID());
-    // Earlier cases intentionally leave unrelated pending provisioning fixtures.
+    // Earlier cases intentionally leave unrelated eligible provisioning fixtures.
     // Keep this lifecycle assertion scoped to its own account so the global poller
     // cannot lease another test's envelope or provider state.
     await workerPool.query(
       `UPDATE flow.wallet_provisioning_jobs
        SET attempts = max_attempts
-       WHERE status = 'PENDING' AND account_id <> $1::uuid`,
+       WHERE attempts < max_attempts AND account_id <> $1::uuid`,
       [accBg.accountId],
     );
 
