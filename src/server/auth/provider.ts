@@ -252,7 +252,7 @@ export function provider(
         includeGrantedScopes: false,
         async getUserInfo(tokens) {
           const rejectGoogleIdentity = (reason: string) => {
-            log("warn", "google_identity_proof_rejected", { reason });
+            log("info", "google_identity_proof_rejected", { reason });
             return null;
           };
           if (!tokens.idToken || !google)
