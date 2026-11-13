@@ -121,6 +121,10 @@ async function migrate() {
   migrationUrl.pathname = `/${databaseName}`;
   migrationEnv.FLOW_MIGRATION_DATABASE_URL = migrationUrl.toString();
   migrationEnv.FLOW_TEST_DATABASE_NAME = databaseName;
+  delete migrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;
+  for (const key of Object.keys(migrationEnv)) {
+    if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) delete migrationEnv[key];
+  }
   if (databaseName === "flow_test_validation") {
     const bootstrapUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
     if (!bootstrapUrl) fail("Isolated admin URL is required to verify failed QA migration rollback.");
@@ -137,12 +141,6 @@ async function migrate() {
       recovery.once("error", reject);
       recovery.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`migration recovery exit ${code}`)));
     }).catch((error) => fail(`Isolated QA migration recovery failed safely: ${error.message}`));
-  }
-  delete migrationEnv.FLOW_BOOTSTRAP_DATABASE_URL;
-  for (const key of Object.keys(migrationEnv)) {
-    if (/^FLOW_(?:STAGING|TEST)_.*_PASSWORD$/.test(key)) {
-      delete migrationEnv[key];
-    }
   }
   const child = spawn("node", ["node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "prisma.config.ts"], {
     stdio: "inherit",
@@ -222,7 +220,7 @@ async function testQa() {
   if (
     !/^flow_test_[a-z0-9_]+$/.test(databaseName) ||
     migrationUrl.pathname !== `/${databaseName}` ||
-    decodeURIComponent(migrationUrl.username) !== "flow_test_migrator" ||
+    decodeURIComponent(migrationUrl.username) !== `${databaseName}_migrator` ||
     migrationUrl.searchParams.size !== 2 ||
     migrationUrl.searchParams.get("sslmode") !== "require" ||
     migrationUrl.searchParams.get("uselibpqcompat") !== "true"
@@ -294,9 +292,20 @@ async function createQaValidationDatabase() {
       const variable = `${name.toUpperCase()}_${suffix.toUpperCase()}_PASSWORD`;
       const password = process.env[variable];
       if (!password || !/^[a-f0-9]{64}$/.test(password)) fail(`${variable} must contain a generated 256-bit hex credential.`);
-      const exists = await client.query("SELECT 1 FROM pg_roles WHERE rolname = $1", [roleName]);
-      if (exists.rowCount) fail(`Role ${roleName} already exists; refusing credential rotation.`);
-      await client.query(`CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(password)}`);
+      const exists = await client.query("SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1", [roleName]);
+      if (exists.rowCount) {
+        const role = exists.rows[0];
+        if (!role.rolcanlogin || role.rolsuper || role.rolcreatedb || role.rolcreaterole || role.rolreplication || role.rolbypassrls) {
+          fail(`Existing role ${roleName} does not meet the restricted QA role policy.`);
+        }
+      } else {
+        await client.query(`CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(password)}`);
+      }
+      const credentialCheckUrl = new URL(adminUrl);
+      credentialCheckUrl.username = roleName;
+      credentialCheckUrl.password = password;
+      const credentialCheck = new pg.Client({ connectionString: credentialCheckUrl.toString(), connectionTimeoutMillis: 3000 });
+      await credentialCheck.connect().then(() => credentialCheck.end()).catch(() => fail(`Existing/generated QA credential check failed for ${roleName}; refusing to rotate it.`));
     }
     const exists = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [name]);
     if (!exists.rowCount) await client.query(`CREATE DATABASE "${name}" OWNER "${name}_migrator"`);
@@ -312,8 +321,11 @@ async function testSecurityQa() {
     fail("Security integration tests require the fresh isolated validation database.");
   }
   const migrationUrl = new URL(process.env.FLOW_MIGRATION_DATABASE_URL ?? "");
+  if (migrationUrl.pathname !== "/flow_test" || decodeURIComponent(migrationUrl.username) !== "flow_test_migrator") fail("The QA migration credential must begin scoped to flow_test.");
   migrationUrl.pathname = "/flow_test_validation";
-  if (decodeURIComponent(migrationUrl.username) !== "flow_test_migrator") fail("Invalid isolated QA migrator role.");
+  migrationUrl.username = "flow_test_validation_migrator";
+  migrationUrl.password = process.env.FLOW_TEST_VALIDATION_MIGRATOR_PASSWORD ?? "";
+  if (!/^[a-f0-9]{64}$/.test(migrationUrl.password)) fail("Validation migrator credential is missing.");
   const databaseEnv = { ...process.env };
   delete databaseEnv.FLOW_BOOTSTRAP_DATABASE_URL;
   delete databaseEnv.FLOW_MIGRATION_DATABASE_URL;
