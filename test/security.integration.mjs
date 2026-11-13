@@ -104,6 +104,7 @@ async function completeGoogle(
       : link
         ? "/security?issue=authentication"
         : "/sign-in?issue=authentication",
+    app.diagnostics(),
   );
   if (accepted && !link) await cookieValue(client);
   return callback;
