@@ -6,6 +6,7 @@ import pg from "pg";
 import { createDatabasePool } from "../src/foundation/database.ts";
 import {
   assertOperatorEnvironment,
+  assertCustodyEnvironment,
   assertWebEnvironment,
   assertWorkerEnvironment,
   readConfig,
@@ -433,6 +434,49 @@ test("assertWebEnvironment rejects operator database URL in web runtime", () => 
       code: "INVALID_CONFIGURATION",
       message: /Privileged operator database credentials are strictly isolated/,
     },
+  );
+});
+
+test("custody runtime accepts only its dedicated database role and encryption key", () => {
+  const source = {
+    FLOW_ENV: "local" as const,
+    FLOW_EXECUTION: "disabled" as const,
+    FLOW_CUSTODY_DATABASE_URL: `postgresql://flow_local_custody_worker:${testPassword}@127.0.0.1:55432/flow_local`,
+    FLOW_WALLET_ENCRYPTION_KEY:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  };
+  assert.doesNotThrow(() => assertCustodyEnvironment(source));
+  assert.equal(
+    readConfig(source, "custody").database.role,
+    "flow_local_custody_worker",
+  );
+  assert.throws(
+    () =>
+      assertCustodyEnvironment({
+        ...source,
+        FLOW_DATABASE_URL: source.FLOW_CUSTODY_DATABASE_URL,
+      }),
+    {
+      code: "INVALID_CONFIGURATION",
+      message: /only the FLOW custody database credential/,
+    },
+  );
+  assert.throws(
+    () => assertCustodyEnvironment({ ...source, FLOW_EXECUTION: "enabled" }),
+    { code: "INVALID_CONFIGURATION", message: /FLOW_EXECUTION=disabled/ },
+  );
+});
+
+test("web runtime rejects custody database credentials", () => {
+  assert.throws(
+    () =>
+      assertWebEnvironment({
+        FLOW_DATABASE_URL:
+          "postgresql://flow_local_app:password@127.0.0.1:55432/flow_local",
+        FLOW_CUSTODY_DATABASE_URL:
+          "postgresql://flow_local_custody_worker:password@127.0.0.1:55432/flow_local",
+      }),
+    { code: "INVALID_CONFIGURATION", message: /Custody database credentials/ },
   );
 });
 

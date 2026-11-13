@@ -72,6 +72,9 @@ export interface WalletProvisioningWorkerOptions {
   readonly hooks?: ProvisioningWorkerHooks;
   readonly compatibilityAuthorizationId?: string;
   readonly providerEnvironment?: "testnet" | "mainnet";
+  /** Fail closed before the first external registration unless explicitly enabled by an authorized isolated rehearsal. */
+  readonly allowNewRegistrations?: boolean;
+  readonly registrationAccountId?: string;
 }
 
 export type ProvisioningJobOutcome =
@@ -212,6 +215,8 @@ export class WalletProvisioningWorker {
   private readonly hooks?: ProvisioningWorkerHooks;
   private readonly compatibilityAuthorizationId?: string;
   private readonly providerEnvironment?: "testnet" | "mainnet";
+  private readonly allowNewRegistrations: boolean;
+  private readonly registrationAccountId?: string;
 
   private running = false;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -241,6 +246,8 @@ export class WalletProvisioningWorker {
     this.hooks = options.hooks;
     this.compatibilityAuthorizationId = options.compatibilityAuthorizationId;
     this.providerEnvironment = options.providerEnvironment;
+    this.allowNewRegistrations = options.allowNewRegistrations ?? true;
+    this.registrationAccountId = options.registrationAccountId?.toLowerCase();
   }
 
   computeBackoffDelayMs(attempt: number): number {
@@ -328,6 +335,16 @@ export class WalletProvisioningWorker {
       FROM flow.wallet_provisioning_jobs
       WHERE attempts < max_attempts
         AND (
+          EXISTS (SELECT 1 FROM flow.wallets w WHERE w.account_id = flow.wallet_provisioning_jobs.account_id)
+          OR (
+            ${this.allowNewRegistrations} AND
+            (
+              ${this.registrationAccountId ?? null}::uuid IS NULL OR
+              ${this.registrationAccountId ?? null}::uuid = flow.wallet_provisioning_jobs.account_id
+            )
+          )
+        )
+        AND (
           (status = 'PENDING')
           OR (status = 'LEASED' AND lease_expires_at <= CURRENT_TIMESTAMP AND dispatched_at IS NULL)
           OR (status IN ('REGISTERED', 'PROVISIONED', 'POLICY_VERIFYING') AND (lease_expires_at IS NULL OR lease_expires_at <= CURRENT_TIMESTAMP))
@@ -368,6 +385,17 @@ export class WalletProvisioningWorker {
   private async executeProcessAccountJob(
     accountId: string,
   ): Promise<ProcessAccountJobResult> {
+    const existing = await this.db.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (SELECT 1 FROM flow.wallets WHERE account_id = ${accountId}::uuid) AS exists
+    `;
+    if (
+      !existing[0]?.exists &&
+      (!this.allowNewRegistrations ||
+        (this.registrationAccountId !== undefined &&
+          this.registrationAccountId !== accountId.toLowerCase()))
+    ) {
+      return { accountId, outcome: "skipped" };
+    }
     const leased = await claimJobLease(
       this.db,
       accountId,

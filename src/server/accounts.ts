@@ -84,6 +84,11 @@ function summarySelect(userId: string) {
         status: true,
         policyState: true,
         controllerAccountId: true,
+        environment: true,
+        addresses: { select: { network: true, chainId: true } },
+        capabilities: {
+          select: { network: true, canDeriveAddress: true, canReceive: true },
+        },
       },
     },
     business: {
@@ -138,6 +143,13 @@ function summary(row: {
       | "RECOVERY_PENDING";
     policyState: string;
     controllerAccountId: string | null;
+    environment: string;
+    addresses: { network: string; chainId: string }[];
+    capabilities: {
+      network: string;
+      canDeriveAddress: boolean;
+      canReceive: boolean;
+    }[];
   } | null;
   business: { members: { role: "OWNER" | "ADMIN" | "MEMBER" }[] } | null;
 }) {
@@ -145,10 +157,38 @@ function summary(row: {
     row.kind === "PERSONAL" ? "OWNER" : row.business?.members[0]?.role;
   if (!role) throw new ApiFailure(404, "NOT_FOUND");
   const walletStatus = mapWalletSummaryStatus(row.wallet?.status);
+  const expectedChainIds =
+    row.wallet?.environment === "testnet"
+      ? {
+          near: "near-testnet",
+          base: "84532",
+          ethereum: "1",
+          solana: "solana-devnet",
+        }
+      : {
+          near: "near-mainnet",
+          base: "8453",
+          ethereum: "1",
+          solana: "solana-mainnet",
+        };
   const provisioningComplete =
     row.wallet?.status === "ACTIVE" &&
     row.wallet?.policyState === "stored" &&
-    Boolean(row.wallet?.controllerAccountId);
+    Boolean(row.wallet?.controllerAccountId) &&
+    ["near", "base", "ethereum", "solana"].every(
+      (network) =>
+        row.wallet?.addresses.some(
+          (address) =>
+            address.network.toLowerCase() === network &&
+            address.chainId ===
+              expectedChainIds[network as keyof typeof expectedChainIds],
+        ) &&
+        row.wallet?.capabilities.some(
+          (capability) =>
+            capability.network.toLowerCase() === network &&
+            capability.canDeriveAddress,
+        ),
+    );
   return {
     id: row.id,
     name: row.name,

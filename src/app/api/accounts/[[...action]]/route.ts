@@ -17,6 +17,7 @@ import {
 } from "../../../../server/payment-requests.ts";
 import {
   provisionAccountWallet,
+  readWalletProvisioningStatus,
   readPortfolio,
   refreshPortfolio,
 } from "../../../../server/portfolio.ts";
@@ -90,6 +91,13 @@ export async function GET(
         request.method === "POST"
       ) {
         return provisionAccountWallet(request, accountId(id));
+      }
+      if (
+        section === "wallet" &&
+        child === "provision" &&
+        request.method === "GET"
+      ) {
+        return readWalletProvisioningStatus(request, accountId(id));
       }
       if (
         section === "activities" &&

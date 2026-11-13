@@ -14,11 +14,12 @@ const environmentSchema = z.object({
 
 type EnvironmentInput = Readonly<Record<string, string | undefined>>;
 export type DatabasePurpose =
-  "runtime" | "worker" | "auth" | "operator" | "migration";
+  "runtime" | "worker" | "custody" | "auth" | "operator" | "migration";
 
 const databaseUrlKeys = {
   runtime: "FLOW_DATABASE_URL",
   worker: "FLOW_WORKER_DATABASE_URL",
+  custody: "FLOW_CUSTODY_DATABASE_URL",
   auth: "FLOW_AUTH_TICKET_DATABASE_URL",
   operator: "FLOW_OPERATOR_DATABASE_URL",
   migration: "FLOW_MIGRATION_DATABASE_URL",
@@ -66,6 +67,7 @@ function assertCredentialScope(
       ? [
           "FLOW_DATABASE_URL",
           "FLOW_WORKER_DATABASE_URL",
+          "FLOW_CUSTODY_DATABASE_URL",
           "FLOW_AUTH_TICKET_DATABASE_URL",
           "FLOW_OPERATOR_DATABASE_URL",
         ]
@@ -73,9 +75,20 @@ function assertCredentialScope(
         ? [
             "FLOW_MIGRATION_DATABASE_URL",
             "FLOW_WORKER_DATABASE_URL",
+            "FLOW_CUSTODY_DATABASE_URL",
             "FLOW_OPERATOR_DATABASE_URL",
           ]
-        : ["FLOW_MIGRATION_DATABASE_URL"];
+        : purpose === "custody"
+          ? [
+              "FLOW_DATABASE_URL",
+              "FLOW_WORKER_DATABASE_URL",
+              "FLOW_AUTH_TICKET_DATABASE_URL",
+              "FLOW_OPERATOR_DATABASE_URL",
+              "FLOW_MIGRATION_DATABASE_URL",
+            ]
+          : purpose === "runtime"
+            ? ["FLOW_MIGRATION_DATABASE_URL", "FLOW_CUSTODY_DATABASE_URL"]
+            : ["FLOW_MIGRATION_DATABASE_URL"];
   if (
     disallowedUrls.some((k) => source[k] !== undefined) ||
     otherDatabaseCredentialKeys.some((key) => source[key] !== undefined)
@@ -87,6 +100,11 @@ function assertCredentialScope(
 }
 
 export function assertWebEnvironment(source: EnvironmentInput): void {
+  if (source.FLOW_CUSTODY_DATABASE_URL !== undefined) {
+    invalidConfig(
+      "Custody database credentials are strictly isolated from the web process.",
+    );
+  }
   assertCredentialScope(source, "runtime");
   if (source.FLOW_WALLET_ENCRYPTION_KEY !== undefined) {
     invalidConfig(
@@ -115,6 +133,16 @@ export function assertWorkerEnvironment(source: EnvironmentInput): void {
     invalidConfig(
       "Operator credentials must remain strictly isolated and are prohibited in worker runtime.",
     );
+  }
+}
+
+export function assertCustodyEnvironment(source: EnvironmentInput): void {
+  assertCredentialScope(source, "custody");
+  if (!source.FLOW_WALLET_ENCRYPTION_KEY) {
+    invalidConfig("Custody worker encryption configuration is required.");
+  }
+  if (source.FLOW_EXECUTION !== "disabled") {
+    invalidConfig("Custody worker requires FLOW_EXECUTION=disabled.");
   }
 }
 
@@ -227,11 +255,13 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
       ? "app"
       : purpose === "worker"
         ? "worker"
-        : purpose === "auth"
-          ? "auth_worker"
-          : purpose === "operator"
-            ? "operator"
-            : "migrator";
+        : purpose === "custody"
+          ? "custody_worker"
+          : purpose === "auth"
+            ? "auth_worker"
+            : purpose === "operator"
+              ? "operator"
+              : "migrator";
   const role = `${databaseName}_${roleSuffix}`;
   const url = parseDatabaseUrl(source[variable], variable);
 

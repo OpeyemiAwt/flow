@@ -5,19 +5,13 @@ import {
   serializePortfolio,
 } from "../domain/portfolio.ts";
 import { getPrismaClient, runtime, type FlowDb } from "../foundation/prisma.ts";
-import { readWalletConfig } from "../foundation/wallet-environment.ts";
-import { access, accountProvisioningKey, principal } from "./accounts.ts";
+import { access, principal } from "./accounts.ts";
 import { getAccountBalances } from "./assets/asset-service.ts";
 import {
   getDefaultRpcConfig,
   reconcileWalletBalances,
 } from "./assets/connectors/multi-chain-reconciler.ts";
-import {
-  ensureProvisioningJobForAccount,
-  getAccountWalletPublicProjection,
-} from "./custody/job-repository.ts";
-import { OutLayerAdapter } from "./custody/outlayer-adapter.ts";
-import { WalletProvisioningWorker } from "./custody/provisioning-worker.ts";
+import { getAccountWalletPublicProjection } from "./custody/job-repository.ts";
 import { ApiFailure, reply } from "./http.ts";
 
 export type {
@@ -312,74 +306,115 @@ export async function provisionAccountWallet(
     throw new ApiFailure(401, "AUTH_REQUIRED");
   }
 
-  const workerDb = getPrismaClient("worker");
-
-  await ensureProvisioningJobForAccount(
-    workerDb,
-    accountId,
-    accountProvisioningKey(accountId),
-  );
-
-  let walletConfig;
-  try {
-    walletConfig = readWalletConfig(process.env);
-  } catch (err) {
-    throw new ApiFailure(
-      503,
-      err instanceof Error ? err.message : "CUSTODY_CONFIGURATION_ERROR",
-    );
-  }
-
-  const adapter = new OutLayerAdapter(
-    process.env.FLOW_OUTLAYER_API_URL || walletConfig.apiUrl,
-    5_000,
-    { compatibilityConfig: walletConfig.compatibility },
-  );
-
-  const worker = new WalletProvisioningWorker({
-    db: workerDb,
-    adapter,
-    walletConfig,
-    workerId: `api-provision-${randomUUID().slice(0, 8)}`,
-  });
-
-  const result = await worker.processAccountJob(accountId);
-
-  // If wallet is now ACTIVE, reconcile initial balances from RPC
-  const wallets = await workerDb.$queryRaw<
-    Array<{ id: string; environment: string; status: string }>
-  >`
-    SELECT id, environment, status::text AS status
-    FROM flow.wallets
-    WHERE account_id = ${accountId}::uuid
-    LIMIT 1
-  `;
-  const activeWallet = wallets[0];
-  if (activeWallet && activeWallet.status === "ACTIVE") {
-    try {
-      const rpcConfig = getDefaultRpcConfig(
-        activeWallet.environment as "testnet" | "mainnet",
-      );
-      await reconcileWalletBalances(workerDb, activeWallet.id, rpcConfig);
-    } catch {
-      // Non-fatal if initial RPC balance check times out; wallet provisioning itself is complete
-    }
-  }
-
   const walletProjection = await getAccountWalletPublicProjection(
-    workerDb,
+    db,
     accountId,
   );
-  const portfolioProjection = await getAccountBalances(db, accountId, {
-    sessionToken: actor.session.token,
-  });
+  const jobs = await db.$queryRaw<Array<{ status: string }>>`
+    SELECT status FROM flow.wallet_provisioning_jobs
+    WHERE account_id = ${accountId}::uuid LIMIT 1
+  `;
+  const job = jobs[0];
+  if (!job) throw new ApiFailure(409, "ONBOARDING_REQUIRED");
 
-  return reply(200, {
-    outcome: result.outcome,
+  return reply(202, {
+    outcome: "queued",
     walletStatus: walletProjection
       ? walletProjection.status.toLowerCase()
       : "setup_pending",
-    wallet: walletProjection,
-    portfolio: serializePortfolio(portfolioProjection),
+    stage: job.status.toLowerCase(),
+    executionEnabled: false,
+  });
+}
+
+export async function readWalletProvisioningStatus(
+  request: Request,
+  accountId: string,
+): Promise<Response> {
+  const { db } = runtime();
+  const actor = await principal(db, request.headers);
+  await access(db, actor, accountId);
+  if (!actor.session.token) throw new ApiFailure(401, "AUTH_REQUIRED");
+
+  const [wallet, jobs] = await Promise.all([
+    getAccountWalletPublicProjection(db, accountId),
+    db.$queryRaw<Array<{ status: string; attempts: number; updatedAt: Date }>>`
+      SELECT status, attempts, updated_at AS "updatedAt"
+      FROM flow.wallet_provisioning_jobs
+      WHERE account_id = ${accountId}::uuid
+      LIMIT 1
+    `,
+  ]);
+  const job = jobs[0];
+  const requiredNetworks = ["near", "base", "ethereum", "solana"] as const;
+  const expectedChainIds = wallet?.isTestnet
+    ? {
+        near: "near-testnet",
+        base: "84532",
+        ethereum: "1",
+        solana: "solana-devnet",
+      }
+    : {
+        near: "near-mainnet",
+        base: "8453",
+        ethereum: "1",
+        solana: "solana-mainnet",
+      };
+  const verifiedNetworks = wallet
+    ? requiredNetworks.filter((network) =>
+        wallet.addresses.some(
+          (address) =>
+            address.network.toLowerCase() === network &&
+            address.chainId === expectedChainIds[network],
+        ),
+      )
+    : [];
+  const walletReady = Boolean(
+    wallet?.provisioningComplete &&
+    verifiedNetworks.length === requiredNetworks.length &&
+    requiredNetworks.every((network) =>
+      wallet?.capabilities.some(
+        (capability) =>
+          capability.network.toLowerCase() === network &&
+          capability.canDeriveAddress,
+      ),
+    ),
+  );
+  const walletStatus = walletReady
+    ? "active"
+    : wallet?.status.toLowerCase() === "frozen"
+      ? "frozen"
+      : job?.status === "UNKNOWN" || job?.status === "MANUAL_REVIEW"
+        ? "recovery_pending"
+        : job?.status === "FAILED"
+          ? "setup_failed"
+          : [
+                "LEASED",
+                "REGISTERED",
+                "PROVISIONED",
+                "POLICY_VERIFYING",
+              ].includes(job?.status ?? "")
+            ? "provisioning"
+            : "setup_pending";
+
+  return reply(200, {
+    accountId,
+    walletStatus,
+    stage: walletReady
+      ? "wallet_ready"
+      : (job?.status.toLowerCase() ?? "pending"),
+    attempts: job?.attempts ?? 0,
+    updatedAt: job?.updatedAt ?? wallet?.updatedAt ?? null,
+    verifiedNetworks,
+    requiredNetworks,
+    addresses: walletReady
+      ? wallet!.addresses.filter((address) =>
+          requiredNetworks.includes(
+            address.network.toLowerCase() as (typeof requiredNetworks)[number],
+          ),
+        )
+      : [],
+    walletReady,
+    executionEnabled: false,
   });
 }

@@ -18,7 +18,18 @@ type OnboardingAccount = {
   id: string;
   walletStatus: WalletStatus;
   provisioningComplete: boolean;
+  addresses?: { network: string; chainId: string; address: string }[];
 };
+
+const onboardingSteps = [
+  "Welcome",
+  "Personal details",
+  "Security",
+  "Confirm",
+  "Provisioning",
+  "Wallet ready",
+  "Dashboard",
+] as const;
 
 const statusCopy: Record<WalletStatus, { title: string; detail: string }> = {
   active: { title: "Wallet verified", detail: "Your wallet is ready." },
@@ -64,16 +75,17 @@ export function CompleteOnboarding({
     initialAccount ?? null,
   );
   const [step, setStep] = useState<
-    "welcome" | "security" | "confirm" | "status"
+    | "welcome"
+    | "details"
+    | "security"
+    | "confirm"
+    | "status"
+    | "ready"
+    | "dashboard"
   >(initialStep === "status" || initialAccount ? "status" : "welcome");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    if (account?.provisioningComplete)
-      router.replace(`/accounts/${account.id}`);
-  }, [account, router]);
 
   useEffect(() => {
     if (
@@ -86,13 +98,24 @@ export function CompleteOnboarding({
     let active = true;
     const refresh = async () => {
       try {
-        const response = await send<{ accounts: OnboardingAccount[] }>(
-          "/api/me",
-          {},
-          "GET",
-        );
-        const latest = response.accounts.find((item) => item.id === account.id);
-        if (active && latest) setAccount(latest);
+        const response = await send<{
+          walletStatus: WalletStatus;
+          walletReady: boolean;
+          addresses: NonNullable<OnboardingAccount["addresses"]>;
+        }>(`/api/accounts/${account.id}/wallet/provision`, {}, "GET");
+        if (active) {
+          setAccount((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  walletStatus: response.walletStatus,
+                  provisioningComplete: response.walletReady,
+                  addresses: response.addresses,
+                }
+              : previous,
+          );
+          if (response.walletReady) setStep("ready");
+        }
       } catch {
         // A polling error is transient. The page keeps showing the last persisted status.
       }
@@ -151,35 +174,46 @@ export function CompleteOnboarding({
               ? status?.title
               : step === "welcome"
                 ? "Welcome to FLOW"
-                : step === "security"
-                  ? "Your wallet, carefully set up"
-                  : "Confirm wallet setup"}
+                : step === "details"
+                  ? "Your Personal account"
+                  : step === "security"
+                    ? "Your wallet, carefully set up"
+                    : step === "confirm"
+                      ? "Confirm wallet setup"
+                      : step === "ready"
+                        ? "Your FLOW wallet is ready"
+                        : step === "dashboard"
+                          ? "Enter your FLOW dashboard"
+                          : "Wallet setup status"}
           </h1>
           <p className="mt-4 text-base leading-7 text-[#5A5A5A]">
             {step === "status"
               ? status?.detail
-              : "Set up your Personal FLOW account and verify its wallet before entering the dashboard."}
+              : step === "details"
+                ? "These details come from your authenticated identity and will be used for your Personal FLOW account."
+                : "Set up your Personal FLOW account and verify its wallet before entering the dashboard."}
           </p>
           <div className="mt-8 flex flex-wrap gap-2" aria-label="Setup steps">
-            {["Welcome", "Security", "Confirm", "Wallet status"].map(
-              (label, index) => {
-                const current = [
-                  "welcome",
-                  "security",
-                  "confirm",
-                  "status",
-                ].indexOf(step);
-                const passed = index < current;
-                return (
-                  <span
-                    key={label}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${index === current ? "bg-[#0B0B0B] text-white" : passed ? "bg-[#E9F8F1] text-[#137A50]" : "border border-[#E3DED7] bg-white text-[#777]"}`}
-                  >
-                    {label}
-                  </span>
-                );
-              },
-            )}
+            {onboardingSteps.map((label, index) => {
+              const current = [
+                "welcome",
+                "details",
+                "security",
+                "confirm",
+                "status",
+                "ready",
+                "dashboard",
+              ].indexOf(step);
+              const passed = index < current;
+              return (
+                <span
+                  key={label}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${index === current ? "bg-[#0B0B0B] text-white" : passed ? "bg-[#E9F8F1] text-[#137A50]" : "border border-[#E3DED7] bg-white text-[#777]"}`}
+                >
+                  {label}
+                </span>
+              );
+            })}
           </div>
         </section>
 
@@ -210,10 +244,52 @@ export function CompleteOnboarding({
               </p>
               <button
                 type="button"
+                onClick={() => setStep("details")}
+                className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+              >
+                Continue
+              </button>
+            </div>
+          )}
+
+          {step === "details" && (
+            <div className="pt-6">
+              <h2 className="font-serif text-2xl">Signed-in identity</h2>
+              <dl className="mt-5 space-y-3 rounded-2xl bg-[#F7F5F1] p-5 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[#777]">Name</dt>
+                  <dd className="font-medium">
+                    {userName.trim() || "Not provided"}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[#777]">Email</dt>
+                  <dd className="break-all text-right font-medium">
+                    {userEmail}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[#777]">Account type</dt>
+                  <dd className="font-medium">Personal</dd>
+                </div>
+              </dl>
+              <p className="mt-4 text-sm leading-6 text-[#5A5A5A]">
+                FLOW keeps this account connected to the identity you used to
+                sign in. Returning to FLOW restores the same account.
+              </p>
+              <button
+                type="button"
                 onClick={() => setStep("security")}
                 className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
               >
                 Continue
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("welcome")}
+                className="mt-3 w-full py-2 text-sm text-[#666]"
+              >
+                Back
               </button>
             </div>
           )}
@@ -297,9 +373,9 @@ export function CompleteOnboarding({
                     {status.detail}
                   </p>
                   <p className="mt-5 rounded-2xl bg-[#F7F5F1] p-4 text-sm leading-6 text-[#555]">
-                    This status comes from FLOW&apos;s saved account record. No
-                    wallet address or balance is shown until it has been
-                    returned and verified.
+                    This status comes from FLOW&apos;s saved account and custody
+                    job records. No wallet address or balance is shown until it
+                    has been returned and verified.
                   </p>
                   {account?.walletStatus === "setup_failed" && (
                     <button
@@ -352,6 +428,58 @@ export function CompleteOnboarding({
                   </button>
                 </>
               )}
+            </div>
+          )}
+          {step === "ready" &&
+            account?.provisioningComplete &&
+            account.addresses && (
+              <div className="pt-6">
+                <h2 className="font-serif text-2xl">Four verified networks</h2>
+                <p className="mt-3 text-sm leading-6 text-[#5A5A5A]">
+                  These public addresses were returned by OutLayer and checked
+                  by FLOW.
+                </p>
+                <ul className="mt-5 space-y-3">
+                  {account.addresses.map((address) => (
+                    <li
+                      key={address.network}
+                      className="rounded-2xl border border-[#E8E4DC] p-4"
+                    >
+                      <div className="text-sm font-semibold capitalize">
+                        {address.network}{" "}
+                        <span className="font-normal text-[#777]">
+                          · {address.chainId}
+                        </span>
+                      </div>
+                      <code className="mt-2 block break-all text-xs text-[#444]">
+                        {address.address}
+                      </code>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => setStep("dashboard")}
+                  className="mt-6 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+                >
+                  Continue
+                </button>
+              </div>
+            )}
+          {step === "dashboard" && account?.provisioningComplete && (
+            <div className="pt-6">
+              <h2 className="font-serif text-2xl">Wallet verified and ready</h2>
+              <p className="mt-3 leading-6 text-[#5A5A5A]">
+                Your account and network addresses are verified. Financial
+                execution remains disabled behind its separate safety gates.
+              </p>
+              <button
+                type="button"
+                onClick={() => router.replace(`/accounts/${account.id}`)}
+                className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+              >
+                Enter dashboard
+              </button>
             </div>
           )}
           <div className="mt-5">
