@@ -103,7 +103,7 @@ export class PaymentMonitoringWorker {
   private exceptionCount = 0;
 
   constructor(options?: PaymentMonitoringWorkerOptions) {
-    this.workerDb = options?.workerDb ?? getPrismaClient("worker");
+    this.workerDb = options?.workerDb ?? getPrismaClient("payment");
     this.workerId =
       options?.workerId ??
       `payment-worker-${Math.random().toString(36).slice(2, 10)}`;

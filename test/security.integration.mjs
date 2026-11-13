@@ -8,14 +8,21 @@ import { securityServer } from "./support/security-server.mjs";
 
 let app;
 let workerDb;
+let legacyWorkerDb;
 let operatorDb;
 const sessionCookie = "__Host-flow-test-session";
 const fixtureSolanaRefund = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw";
 
 before(async () => {
   app = await securityServer();
-  if (process.env.FLOW_WORKER_DATABASE_URL) {
+  if (process.env.FLOW_FIXTURE_DATABASE_URL) {
     workerDb = new pg.Pool({
+      connectionString: process.env.FLOW_FIXTURE_DATABASE_URL,
+      max: 2,
+    });
+  }
+  if (process.env.FLOW_WORKER_DATABASE_URL) {
+    legacyWorkerDb = new pg.Pool({
       connectionString: process.env.FLOW_WORKER_DATABASE_URL,
       max: 2,
     });
@@ -32,6 +39,7 @@ after(async () => {
   if (workerDb) {
     await workerDb.end();
   }
+  if (legacyWorkerDb) await legacyWorkerDb.end();
   if (operatorDb) {
     await operatorDb.end();
   }
@@ -1347,9 +1355,13 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
     assert.equal(new URL(page.url()).pathname, "/onboarding");
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("heading", { name: "Your Personal account" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Your Personal account" })
+      .waitFor();
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("heading", { name: "Your wallet, carefully set up" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Your wallet, carefully set up" })
+      .waitFor();
     await page.getByRole("button", { name: "Continue" }).click();
     await page.getByRole("heading", { name: "Confirm wallet setup" }).waitFor();
     await page.getByRole("checkbox").check();
@@ -1653,8 +1665,7 @@ test("m3 phase 4: authenticated activities API — authorization, cross-tenant i
 
 test("FLOW desktop brand UI: multi-chain routing, curated asset registry, workspace navigation, and truthfulness gates", async () => {
   const previousOnboardingScreenshotDir = process.env.FLOW_TEST_SCREENSHOT_DIR;
-  process.env.FLOW_TEST_SCREENSHOT_DIR ??=
-    `/tmp/flow-onboarding-qa-${process.pid}`;
+  process.env.FLOW_TEST_SCREENSHOT_DIR ??= `/tmp/flow-onboarding-qa-${process.pid}`;
   mkdirSync(process.env.FLOW_TEST_SCREENSHOT_DIR, { recursive: true });
   const ctx = await app.browser.newContext({
     ignoreHTTPSErrors: true,
@@ -1725,10 +1736,14 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
     await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
     await captureRecoveryScreen(page, "onboarding-01-welcome");
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("heading", { name: "Your Personal account" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Your Personal account" })
+      .waitFor();
     await captureRecoveryScreen(page, "onboarding-02-personal-details");
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("heading", { name: "Your wallet, carefully set up" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Your wallet, carefully set up" })
+      .waitFor();
     await captureRecoveryScreen(page, "onboarding-03-security");
     await page.getByRole("button", { name: "Continue" }).click();
     await page.getByRole("heading", { name: "Confirm wallet setup" }).waitFor();
@@ -1769,9 +1784,24 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
     );
     const testnetAddresses = [
       ["near", "near-testnet", "flow-fixture.testnet", "ed25519:fixture-near"],
-      ["base", "84532", "0x1111111111111111111111111111111111111111", "secp256k1:fixture-base"],
-      ["ethereum", "1", "0x1111111111111111111111111111111111111111", "secp256k1:fixture-eth"],
-      ["solana", "solana-devnet", "11111111111111111111111111111111", "ed25519:fixture-solana"],
+      [
+        "base",
+        "84532",
+        "0x1111111111111111111111111111111111111111",
+        "secp256k1:fixture-base",
+      ],
+      [
+        "ethereum",
+        "1",
+        "0x1111111111111111111111111111111111111111",
+        "secp256k1:fixture-eth",
+      ],
+      [
+        "solana",
+        "solana-devnet",
+        "11111111111111111111111111111111",
+        "ed25519:fixture-solana",
+      ],
     ];
     for (const [network, chainId, address, publicKey] of testnetAddresses) {
       await workerDb.query(
@@ -1789,10 +1819,14 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
         [walletId, network],
       );
     }
-    await page.getByRole("heading", { name: "Four verified networks" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Four verified networks" })
+      .waitFor();
     await captureRecoveryScreen(page, "onboarding-06-wallet-ready");
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("heading", { name: "Wallet verified and ready" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Wallet verified and ready" })
+      .waitFor();
     await captureRecoveryScreen(page, "onboarding-07-dashboard-entry");
     await page.getByRole("button", { name: "Enter dashboard" }).click();
     await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
@@ -2890,9 +2924,9 @@ test("security: wallet persistence across re-authentication, duplicate preventio
   assert.equal(transferAttempt.status(), 404);
 });
 
-test("phase 6 end-to-end acceptance scenarios A–G: live OutLayer wallet provisioning, persistence, business isolation, quote/settlement recovery, exception handling, and UI truthfulness", async () => {
+test("phase 6 end-to-end acceptance scenarios A–G: queued wallet onboarding, persistence, business isolation, quote/settlement recovery, exception handling, and UI truthfulness", async () => {
   // =========================================================================
-  // SCENARIO A — Account & Wallet Persistence (Genuine 3-Stage OutLayer Worker)
+  // SCENARIO A — Account & Provisioning Job Persistence (provider registration is gated)
   // =========================================================================
   const ownerEmail = "e2e-sprint-owner@flow.local";
   const ownerClient = await app.createClient();
@@ -2902,53 +2936,62 @@ test("phase 6 end-to-end acceptance scenarios A–G: live OutLayer wallet provis
   const personalId = onb.account.id;
   assert.equal(onb.account.walletStatus, "setup_pending");
 
-  // Trigger on-demand 3-stage OutLayer wallet provisioning + RPC balance reconciliation
+  // The web request only enqueues; custody registration must happen in the isolated worker.
   const provRes = await ownerClient.post(
     `/api/accounts/${personalId}/wallet/provision`,
     { data: {} },
   );
-  assert.equal(provRes.status(), 200);
+  assert.equal(provRes.status(), 202);
   const provData = await provRes.json();
-  assert.equal(provData.outcome, "activated");
-  assert.equal(provData.walletStatus, "active");
-  assert.ok(provData.wallet);
-  assert.equal(provData.wallet.addresses.length, 4);
+  assert.equal(provData.outcome, "queued");
+  assert.equal(provData.walletStatus, "setup_pending");
+  assert.equal(provData.executionEnabled, false);
+  assert.equal("wallet" in provData, false);
 
-  const personalEvm = provData.wallet.addresses.find(
-    (a) => a.network.includes("base") || a.network.includes("ethereum"),
-  )?.address;
-  const personalSol = provData.wallet.addresses.find((a) =>
-    a.network.includes("solana"),
-  )?.address;
-  const personalNear = provData.wallet.addresses.find((a) =>
-    a.network.includes("near"),
-  )?.address;
-  assert.match(personalEvm, /^0x[0-9a-fA-F]{40}$/);
-  assert.match(personalSol, /^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
-  assert.match(personalNear, /^[0-9a-f]{64}$/);
+  const statusRes = await ownerClient.get(
+    `/api/accounts/${personalId}/wallet/provision`,
+  );
+  assert.equal(statusRes.status(), 200);
+  const statusData = await statusRes.json();
+  assert.equal(statusData.walletReady, false);
+  assert.deepEqual(statusData.addresses, []);
+  assert.equal(statusData.executionEnabled, false);
+
+  const jobRows = await workerDb.query(
+    `SELECT id, status::text AS status FROM flow.wallet_provisioning_jobs WHERE account_id = $1::uuid`,
+    [personalId],
+  );
+  assert.equal(jobRows.rowCount, 1);
 
   // Idempotent re-provisioning check: never replaces existing wallet
   const provAgain = await ownerClient.post(
     `/api/accounts/${personalId}/wallet/provision`,
     { data: {} },
   );
-  assert.equal(provAgain.status(), 200);
+  assert.equal(provAgain.status(), 202);
   const provAgainData = await provAgain.json();
-  assert.equal(provAgainData.outcome, "skipped");
-  assert.equal(provAgainData.wallet.id, provData.wallet.id);
+  assert.equal(provAgainData.outcome, "queued");
+  assert.equal(provAgainData.stage, provData.stage);
+  assert.equal(provAgainData.walletStatus, "setup_pending");
+  assert.equal("wallet" in provAgainData, false);
 
   // Sign out and sign back in: verify addresses remain identical
   await post(ownerClient, "/api/auth/sign-out", {}, 204);
   const reloginClient = await app.createClient();
   await emailLogin(reloginClient, ownerEmail);
 
-  const portAfterRelogin = await reloginClient.get(
-    `/api/accounts/${personalId}/portfolio`,
+  const restoredStatus = await reloginClient.get(
+    `/api/accounts/${personalId}/wallet/provision`,
   );
-  assert.equal(portAfterRelogin.status(), 200);
-  const portJson = await portAfterRelogin.json();
-  assert.equal(portJson.wallet.id, provData.wallet.id);
-  assert.ok(portJson.balances.length > 0, "Expected reconciled RPC balances");
+  assert.equal(restoredStatus.status(), 200);
+  const restoredJson = await restoredStatus.json();
+  assert.equal(restoredJson.walletReady, false);
+  assert.deepEqual(restoredJson.addresses, []);
+  const restoredJobs = await workerDb.query(
+    `SELECT id FROM flow.wallet_provisioning_jobs WHERE account_id = $1::uuid`,
+    [personalId],
+  );
+  assert.equal(restoredJobs.rowCount, 1);
 
   // =========================================================================
   // SCENARIO B — Business Workspace & Team Isolation
@@ -2961,15 +3004,12 @@ test("phase 6 end-to-end acceptance scenarios A–G: live OutLayer wallet provis
     `/api/accounts/${bizId}/wallet/provision`,
     { data: {} },
   );
-  assert.equal(bizProvRes.status(), 200);
+  assert.equal(bizProvRes.status(), 202);
   const bizProvData = await bizProvRes.json();
-  assert.equal(bizProvData.outcome, "activated");
-  assert.notEqual(bizProvData.wallet.id, provData.wallet.id);
-
-  const bizEvm = bizProvData.wallet.addresses.find(
-    (a) => a.network.includes("base") || a.network.includes("ethereum"),
-  )?.address;
-  assert.notEqual(bizEvm, personalEvm);
+  assert.equal(bizProvData.outcome, "queued");
+  assert.equal(bizProvData.walletStatus, "setup_pending");
+  assert.equal(bizProvData.executionEnabled, false);
+  assert.equal("wallet" in bizProvData, false);
 
   // Cross-account isolation check with stranger
   const stranger = await person("e2e-stranger@flow.local");
@@ -3339,7 +3379,7 @@ test("security: scoped single-use rehearsal authorization lifecycle, privilege s
     // (d) workerDb cannot INSERT into payment_rehearsal_authorizations
     await assert.rejects(
       async () => {
-        await workerDb.query(
+        await legacyWorkerDb.query(
           `INSERT INTO flow.payment_rehearsal_authorizations (
              payment_request_id, operator_auth_id, environment,
              source_network, source_asset_id, destination_network, destination_asset_id,
@@ -3368,7 +3408,7 @@ test("security: scoped single-use rehearsal authorization lifecycle, privilege s
     // (e) workerDb cannot UPDATE payment_rehearsal_authorizations
     await assert.rejects(
       async () => {
-        await workerDb.query(
+        await legacyWorkerDb.query(
           `UPDATE flow.payment_rehearsal_authorizations SET max_atomic_amount = 1000`,
         );
       },
@@ -3382,7 +3422,7 @@ test("security: scoped single-use rehearsal authorization lifecycle, privilege s
     // (f) workerDb cannot DELETE from payment_rehearsal_authorizations
     await assert.rejects(
       async () => {
-        await workerDb.query(
+        await legacyWorkerDb.query(
           `DELETE FROM flow.payment_rehearsal_authorizations`,
         );
       },
@@ -3396,7 +3436,7 @@ test("security: scoped single-use rehearsal authorization lifecycle, privilege s
     // (g) workerDb cannot execute create_payment_rehearsal_authorization (worker cannot self-authorize)
     await assert.rejects(
       async () => {
-        await workerDb.query(
+        await legacyWorkerDb.query(
           `SELECT flow.create_payment_rehearsal_authorization(
              $1::uuid, $2, 'dummy_assertion_token_123456789012',
              'solana-mainnet', 'solana-mainnet:SOL',
@@ -3524,7 +3564,7 @@ test("security: scoped single-use rehearsal authorization lifecycle, privilege s
     // workerDb CANNOT insert/update/delete operator_approval_assertions or issue assertions
     await assert.rejects(
       async () => {
-        await workerDb.query(
+        await legacyWorkerDb.query(
           `INSERT INTO flow.operator_approval_assertions (
              assertion_token_hash, operator_auth_id, payment_request_id,
              source_network, source_asset_id, destination_network, destination_asset_id,
@@ -3546,7 +3586,7 @@ test("security: scoped single-use rehearsal authorization lifecycle, privilege s
 
     await assert.rejects(
       async () => {
-        await workerDb.query(
+        await legacyWorkerDb.query(
           `SELECT flow.issue_operator_approval_assertion(
              $1, $2, $3::uuid, 'solana-mainnet', 'solana-mainnet:SOL',
              'base-mainnet', 'base-mainnet:USDC', 5000000, $4, $5, 1800, 'dummy_hash'

@@ -722,7 +722,7 @@ export async function workerSettlePayment(
   journalId: string;
   journalPublicId: string;
 }> {
-  const workerDb = getPrismaClient("worker");
+  const workerDb = getPrismaClient("payment");
 
   const rows = await workerDb.$queryRaw<
     Array<{

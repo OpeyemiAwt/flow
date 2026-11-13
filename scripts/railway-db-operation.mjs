@@ -552,6 +552,20 @@ async function testQa() {
         : `${databaseName.toUpperCase()}_WORKER_PASSWORD`,
     ],
     [
+      "FLOW_FIXTURE_DATABASE_URL",
+      "fixture",
+      databaseName === "flow_test"
+        ? "FLOW_TEST_FIXTURE_PASSWORD"
+        : `${databaseName.toUpperCase()}_FIXTURE_PASSWORD`,
+    ],
+    [
+      "FLOW_PAYMENT_DATABASE_URL",
+      "payment_worker",
+      databaseName === "flow_test"
+        ? "FLOW_TEST_PAYMENT_WORKER_PASSWORD"
+        : `${databaseName.toUpperCase()}_PAYMENT_WORKER_PASSWORD`,
+    ],
+    [
       "FLOW_CUSTODY_DATABASE_URL",
       "custody_worker",
       databaseName === "flow_test"
@@ -640,6 +654,8 @@ async function createQaValidationDatabase() {
     for (const suffix of [
       "app",
       "worker",
+      "payment_worker",
+      "fixture",
       "auth_worker",
       "operator",
       "migrator",
@@ -661,7 +677,7 @@ async function createQaValidationDatabase() {
           role.rolcreatedb ||
           role.rolcreaterole ||
           role.rolreplication ||
-          role.rolbypassrls
+          role.rolbypassrls !== (suffix === "fixture")
         ) {
           fail(
             `Existing role ${roleName} does not meet the restricted QA role policy.`,
@@ -669,7 +685,7 @@ async function createQaValidationDatabase() {
         }
       } else {
         await client.query(
-          `CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(password)}`,
+          `CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION ${suffix === "fixture" ? "BYPASSRLS" : "NOBYPASSRLS"} PASSWORD ${sqlLiteral(password)}`,
         );
       }
       const credentialCheckUrl = new URL(adminUrl);
@@ -700,15 +716,21 @@ async function createQaValidationDatabase() {
       );
     await client.query(`REVOKE CREATE ON DATABASE "${name}" FROM PUBLIC`);
     await client.query(
-      `GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_auth_worker", "${name}_operator"`,
+      `GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_payment_worker", "${name}_fixture", "${name}_auth_worker", "${name}_operator"`,
     );
     console.log(
       JSON.stringify({
         event: "qa_validation_roles_ready",
         database: name,
-        roles: ["app", "worker", "auth_worker", "operator", "migrator"].map(
-          (suffix) => `${name}_${suffix}`,
-        ),
+        roles: [
+          "app",
+          "worker",
+          "payment_worker",
+          "fixture",
+          "auth_worker",
+          "operator",
+          "migrator",
+        ].map((suffix) => `${name}_${suffix}`),
       }),
     );
   } finally {
@@ -758,6 +780,16 @@ async function testSecurityQa() {
       "FLOW_WORKER_DATABASE_URL",
       "flow_test_validation_worker",
       process.env.FLOW_TEST_VALIDATION_WORKER_PASSWORD,
+    ],
+    [
+      "FLOW_FIXTURE_DATABASE_URL",
+      "flow_test_validation_fixture",
+      process.env.FLOW_TEST_VALIDATION_FIXTURE_PASSWORD,
+    ],
+    [
+      "FLOW_PAYMENT_DATABASE_URL",
+      "flow_test_validation_payment_worker",
+      process.env.FLOW_TEST_VALIDATION_PAYMENT_WORKER_PASSWORD,
     ],
     [
       "FLOW_AUTH_TICKET_DATABASE_URL",
@@ -863,6 +895,8 @@ async function testSecurityQaTwice() {
         );
       const roles = [
         "app",
+        "payment_worker",
+        "fixture",
         "worker",
         "custody_worker",
         "auth_worker",
@@ -883,13 +917,13 @@ async function testSecurityQaTwice() {
             `QA role for pass ${pass} already exists; refusing to rotate it.`,
           );
         await admin.query(
-          `CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(credentials.get(suffix))}`,
+          `CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION ${suffix === "fixture" ? "BYPASSRLS" : "NOBYPASSRLS"} PASSWORD ${sqlLiteral(credentials.get(suffix))}`,
         );
       }
       await admin.query(`CREATE DATABASE "${name}" OWNER "${name}_migrator"`);
       await admin.query(`REVOKE CREATE ON DATABASE "${name}" FROM PUBLIC`);
       await admin.query(
-        `GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_worker", "${name}_custody_worker", "${name}_auth_worker", "${name}_operator"`,
+        `GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_payment_worker", "${name}_fixture", "${name}_worker", "${name}_custody_worker", "${name}_auth_worker", "${name}_operator"`,
       );
 
       const databaseEnv = { ...process.env, FLOW_TEST_DATABASE_NAME: name };
@@ -908,6 +942,8 @@ async function testSecurityQaTwice() {
       databaseEnv.FLOW_MIGRATION_DATABASE_URL = makeUrl("migrator");
       databaseEnv.FLOW_DATABASE_URL = makeUrl("app");
       databaseEnv.FLOW_WORKER_DATABASE_URL = makeUrl("worker");
+      databaseEnv.FLOW_FIXTURE_DATABASE_URL = makeUrl("fixture");
+      databaseEnv.FLOW_PAYMENT_DATABASE_URL = makeUrl("payment_worker");
       databaseEnv.FLOW_CUSTODY_DATABASE_URL = makeUrl("custody_worker");
       databaseEnv.FLOW_AUTH_TICKET_DATABASE_URL = makeUrl("auth_worker");
       databaseEnv.FLOW_OPERATOR_DATABASE_URL = makeUrl("operator");

@@ -174,6 +174,41 @@ test("web process rejects broad worker credentials while allowing auth-ticket ro
       }),
     invalid,
   );
+  assert.throws(
+    () =>
+      assertWebEnvironment({
+        ...source,
+        FLOW_PAYMENT_DATABASE_URL: "payment-worker-credential-present",
+      }),
+    invalid,
+  );
+});
+
+test("payment worker accepts only its own role and disabled execution gates", () => {
+  const config = readConfig(
+    {
+      FLOW_ENV: "staging",
+      FLOW_EXECUTION: "disabled",
+      FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
+      FLOW_PAYMENT_DATABASE_URL:
+        "postgresql://flow_staging_payment_worker:fixture-only-password@postgres.internal.railway.internal:5432/flow_staging?sslmode=require&uselibpqcompat=true",
+    },
+    "payment",
+  );
+  assert.equal(config.database.role, "flow_staging_payment_worker");
+  assert.throws(
+    () =>
+      readConfig(
+        {
+          FLOW_ENV: "staging",
+          FLOW_EXECUTION: "disabled",
+          FLOW_PAYMENT_DATABASE_URL:
+            "postgresql://flow_staging_app:fixture-only-password@postgres.internal.railway.internal:5432/flow_staging?sslmode=require&uselibpqcompat=true",
+        },
+        "payment",
+      ),
+    invalid,
+  );
 });
 
 test("alternate QA database names require the remote test guard and keep test roles", () => {

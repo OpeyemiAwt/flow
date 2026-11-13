@@ -17,7 +17,27 @@ export function getPrismaClient(
     processCache.flowPrismaClients = {};
   }
   if (!processCache.flowPrismaClients[purpose]) {
-    const config = readConfig(process.env, purpose);
+    const source =
+      purpose === "fixture"
+        ? {
+            FLOW_ENV: process.env.FLOW_ENV,
+            FLOW_EXECUTION: process.env.FLOW_EXECUTION,
+            FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+            FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+            FLOW_FIXTURE_DATABASE_URL: process.env.FLOW_FIXTURE_DATABASE_URL,
+          }
+        : purpose === "runtime" && process.env.FLOW_ENV === "test"
+          ? {
+              FLOW_ENV: process.env.FLOW_ENV,
+              FLOW_EXECUTION: process.env.FLOW_EXECUTION,
+              FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+              FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+              FLOW_DATABASE_URL: process.env.FLOW_DATABASE_URL,
+              FLOW_AUTH_TICKET_DATABASE_URL:
+                process.env.FLOW_AUTH_TICKET_DATABASE_URL,
+            }
+          : process.env;
+    const config = readConfig(source, purpose);
     const pool = createDatabasePool(config.database, "application");
     processCache.flowPrismaClients[purpose] = new PrismaClient({
       adapter: new PrismaPg(pool, { schema: "flow" }),

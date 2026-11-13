@@ -24,7 +24,7 @@ import {
   CURATED_SUPPORTED_DEPLOYMENTS,
   canonicalizeNetworkId,
 } from "../domain/supported-assets-catalog.ts";
-import { getPrismaClient, runtime, type FlowDb } from "../foundation/prisma.ts";
+import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { access, principal } from "./accounts.ts";
 import { clientBudget } from "./auth/limits.ts";
 import { ApiFailure, reply } from "./http.ts";
@@ -32,13 +32,10 @@ import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import { validateProviderAddress } from "./providers/one-click-preview.ts";
 
 export function readPaymentWalletAddresses(publicId: string) {
-  return getPrismaClient("worker").$queryRaw<
+  return runtime().db.$queryRaw<
     Array<{ address: string; chain_id: string }>
-  >`SELECT wa.address, wa.chain_id
-      FROM flow.wallets w
-      JOIN flow.wallet_addresses wa ON wa.wallet_id = w.id
-      JOIN flow.payment_requests pr ON pr.account_id = w.account_id
-      WHERE pr.public_id = ${publicId} AND w.status = 'ACTIVE'`;
+  >`SELECT address, chain_id
+      FROM flow.get_payment_request_wallet_addresses(${publicId})`;
 }
 
 export interface CreatePaymentRequestInput {
@@ -522,7 +519,7 @@ export async function readPaymentAttempt(
   requestedAttemptId: string | null,
   merchantAddresses: readonly { address: string }[],
 ): Promise<PaymentDepositInstructions | null> {
-  const attemptRows = await getPrismaClient("worker").$queryRaw<
+  const attemptRows = await runtime().db.$queryRaw<
     Array<{
       attempt_public_id: string;
       status: string;
@@ -573,19 +570,7 @@ export async function readPaymentAttempt(
       pa.destination_tx_hash,
       pa.settled_at,
       pa.payer_refund_address
-    FROM flow.payment_attempts pa
-    JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
-    WHERE pr.public_id = ${publicId}
-      AND (
-        (${requestedAttemptId}::text IS NOT NULL AND pa.attempt_public_id = ${requestedAttemptId})
-        OR (
-          ${requestedAttemptId}::text IS NULL
-          AND pa.deposit_address IS NOT NULL
-          AND pa.status IN ('DEPOSIT_COMMITTED', 'DETECTED', 'SETTLING', 'SETTLED', 'EXCEPTION_REFUND_REQUIRED', 'FAILED')
-        )
-      )
-    ORDER BY pa.updated_at DESC
-    LIMIT 1
+    FROM flow.get_checkout_payment_attempt(${publicId}, ${requestedAttemptId})
   `;
 
   const att = attemptRows[0];

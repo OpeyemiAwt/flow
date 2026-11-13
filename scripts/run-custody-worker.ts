@@ -15,11 +15,52 @@ import { WalletProvisioningWorker } from "../src/server/custody/provisioning-wor
 async function main(): Promise<void> {
   assertCustodyEnvironment(process.env);
   const config = readConfig(process.env, "custody");
+  const workerId =
+    process.env.FLOW_CUSTODY_WORKER_ID ??
+    `custody-${process.pid}-${randomUUID().slice(0, 8)}`;
+  const mode = process.env.FLOW_CUSTODY_WORKER_MODE ?? "heartbeat-only";
+  if (mode === "heartbeat-only") {
+    if (process.env.FLOW_CUSTODY_REGISTRATION_AUTHORIZED === "enabled") {
+      throw new Error(
+        "Heartbeat-only custody mode cannot authorize wallet registration.",
+      );
+    }
+    const db = getPrismaClient("custody");
+    await db.$queryRaw`SELECT 1`;
+    const signal = new AbortController();
+    const shutdown = async (name: string) => {
+      log("info", "custody_worker_shutdown", { workerId, signal: name, mode });
+      signal.abort();
+    };
+    process.once("SIGINT", () => void shutdown("SIGINT"));
+    process.once("SIGTERM", () => void shutdown("SIGTERM"));
+    log("info", "custody_worker_heartbeat_ready", {
+      workerId,
+      databaseRole: config.database.role,
+      registrationEnabled: false,
+      mode,
+    });
+    const heartbeat = setInterval(() => {
+      log("info", "custody_worker_heartbeat", { workerId, mode });
+    }, 30_000);
+    await new Promise<void>((resolve) =>
+      signal.signal.addEventListener("abort", () => resolve(), { once: true }),
+    );
+    clearInterval(heartbeat);
+    await disconnectPrismaClients();
+    return;
+  }
+  if (mode !== "provision") {
+    throw new Error(
+      "FLOW_CUSTODY_WORKER_MODE must be provision or heartbeat-only.",
+    );
+  }
   const walletConfig = readWalletConfig(process.env, {
     authSecret: process.env.FLOW_AUTH_SECRET,
     otpKey: process.env.FLOW_OTP_KEY,
   });
-  const registrationAccountId = process.env.FLOW_CUSTODY_REGISTRATION_ACCOUNT_ID;
+  const registrationAccountId =
+    process.env.FLOW_CUSTODY_REGISTRATION_ACCOUNT_ID;
   const registrationAuthorized =
     process.env.FLOW_CUSTODY_REGISTRATION_AUTHORIZED === "enabled";
   const isValidRegistrationAccountId =
@@ -46,9 +87,6 @@ async function main(): Promise<void> {
   const adapter = new OutLayerAdapter(walletConfig.apiUrl, 5_000, {
     compatibilityConfig: walletConfig.compatibility,
   });
-  const workerId =
-    process.env.FLOW_CUSTODY_WORKER_ID ??
-    `custody-${process.pid}-${randomUUID().slice(0, 8)}`;
   const pollIntervalMs = Number(
     process.env.FLOW_CUSTODY_POLL_INTERVAL_MS ?? "5000",
   );

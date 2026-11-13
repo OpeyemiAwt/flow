@@ -14,11 +14,20 @@ const environmentSchema = z.object({
 
 type EnvironmentInput = Readonly<Record<string, string | undefined>>;
 export type DatabasePurpose =
-  "runtime" | "worker" | "custody" | "auth" | "operator" | "migration";
+  | "runtime"
+  | "worker"
+  | "payment"
+  | "custody"
+  | "auth"
+  | "operator"
+  | "migration"
+  | "fixture";
 
 const databaseUrlKeys = {
   runtime: "FLOW_DATABASE_URL",
   worker: "FLOW_WORKER_DATABASE_URL",
+  fixture: "FLOW_FIXTURE_DATABASE_URL",
+  payment: "FLOW_PAYMENT_DATABASE_URL",
   custody: "FLOW_CUSTODY_DATABASE_URL",
   auth: "FLOW_AUTH_TICKET_DATABASE_URL",
   operator: "FLOW_OPERATOR_DATABASE_URL",
@@ -67,6 +76,7 @@ function assertCredentialScope(
       ? [
           "FLOW_DATABASE_URL",
           "FLOW_WORKER_DATABASE_URL",
+          "FLOW_PAYMENT_DATABASE_URL",
           "FLOW_CUSTODY_DATABASE_URL",
           "FLOW_AUTH_TICKET_DATABASE_URL",
           "FLOW_OPERATOR_DATABASE_URL",
@@ -75,6 +85,7 @@ function assertCredentialScope(
         ? [
             "FLOW_MIGRATION_DATABASE_URL",
             "FLOW_WORKER_DATABASE_URL",
+            "FLOW_PAYMENT_DATABASE_URL",
             "FLOW_CUSTODY_DATABASE_URL",
             "FLOW_OPERATOR_DATABASE_URL",
           ]
@@ -82,13 +93,42 @@ function assertCredentialScope(
           ? [
               "FLOW_DATABASE_URL",
               "FLOW_WORKER_DATABASE_URL",
+              "FLOW_PAYMENT_DATABASE_URL",
               "FLOW_AUTH_TICKET_DATABASE_URL",
               "FLOW_OPERATOR_DATABASE_URL",
               "FLOW_MIGRATION_DATABASE_URL",
             ]
           : purpose === "runtime"
             ? ["FLOW_MIGRATION_DATABASE_URL", "FLOW_CUSTODY_DATABASE_URL"]
-            : ["FLOW_MIGRATION_DATABASE_URL"];
+            : purpose === "payment"
+              ? [
+                  "FLOW_DATABASE_URL",
+                  "FLOW_WORKER_DATABASE_URL",
+                  "FLOW_CUSTODY_DATABASE_URL",
+                  "FLOW_AUTH_TICKET_DATABASE_URL",
+                  "FLOW_OPERATOR_DATABASE_URL",
+                  "FLOW_MIGRATION_DATABASE_URL",
+                ]
+              : purpose === "worker"
+                ? [
+                    "FLOW_DATABASE_URL",
+                    "FLOW_PAYMENT_DATABASE_URL",
+                    "FLOW_CUSTODY_DATABASE_URL",
+                    "FLOW_AUTH_TICKET_DATABASE_URL",
+                    "FLOW_OPERATOR_DATABASE_URL",
+                    "FLOW_MIGRATION_DATABASE_URL",
+                  ]
+                : purpose === "fixture"
+                  ? [
+                      "FLOW_DATABASE_URL",
+                      "FLOW_WORKER_DATABASE_URL",
+                      "FLOW_PAYMENT_DATABASE_URL",
+                      "FLOW_CUSTODY_DATABASE_URL",
+                      "FLOW_AUTH_TICKET_DATABASE_URL",
+                      "FLOW_OPERATOR_DATABASE_URL",
+                      "FLOW_MIGRATION_DATABASE_URL",
+                    ]
+                  : ["FLOW_MIGRATION_DATABASE_URL"];
   if (
     disallowedUrls.some((k) => source[k] !== undefined) ||
     otherDatabaseCredentialKeys.some((key) => source[key] !== undefined)
@@ -121,6 +161,16 @@ export function assertWebEnvironment(source: EnvironmentInput): void {
       "Supply only FLOW_DATABASE_URL and the restricted FLOW_AUTH_TICKET_DATABASE_URL to the web process.",
     );
   }
+  if (source.FLOW_PAYMENT_DATABASE_URL !== undefined) {
+    invalidConfig(
+      "Payment worker credentials are strictly isolated from the web process.",
+    );
+  }
+  if (source.FLOW_FIXTURE_DATABASE_URL !== undefined) {
+    invalidConfig(
+      "QA fixture credentials are strictly isolated from the web process.",
+    );
+  }
 }
 
 export function assertWorkerEnvironment(source: EnvironmentInput): void {
@@ -132,6 +182,23 @@ export function assertWorkerEnvironment(source: EnvironmentInput): void {
   if (source.FLOW_OPERATOR_DATABASE_URL !== undefined) {
     invalidConfig(
       "Operator credentials must remain strictly isolated and are prohibited in worker runtime.",
+    );
+  }
+}
+
+export function assertPaymentEnvironment(source: EnvironmentInput): void {
+  assertCredentialScope(source, "payment");
+  if (source.FLOW_WALLET_ENCRYPTION_KEY !== undefined) {
+    invalidConfig(
+      "Custody encryption keys are strictly isolated from the payment worker.",
+    );
+  }
+  if (
+    source.FLOW_EXECUTION !== "disabled" ||
+    source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    invalidConfig(
+      "Payment worker requires financial execution and provider compatibility to remain disabled.",
     );
   }
 }
@@ -228,6 +295,19 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
 
   const { FLOW_ENV: environment, FLOW_EXECUTION: execution } = result.data;
   if (
+    purpose === "runtime" &&
+    environment !== "test" &&
+    [
+      "FLOW_WORKER_DATABASE_URL",
+      "FLOW_PAYMENT_DATABASE_URL",
+      "FLOW_FIXTURE_DATABASE_URL",
+    ].some((key) => source[key] !== undefined)
+  ) {
+    invalidConfig(
+      "Worker and QA fixture database credentials are prohibited in the web runtime.",
+    );
+  }
+  if (
     source.FLOW_TEST_DATABASE_REMOTE !== undefined &&
     environment !== "test"
   ) {
@@ -239,6 +319,19 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
   ) {
     invalidConfig(
       "Alternate database names are restricted to isolated remote QA.",
+    );
+  }
+  if (purpose === "fixture" && environment !== "test") {
+    invalidConfig(
+      "Fixture database credentials are restricted to isolated FLOW_ENV=test.",
+    );
+  }
+  if (
+    source.FLOW_FIXTURE_DATABASE_URL !== undefined &&
+    environment !== "test"
+  ) {
+    invalidConfig(
+      "Fixture database credentials are restricted to isolated FLOW_ENV=test.",
     );
   }
   const tls =
@@ -255,13 +348,17 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
       ? "app"
       : purpose === "worker"
         ? "worker"
-        : purpose === "custody"
-          ? "custody_worker"
-          : purpose === "auth"
-            ? "auth_worker"
-            : purpose === "operator"
-              ? "operator"
-              : "migrator";
+        : purpose === "payment"
+          ? "payment_worker"
+          : purpose === "fixture"
+            ? "fixture"
+            : purpose === "custody"
+              ? "custody_worker"
+              : purpose === "auth"
+                ? "auth_worker"
+                : purpose === "operator"
+                  ? "operator"
+                  : "migrator";
   const role = `${databaseName}_${roleSuffix}`;
   const url = parseDatabaseUrl(source[variable], variable);
 

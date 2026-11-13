@@ -73,13 +73,49 @@ assert.equal(
   "test",
   "Integration tests require FLOW_ENV=test.",
 );
-const { database: appDbConfig } = readConfig(process.env, "runtime");
+const { database: appDbConfig } = readConfig(
+  {
+    FLOW_ENV: process.env.FLOW_ENV!,
+    FLOW_EXECUTION: process.env.FLOW_EXECUTION!,
+    FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+    FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+    FLOW_DATABASE_URL: process.env.FLOW_DATABASE_URL,
+    FLOW_AUTH_TICKET_DATABASE_URL: process.env.FLOW_AUTH_TICKET_DATABASE_URL,
+  },
+  "runtime",
+);
 const pool = createDatabasePool(appDbConfig);
 const appDb = getPrismaClient("runtime");
 
-const { database: workerDbConfig } = readConfig(process.env, "worker");
+const fixtureConfig = readConfig(
+  {
+    FLOW_ENV: process.env.FLOW_ENV!,
+    FLOW_EXECUTION: process.env.FLOW_EXECUTION!,
+    FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+    FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+    FLOW_FIXTURE_DATABASE_URL: process.env.FLOW_FIXTURE_DATABASE_URL,
+  },
+  "fixture",
+);
+const { database: workerDbConfig } = fixtureConfig;
 const workerPool = createDatabasePool(workerDbConfig);
-const db = getPrismaClient("worker");
+const db = getPrismaClient("fixture");
+
+const paymentPool = process.env.FLOW_PAYMENT_DATABASE_URL
+  ? createDatabasePool(
+      readConfig(
+        {
+          FLOW_ENV: process.env.FLOW_ENV!,
+          FLOW_EXECUTION: process.env.FLOW_EXECUTION!,
+          FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+          FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+          FLOW_PAYMENT_DATABASE_URL: process.env.FLOW_PAYMENT_DATABASE_URL,
+          FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
+        },
+        "payment",
+      ).database,
+    )
+  : undefined;
 
 const { database: operatorDbConfig } = readConfig(process.env, "operator");
 const operatorPool = createDatabasePool(operatorDbConfig);
@@ -103,6 +139,7 @@ const authTicketPool = process.env.FLOW_AUTH_TICKET_DATABASE_URL
 after(async () => {
   await pool.end();
   await workerPool.end();
+  await paymentPool?.end();
   await operatorPool.end();
   await authTicketPool?.end();
   try {
@@ -143,6 +180,46 @@ test("auth-ticket role can invoke only guarded ticket functions and cannot read 
   assert.equal(rows[0]?.can_issue_google, true);
   assert.equal(rows[0]?.can_select_auth_users, false);
   assert.equal(rows[0]?.can_select_wallets, false);
+});
+
+test("payment and custody roles stay isolated from the legacy worker role", async () => {
+  const legacyRole = `${appDbConfig.name}_worker`;
+  const paymentRole = `${appDbConfig.name}_payment_worker`;
+  const custodyRole = `${appDbConfig.name}_custody_worker`;
+  const { rows } = await pool.query<{
+    legacy_wallet_read: boolean;
+    payment_wallet_read: boolean;
+    payment_wallet_environment_read: boolean;
+    payment_wallet_address_read: boolean;
+    payment_provisioning_write: boolean;
+    payment_ledger_read: boolean;
+    payment_can_self_authorize: boolean;
+    custody_wallet_read: boolean;
+    custody_job_write: boolean;
+  }>(
+    `SELECT
+       has_table_privilege($1, 'flow.wallets', 'SELECT') AS legacy_wallet_read,
+       has_table_privilege($2, 'flow.wallets', 'SELECT') AS payment_wallet_read,
+       has_column_privilege($2, 'flow.wallets', 'environment', 'SELECT') AS payment_wallet_environment_read,
+       has_column_privilege($2, 'flow.wallet_addresses', 'address', 'SELECT') AS payment_wallet_address_read,
+       has_table_privilege($2, 'flow.wallet_provisioning_jobs', 'INSERT') AS payment_provisioning_write,
+       has_table_privilege($2, 'flow.ledger_entries', 'SELECT') AS payment_ledger_read,
+       has_function_privilege($2, 'flow.create_payment_rehearsal_authorization(uuid,text,text,text,text,text,text,numeric,text,text,integer)', 'EXECUTE') AS payment_can_self_authorize,
+       has_table_privilege($3, 'flow.wallets', 'SELECT') AS custody_wallet_read,
+       has_table_privilege($3, 'flow.wallet_provisioning_jobs', 'INSERT') AS custody_job_write`,
+    [legacyRole, paymentRole, custodyRole],
+  );
+  assert.deepEqual(rows[0], {
+    legacy_wallet_read: false,
+    payment_wallet_read: false,
+    payment_wallet_environment_read: true,
+    payment_wallet_address_read: true,
+    payment_provisioning_write: false,
+    payment_ledger_read: false,
+    payment_can_self_authorize: false,
+    custody_wallet_read: true,
+    custody_job_write: true,
+  });
 });
 
 async function createTestAccount(
@@ -3393,7 +3470,7 @@ test("M2 Phase 5.2 Adversarial Test: Database privilege separation blocks permis
 
   // 6. Worker role (workerPool) CANNOT insert into flow.custody_operators (42501)
   await assert.rejects(
-    workerPool.query(
+    paymentPool!.query(
       `INSERT INTO flow.custody_operators (auth_user_id, role, status, enrolled_by)
        VALUES ($1, 'CUSTODY_OPERATOR', 'ACTIVE', $1)`,
       [acc.authUserId],
@@ -3403,7 +3480,7 @@ test("M2 Phase 5.2 Adversarial Test: Database privilege separation blocks permis
 
   // 7. Worker role (workerPool) CANNOT insert into flow.custody_recovery_approvals (42501)
   await assert.rejects(
-    workerPool.query(
+    paymentPool!.query(
       `INSERT INTO flow.custody_recovery_approvals (
         job_id, account_id, approver_auth_id, initiator_operator_auth_id,
         dispatch_attempt_id, resolution, approval_token_hash, status, expires_at
@@ -3415,7 +3492,7 @@ test("M2 Phase 5.2 Adversarial Test: Database privilege separation blocks permis
 
   // 8. Worker role (workerPool) CANNOT insert into flow.provider_compatibility_authorizations (42501)
   await assert.rejects(
-    workerPool.query(
+    paymentPool!.query(
       `INSERT INTO flow.provider_compatibility_authorizations (
         account_id, environment, allowed_methods, status, max_registrations, expires_at
       ) VALUES ($1, 'testnet', ARRAY['POST /register'], 'AUTHORIZED', 1, now() + interval '1 hour')`,
