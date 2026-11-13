@@ -112,6 +112,7 @@ export async function ingestWalletActivities(
   `;
 
   const allRawActivities: UnifiedRawActivity[] = [];
+  let unavailableNetworkCount = 0;
 
   // 4. Query indexers per registered address
   for (const addr of addresses) {
@@ -165,13 +166,18 @@ export async function ingestWalletActivities(
         );
         allRawActivities.push(...items);
       }
-    } catch (err) {
-      // Log indexer warning without halting entire indexing workflow
-      console.warn(
-        `[ActivityIngester] Indexer warning for ${addr.network}:${addr.chain_id}:`,
-        err,
-      );
+    } catch {
+      // A partial provider outage must not be reported as a complete sync.
+      unavailableNetworkCount += 1;
+      console.warn("[ActivityIngester] Network query failed; sync will retry.");
     }
+  }
+
+  if (unavailableNetworkCount > 0) {
+    throw new FlowError(
+      "RPC_NETWORK_ERROR",
+      "One or more network activity providers were unavailable.",
+    );
   }
 
   // 5. Idempotent upsert into flow.wallet_activities

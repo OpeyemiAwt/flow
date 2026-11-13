@@ -63,6 +63,8 @@ export interface SerializedAccountPortfolio {
   readonly lastSyncedAt: string | null;
   readonly isStale: boolean;
   readonly cooldownRemainingSeconds?: number;
+  readonly syncStatus?: string;
+  readonly syncJobId?: string;
 }
 
 export const REFRESH_COOLDOWN_MS = 15_000;

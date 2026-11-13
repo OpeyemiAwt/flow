@@ -9,9 +9,9 @@ import {
   serializeActivities,
 } from "../domain/activities.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { getPrismaClient, runtime, type FlowDb } from "../foundation/prisma.ts";
+import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { access, principal } from "./accounts.ts";
-import { ingestWalletActivities } from "./assets/indexers/multi-chain-activity-ingester.ts";
+import { readAccountSync, requestAccountSync } from "./account-sync.ts";
 import { ApiFailure, reply } from "./http.ts";
 
 function accountActivityRows(accountId: string) {
@@ -294,37 +294,38 @@ export async function syncActivities(
     throw new ApiFailure(401, "AUTH_REQUIRED");
   }
 
-  const wallets = await db.$queryRaw<
-    Array<{ id: string; environment: string }>
-  >`
-    SELECT id, environment FROM flow.wallets WHERE account_id = ${accountId}::uuid LIMIT 1
-  `;
-  const wallet = wallets[0];
-  if (!wallet) {
-    return reply(200, {
-      activities: [],
-      total: 0,
-      limit: 20,
-      offset: 0,
-      hasMore: false,
-      syncSummary: {
-        totalDiscovered: 0,
-        insertedCount: 0,
-        updatedCount: 0,
-      },
-    });
-  }
-
-  // Use worker database client for privileged indexer ingestion
-  const workerDb = getPrismaClient("worker");
-  const summary = await ingestWalletActivities(workerDb, wallet.id);
-
-  // Return fresh activity list for the user
+  const job = await requestAccountSync(
+    accountId,
+    actor.session.token,
+    "ACTIVITY_SYNC",
+  );
   const feedResponse = await readActivities(request, accountId);
   const feedJson = (await feedResponse.json()) as ActivityFeedResponse;
+  return reply(
+    200,
+    job
+      ? {
+          ...feedJson,
+          syncStatus: job.job_status.toLowerCase(),
+          syncJobId: job.job_id,
+        }
+      : { ...feedJson, syncStatus: "unavailable" },
+  );
+}
 
+export async function readActivitySyncStatus(
+  request: Request,
+  accountId: string,
+): Promise<Response> {
+  const { db } = runtime();
+  const actor = await principal(db, request.headers);
+  await access(db, actor, accountId);
+  if (!actor.session.token) throw new ApiFailure(401, "AUTH_REQUIRED");
   return reply(200, {
-    ...feedJson,
-    syncSummary: summary,
+    sync: await readAccountSync(
+      accountId,
+      actor.session.token,
+      "ACTIVITY_SYNC",
+    ),
   });
 }

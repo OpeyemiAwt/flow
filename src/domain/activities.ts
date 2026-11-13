@@ -91,6 +91,8 @@ export interface ActivityFeedResponse {
   readonly hasMore: boolean;
   readonly nextCursor?: string | null;
   readonly totalCount?: number;
+  readonly syncStatus?: string;
+  readonly syncJobId?: string;
 }
 
 /**

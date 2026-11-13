@@ -7,10 +7,6 @@ import {
   getEquivalentNetworkTokens,
 } from "../../domain/supported-assets-catalog.ts";
 import {
-  getDefaultRpcConfig,
-  reconcileWalletBalances,
-} from "../assets/connectors/multi-chain-reconciler.ts";
-import {
   recordVerificationInDatabase,
   verifyOnChainTransfer,
   type EvidenceSource,
@@ -761,41 +757,23 @@ export class PaymentMonitoringWorker {
         destTx: dTx,
       });
 
-      // Immediately reconcile recipient wallet balance from canonical RPC upon settlement
+      // Queue an account-scoped refresh for the isolated indexer worker.
       try {
-        const recipientWallets = await this.workerDb.$queryRaw<
-          Array<{ walletId: string; environment: string; walletStatus: string }>
+        const syncJobs = await this.workerDb.$queryRaw<
+          Array<{ job_id: string; job_status: string }>
         >`
-          SELECT w.id as "walletId", w.environment, w.status::text as "walletStatus"
-          FROM flow.payment_attempts pa
-          JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
-          JOIN flow.wallets w ON w.account_id = pr.account_id
-          WHERE pa.id = ${attempt.id}::uuid
-          LIMIT 1
+          SELECT job_id, job_status
+          FROM flow.enqueue_settlement_balance_sync(${attempt.attemptPublicId})
         `;
-        const rWallet = recipientWallets[0];
-        if (rWallet && rWallet.walletStatus === "ACTIVE") {
-          const rpcConfig = getDefaultRpcConfig(
-            rWallet.environment as "testnet" | "mainnet",
-          );
-          await reconcileWalletBalances(
-            this.workerDb,
-            rWallet.walletId,
-            rpcConfig,
-          );
-          log("info", "settlement_wallet_balance_reconciled", {
-            attemptPublicId: attempt.attemptPublicId,
-            walletId: rWallet.walletId,
-            environment: rWallet.environment,
-          });
-        }
-      } catch (balanceErr) {
-        log("error", "settlement_wallet_balance_reconcile_failed", {
+        log("info", "settlement_balance_sync_queued", {
           attemptPublicId: attempt.attemptPublicId,
-          error:
-            balanceErr instanceof Error
-              ? balanceErr.message
-              : String(balanceErr),
+          jobId: syncJobs[0]?.job_id ?? null,
+          status: syncJobs[0]?.job_status ?? "NO_ACTIVE_WALLET",
+        });
+      } catch (balanceErr) {
+        log("error", "settlement_balance_sync_enqueue_failed", {
+          attemptPublicId: attempt.attemptPublicId,
+          errorCode: balanceErr instanceof Error ? balanceErr.name : "UNKNOWN",
         });
       }
 

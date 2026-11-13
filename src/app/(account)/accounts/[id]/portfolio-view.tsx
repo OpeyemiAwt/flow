@@ -779,7 +779,11 @@ export function PortfolioView({
       );
       setPortfolio(updated);
       setCooldown(updated.cooldownRemainingSeconds ?? 15);
-      setMessage("Balances refreshed successfully.");
+      setMessage(
+        updated.syncStatus === "complete"
+          ? "Balances refreshed from verified network data."
+          : "Balance refresh queued. Current balances remain unchanged until verified network data arrives.",
+      );
     } catch (err) {
       setMessage(describe(err));
     } finally {
@@ -798,7 +802,13 @@ export function PortfolioView({
         "POST",
       );
       setActivities(res.activities);
-      setMessage("On-chain activity synchronized.");
+      setMessage(
+        res.syncStatus === "complete"
+          ? "On-chain activity synchronized."
+          : res.syncStatus === "unavailable"
+            ? "Activity sync is unavailable until a wallet is ready."
+            : "Activity sync queued. New entries appear after worker verification.",
+      );
     } catch (err) {
       setMessage(describe(err));
     } finally {

@@ -17,6 +17,7 @@ export type DatabasePurpose =
   | "runtime"
   | "worker"
   | "payment"
+  | "indexer"
   | "custody"
   | "auth"
   | "operator"
@@ -28,6 +29,7 @@ const databaseUrlKeys = {
   worker: "FLOW_WORKER_DATABASE_URL",
   fixture: "FLOW_FIXTURE_DATABASE_URL",
   payment: "FLOW_PAYMENT_DATABASE_URL",
+  indexer: "FLOW_INDEXER_DATABASE_URL",
   custody: "FLOW_CUSTODY_DATABASE_URL",
   auth: "FLOW_AUTH_TICKET_DATABASE_URL",
   operator: "FLOW_OPERATOR_DATABASE_URL",
@@ -44,6 +46,7 @@ const otherDatabaseCredentialKeys = [
   "FLOW_TEST_WORKER_PASSWORD",
   "FLOW_TEST_OPERATOR_PASSWORD",
   "FLOW_TEST_MIGRATOR_PASSWORD",
+  "FLOW_TEST_INDEXER_WORKER_PASSWORD",
   "POSTGRES_PASSWORD",
   "POSTGRES_PASSWORD_FILE",
   "PGPASSWORD",
@@ -77,6 +80,7 @@ function assertCredentialScope(
           "FLOW_DATABASE_URL",
           "FLOW_WORKER_DATABASE_URL",
           "FLOW_PAYMENT_DATABASE_URL",
+          "FLOW_INDEXER_DATABASE_URL",
           "FLOW_CUSTODY_DATABASE_URL",
           "FLOW_AUTH_TICKET_DATABASE_URL",
           "FLOW_OPERATOR_DATABASE_URL",
@@ -86,6 +90,7 @@ function assertCredentialScope(
             "FLOW_MIGRATION_DATABASE_URL",
             "FLOW_WORKER_DATABASE_URL",
             "FLOW_PAYMENT_DATABASE_URL",
+            "FLOW_INDEXER_DATABASE_URL",
             "FLOW_CUSTODY_DATABASE_URL",
             "FLOW_OPERATOR_DATABASE_URL",
           ]
@@ -94,16 +99,22 @@ function assertCredentialScope(
               "FLOW_DATABASE_URL",
               "FLOW_WORKER_DATABASE_URL",
               "FLOW_PAYMENT_DATABASE_URL",
+              "FLOW_INDEXER_DATABASE_URL",
               "FLOW_AUTH_TICKET_DATABASE_URL",
               "FLOW_OPERATOR_DATABASE_URL",
               "FLOW_MIGRATION_DATABASE_URL",
             ]
           : purpose === "runtime"
-            ? ["FLOW_MIGRATION_DATABASE_URL", "FLOW_CUSTODY_DATABASE_URL"]
+            ? [
+                "FLOW_MIGRATION_DATABASE_URL",
+                "FLOW_CUSTODY_DATABASE_URL",
+                "FLOW_INDEXER_DATABASE_URL",
+              ]
             : purpose === "payment"
               ? [
                   "FLOW_DATABASE_URL",
                   "FLOW_WORKER_DATABASE_URL",
+                  "FLOW_INDEXER_DATABASE_URL",
                   "FLOW_CUSTODY_DATABASE_URL",
                   "FLOW_AUTH_TICKET_DATABASE_URL",
                   "FLOW_OPERATOR_DATABASE_URL",
@@ -113,12 +124,13 @@ function assertCredentialScope(
                 ? [
                     "FLOW_DATABASE_URL",
                     "FLOW_PAYMENT_DATABASE_URL",
+                    "FLOW_INDEXER_DATABASE_URL",
                     "FLOW_CUSTODY_DATABASE_URL",
                     "FLOW_AUTH_TICKET_DATABASE_URL",
                     "FLOW_OPERATOR_DATABASE_URL",
                     "FLOW_MIGRATION_DATABASE_URL",
                   ]
-                : purpose === "fixture"
+                : purpose === "indexer"
                   ? [
                       "FLOW_DATABASE_URL",
                       "FLOW_WORKER_DATABASE_URL",
@@ -127,8 +139,20 @@ function assertCredentialScope(
                       "FLOW_AUTH_TICKET_DATABASE_URL",
                       "FLOW_OPERATOR_DATABASE_URL",
                       "FLOW_MIGRATION_DATABASE_URL",
+                      "FLOW_FIXTURE_DATABASE_URL",
                     ]
-                  : ["FLOW_MIGRATION_DATABASE_URL"];
+                  : purpose === "fixture"
+                    ? [
+                        "FLOW_DATABASE_URL",
+                        "FLOW_WORKER_DATABASE_URL",
+                        "FLOW_PAYMENT_DATABASE_URL",
+                        "FLOW_INDEXER_DATABASE_URL",
+                        "FLOW_CUSTODY_DATABASE_URL",
+                        "FLOW_AUTH_TICKET_DATABASE_URL",
+                        "FLOW_OPERATOR_DATABASE_URL",
+                        "FLOW_MIGRATION_DATABASE_URL",
+                      ]
+                    : ["FLOW_MIGRATION_DATABASE_URL"];
   if (
     disallowedUrls.some((k) => source[k] !== undefined) ||
     otherDatabaseCredentialKeys.some((key) => source[key] !== undefined)
@@ -166,6 +190,11 @@ export function assertWebEnvironment(source: EnvironmentInput): void {
       "Payment worker credentials are strictly isolated from the web process.",
     );
   }
+  if (source.FLOW_INDEXER_DATABASE_URL !== undefined) {
+    invalidConfig(
+      "Indexer worker credentials are strictly isolated from the web process.",
+    );
+  }
   if (source.FLOW_FIXTURE_DATABASE_URL !== undefined) {
     invalidConfig(
       "QA fixture credentials are strictly isolated from the web process.",
@@ -184,6 +213,13 @@ export function assertWorkerEnvironment(source: EnvironmentInput): void {
       "Operator credentials must remain strictly isolated and are prohibited in worker runtime.",
     );
   }
+  assertCredentialScope(source, "worker");
+  if (
+    source.FLOW_WALLET_ENCRYPTION_KEY !== undefined ||
+    source.FLOW_OUTLAYER_API_KEY !== undefined
+  ) {
+    invalidConfig("Legacy workers cannot receive custody credentials.");
+  }
 }
 
 export function assertPaymentEnvironment(source: EnvironmentInput): void {
@@ -199,6 +235,24 @@ export function assertPaymentEnvironment(source: EnvironmentInput): void {
   ) {
     invalidConfig(
       "Payment worker requires financial execution and provider compatibility to remain disabled.",
+    );
+  }
+}
+
+export function assertIndexerEnvironment(source: EnvironmentInput): void {
+  assertCredentialScope(source, "indexer");
+  if (
+    source.FLOW_WALLET_ENCRYPTION_KEY !== undefined ||
+    source.FLOW_OUTLAYER_API_KEY !== undefined
+  ) {
+    invalidConfig("Indexer workers cannot receive custody credentials.");
+  }
+  if (
+    source.FLOW_EXECUTION !== "disabled" ||
+    source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    invalidConfig(
+      "Indexer workers require financial execution and provider compatibility to remain disabled.",
     );
   }
 }
@@ -300,6 +354,7 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
     [
       "FLOW_WORKER_DATABASE_URL",
       "FLOW_PAYMENT_DATABASE_URL",
+      "FLOW_INDEXER_DATABASE_URL",
       "FLOW_FIXTURE_DATABASE_URL",
     ].some((key) => source[key] !== undefined)
   ) {
@@ -350,15 +405,17 @@ export function readConfig(source: EnvironmentInput, purpose: DatabasePurpose) {
         ? "worker"
         : purpose === "payment"
           ? "payment_worker"
-          : purpose === "fixture"
-            ? "fixture"
-            : purpose === "custody"
-              ? "custody_worker"
-              : purpose === "auth"
-                ? "auth_worker"
-                : purpose === "operator"
-                  ? "operator"
-                  : "migrator";
+          : purpose === "indexer"
+            ? "indexer_worker"
+            : purpose === "fixture"
+              ? "fixture"
+              : purpose === "custody"
+                ? "custody_worker"
+                : purpose === "auth"
+                  ? "auth_worker"
+                  : purpose === "operator"
+                    ? "operator"
+                    : "migrator";
   const role = `${databaseName}_${roleSuffix}`;
   const url = parseDatabaseUrl(source[variable], variable);
 

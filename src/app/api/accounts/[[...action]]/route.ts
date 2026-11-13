@@ -5,6 +5,7 @@ import {
   renameAccount,
 } from "../../../../server/accounts.ts";
 import {
+  readActivitySyncStatus,
   readActivities,
   syncActivities,
 } from "../../../../server/activities.ts";
@@ -19,6 +20,7 @@ import {
   provisionAccountWallet,
   readWalletProvisioningStatus,
   readPortfolio,
+  readPortfolioSyncStatus,
   refreshPortfolio,
 } from "../../../../server/portfolio.ts";
 import {
@@ -86,6 +88,13 @@ export async function GET(
         return refreshPortfolio(request, accountId(id));
       }
       if (
+        section === "portfolio" &&
+        child === "refresh" &&
+        request.method === "GET"
+      ) {
+        return readPortfolioSyncStatus(request, accountId(id));
+      }
+      if (
         section === "wallet" &&
         child === "provision" &&
         request.method === "POST"
@@ -105,6 +114,13 @@ export async function GET(
         request.method === "POST"
       ) {
         return syncActivities(request, accountId(id));
+      }
+      if (
+        section === "activities" &&
+        child === "sync" &&
+        request.method === "GET"
+      ) {
+        return readActivitySyncStatus(request, accountId(id));
       }
       if (
         section === "members" &&

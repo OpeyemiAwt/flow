@@ -117,6 +117,22 @@ const paymentPool = process.env.FLOW_PAYMENT_DATABASE_URL
     )
   : undefined;
 
+const indexerPool = process.env.FLOW_INDEXER_DATABASE_URL
+  ? createDatabasePool(
+      readConfig(
+        {
+          FLOW_ENV: process.env.FLOW_ENV!,
+          FLOW_EXECUTION: process.env.FLOW_EXECUTION!,
+          FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+          FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+          FLOW_INDEXER_DATABASE_URL: process.env.FLOW_INDEXER_DATABASE_URL,
+          FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
+        },
+        "indexer",
+      ).database,
+    )
+  : undefined;
+
 const { database: operatorDbConfig } = readConfig(process.env, "operator");
 const operatorPool = createDatabasePool(operatorDbConfig);
 const operatorDb = getPrismaClient("operator");
@@ -140,6 +156,7 @@ after(async () => {
   await pool.end();
   await workerPool.end();
   await paymentPool?.end();
+  await indexerPool?.end();
   await operatorPool.end();
   await authTicketPool?.end();
   try {
@@ -147,6 +164,148 @@ after(async () => {
   } catch {
     // Ignore cleanup errors
   }
+});
+
+test("indexer role has only public wallet reads, sync execution, and observed-data writes", async (t) => {
+  if (!indexerPool)
+    return t.skip(
+      "Dedicated indexer role is not configured in this test environment.",
+    );
+  const { rows } = await indexerPool.query<{
+    role_name: string;
+    correct_database: boolean;
+    can_read_wallet_identity: boolean;
+    can_read_wallet_credentials: boolean;
+    can_read_addresses: boolean;
+    can_read_asset_registry: boolean;
+    can_write_balances: boolean;
+    can_write_activity: boolean;
+    can_write_provisioning: boolean;
+    can_read_ledger: boolean;
+    can_claim_sync: boolean;
+    can_finish_sync: boolean;
+    can_request_sync: boolean;
+  }>(
+    `
+    SELECT current_user AS role_name,
+      current_database() = $1 AS correct_database,
+      has_column_privilege(current_user, 'flow.wallets', 'id', 'SELECT')
+        AND has_column_privilege(current_user, 'flow.wallets', 'environment', 'SELECT') AS can_read_wallet_identity,
+      has_column_privilege(current_user, 'flow.wallets', 'encrypted_credential', 'SELECT') AS can_read_wallet_credentials,
+      has_column_privilege(current_user, 'flow.wallet_addresses', 'address', 'SELECT') AS can_read_addresses,
+      has_table_privilege(current_user, 'flow.network_assets', 'SELECT') AS can_read_asset_registry,
+      has_table_privilege(current_user, 'flow.wallet_balances', 'INSERT') AS can_write_balances,
+      has_table_privilege(current_user, 'flow.wallet_activities', 'INSERT') AS can_write_activity,
+      has_table_privilege(current_user, 'flow.wallet_provisioning_jobs', 'UPDATE') AS can_write_provisioning,
+      has_table_privilege(current_user, 'flow.ledger_entries', 'SELECT') AS can_read_ledger,
+      has_function_privilege(current_user, 'flow.claim_account_sync_job(text,integer)', 'EXECUTE') AS can_claim_sync,
+      has_function_privilege(current_user, 'flow.finish_account_sync_job(uuid,uuid,text)', 'EXECUTE') AS can_finish_sync,
+      has_function_privilege(current_user, 'flow.request_account_sync(uuid,text)', 'EXECUTE') AS can_request_sync
+  `,
+    [appDbConfig.name],
+  );
+  assert.deepEqual(rows[0], {
+    role_name: `${appDbConfig.name}_indexer_worker`,
+    correct_database: true,
+    can_read_wallet_identity: true,
+    can_read_wallet_credentials: false,
+    can_read_addresses: true,
+    can_read_asset_registry: true,
+    can_write_balances: true,
+    can_write_activity: true,
+    can_write_provisioning: false,
+    can_read_ledger: false,
+    can_claim_sync: true,
+    can_finish_sync: true,
+    can_request_sync: false,
+  });
+  await assert.rejects(
+    indexerPool.query("SELECT encrypted_credential FROM flow.wallets LIMIT 1"),
+    (error: unknown) => (error as { code?: string }).code === "42501",
+  );
+  await assert.rejects(
+    indexerPool.query("SELECT 1 FROM flow.ledger_entries LIMIT 1"),
+    (error: unknown) => (error as { code?: string }).code === "42501",
+  );
+  await assert.rejects(
+    indexerPool.query(
+      "UPDATE flow.wallet_provisioning_jobs SET status = status WHERE false",
+    ),
+    (error: unknown) => (error as { code?: string }).code === "42501",
+  );
+});
+
+test("account sync enqueue is account-scoped, idempotent, and lease-completable", async (t) => {
+  if (!indexerPool)
+    return t.skip(
+      "Dedicated indexer role is not configured in this test environment.",
+    );
+  const owner = await createTestAccount(pool, "PERSONAL", "sync-owner");
+  const other = await createTestAccount(pool, "PERSONAL", "sync-other");
+  const ownerToken = await createTestSession(pool, owner.authUserId);
+  const otherToken = await createTestSession(pool, other.authUserId);
+  const walletId = randomUUID();
+  await workerPool.query(
+    `INSERT INTO flow.wallets (
+       id, account_id, provider, provider_wallet_id, near_account_id,
+       encrypted_credential, key_id, key_digest, status
+     ) VALUES ($1, $2, 'OUTLAYER', $3, $4, 'test-envelope-only', 'test-key', 'test-digest', 'ACTIVE')`,
+    [walletId, owner.accountId, `sync-${walletId}`, `sync-${walletId}.test`],
+  );
+
+  const enqueue = async (token: string, accountId: string) => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT set_config('flow.current_session_token', $1, true)",
+        [token],
+      );
+      const result = await client.query<{
+        job_id: string;
+        job_status: string;
+      }>(
+        "SELECT job_id, job_status FROM flow.request_account_sync($1::uuid, 'BALANCE_REFRESH')",
+        [accountId],
+      );
+      await client.query("COMMIT");
+      return result.rows[0];
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  };
+
+  const first = await enqueue(ownerToken, owner.accountId);
+  assert.equal(first?.job_status, "QUEUED");
+  const repeated = await enqueue(ownerToken, owner.accountId);
+  assert.equal(repeated?.job_id, first?.job_id);
+  await assert.rejects(
+    enqueue(otherToken, owner.accountId),
+    (error: unknown) => (error as { code?: string }).code === "42501",
+  );
+
+  const claimed = await indexerPool.query<{
+    job_id: string;
+    account_id: string;
+    wallet_id: string;
+    lease_token: string;
+  }>(
+    "SELECT job_id, account_id, wallet_id, lease_token FROM flow.claim_account_sync_job($1, 60)",
+    [`qa-indexer-${randomUUID()}`],
+  );
+  assert.equal(claimed.rows[0]?.job_id, first?.job_id);
+  assert.equal(claimed.rows[0]?.account_id, owner.accountId);
+  assert.equal(claimed.rows[0]?.wallet_id, walletId);
+  const completed = await indexerPool.query<{
+    finish_account_sync_job: string;
+  }>("SELECT flow.finish_account_sync_job($1::uuid, $2::uuid, NULL)", [
+    claimed.rows[0]!.job_id,
+    claimed.rows[0]!.lease_token,
+  ]);
+  assert.equal(completed.rows[0]?.finish_account_sync_job, "COMPLETE");
 });
 
 test("auth-ticket role can invoke only guarded ticket functions and cannot read account data", async (t) => {
@@ -196,6 +355,8 @@ test("payment and custody roles stay isolated from the legacy worker role", asyn
     payment_can_self_authorize: boolean;
     custody_wallet_read: boolean;
     custody_job_write: boolean;
+    payment_can_enqueue_settlement_sync: boolean;
+    indexer_can_enqueue_settlement_sync: boolean;
   }>(
     `SELECT
        has_table_privilege($1, 'flow.wallets', 'SELECT') AS legacy_wallet_read,
@@ -205,9 +366,16 @@ test("payment and custody roles stay isolated from the legacy worker role", asyn
        has_table_privilege($2, 'flow.wallet_provisioning_jobs', 'INSERT') AS payment_provisioning_write,
        has_table_privilege($2, 'flow.ledger_entries', 'SELECT') AS payment_ledger_read,
        has_function_privilege($2, 'flow.create_payment_rehearsal_authorization(uuid,text,text,text,text,text,text,numeric,text,text,integer)', 'EXECUTE') AS payment_can_self_authorize,
+       has_function_privilege($2, 'flow.enqueue_settlement_balance_sync(text)', 'EXECUTE') AS payment_can_enqueue_settlement_sync,
+       has_function_privilege($4, 'flow.enqueue_settlement_balance_sync(text)', 'EXECUTE') AS indexer_can_enqueue_settlement_sync,
        has_table_privilege($3, 'flow.wallets', 'SELECT') AS custody_wallet_read,
        has_table_privilege($3, 'flow.wallet_provisioning_jobs', 'INSERT') AS custody_job_write`,
-    [legacyRole, paymentRole, custodyRole],
+    [
+      legacyRole,
+      paymentRole,
+      custodyRole,
+      `${appDbConfig.name}_indexer_worker`,
+    ],
   );
   assert.deepEqual(rows[0], {
     legacy_wallet_read: false,
@@ -219,6 +387,8 @@ test("payment and custody roles stay isolated from the legacy worker role", asyn
     payment_can_self_authorize: false,
     custody_wallet_read: true,
     custody_job_write: true,
+    payment_can_enqueue_settlement_sync: true,
+    indexer_can_enqueue_settlement_sync: false,
   });
 });
 

@@ -7,6 +7,7 @@ import { createDatabasePool } from "../src/foundation/database.ts";
 import {
   assertOperatorEnvironment,
   assertCustodyEnvironment,
+  assertIndexerEnvironment,
   assertWebEnvironment,
   assertWorkerEnvironment,
   readConfig,
@@ -674,5 +675,34 @@ test("rejects placeholder or malformed URLs without exposing their content", () 
       code: "INVALID_CONFIGURATION",
       message: "FLOW_DATABASE_URL must be an encoded PostgreSQL URL.",
     },
+  );
+});
+
+test("indexer role is isolated from web and custody credentials", () => {
+  const url =
+    "postgresql://flow_staging_indexer_worker:fixture-only-password@db.flow.example:5432/flow_staging?sslmode=verify-full";
+  const source = {
+    FLOW_ENV: "staging",
+    FLOW_EXECUTION: "disabled",
+    FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
+    FLOW_INDEXER_DATABASE_URL: url,
+  };
+  assert.equal(
+    readConfig(source, "indexer").database.role,
+    "flow_staging_indexer_worker",
+  );
+  assert.throws(() => assertWebEnvironment(source), invalid);
+  assert.throws(
+    () =>
+      assertIndexerEnvironment({
+        ...source,
+        FLOW_WALLET_ENCRYPTION_KEY: "secret",
+      }),
+    invalid,
+  );
+  assert.throws(
+    () =>
+      assertIndexerEnvironment({ ...source, FLOW_OUTLAYER_API_KEY: "secret" }),
+    invalid,
   );
 });

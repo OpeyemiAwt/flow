@@ -38,6 +38,7 @@
     "check:balances": "node --env-file-if-exists=.env scripts/check-balances.ts",
     "worker:monitoring": "node --env-file-if-exists=.env scripts/run-payment-monitoring-worker.ts",
     "worker:payments": "node scripts/run-payment-worker.ts",
+    "worker:indexer": "node scripts/run-indexer-worker.ts",
     "worker:custody": "node scripts/run-custody-worker.ts"
   },
   "dependencies": {

@@ -566,6 +566,13 @@ async function testQa() {
         : `${databaseName.toUpperCase()}_PAYMENT_WORKER_PASSWORD`,
     ],
     [
+      "FLOW_INDEXER_DATABASE_URL",
+      "indexer_worker",
+      databaseName === "flow_test"
+        ? "FLOW_TEST_INDEXER_WORKER_PASSWORD"
+        : `${databaseName.toUpperCase()}_INDEXER_WORKER_PASSWORD`,
+    ],
+    [
       "FLOW_CUSTODY_DATABASE_URL",
       "custody_worker",
       databaseName === "flow_test"
@@ -655,6 +662,7 @@ async function createQaValidationDatabase() {
       "app",
       "worker",
       "payment_worker",
+      "indexer_worker",
       "fixture",
       "auth_worker",
       "operator",
@@ -726,6 +734,7 @@ async function createQaValidationDatabase() {
           "app",
           "worker",
           "payment_worker",
+          "indexer_worker",
           "fixture",
           "auth_worker",
           "operator",
@@ -896,6 +905,7 @@ async function testSecurityQaTwice() {
       const roles = [
         "app",
         "payment_worker",
+        "indexer_worker",
         "fixture",
         "worker",
         "custody_worker",
@@ -923,7 +933,7 @@ async function testSecurityQaTwice() {
       await admin.query(`CREATE DATABASE "${name}" OWNER "${name}_migrator"`);
       await admin.query(`REVOKE CREATE ON DATABASE "${name}" FROM PUBLIC`);
       await admin.query(
-        `GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_payment_worker", "${name}_fixture", "${name}_worker", "${name}_custody_worker", "${name}_auth_worker", "${name}_operator"`,
+        `GRANT CONNECT ON DATABASE "${name}" TO "${name}_app", "${name}_payment_worker", "${name}_indexer_worker", "${name}_fixture", "${name}_worker", "${name}_custody_worker", "${name}_auth_worker", "${name}_operator"`,
       );
 
       const databaseEnv = { ...process.env, FLOW_TEST_DATABASE_NAME: name };
@@ -944,6 +954,7 @@ async function testSecurityQaTwice() {
       databaseEnv.FLOW_WORKER_DATABASE_URL = makeUrl("worker");
       databaseEnv.FLOW_FIXTURE_DATABASE_URL = makeUrl("fixture");
       databaseEnv.FLOW_PAYMENT_DATABASE_URL = makeUrl("payment_worker");
+      databaseEnv.FLOW_INDEXER_DATABASE_URL = makeUrl("indexer_worker");
       databaseEnv.FLOW_CUSTODY_DATABASE_URL = makeUrl("custody_worker");
       databaseEnv.FLOW_AUTH_TICKET_DATABASE_URL = makeUrl("auth_worker");
       databaseEnv.FLOW_OPERATOR_DATABASE_URL = makeUrl("operator");
