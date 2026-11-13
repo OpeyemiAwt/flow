@@ -185,6 +185,34 @@ async function testQa() {
   });
 }
 
+async function testUnit() {
+  if (
+    process.env.FLOW_ENV !== "test" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "qa-only" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail("Unit tests are restricted to the isolated Railway QA service.");
+  }
+
+  const child = spawn("npm", ["test"], {
+    stdio: "inherit",
+    env: {
+      PATH: process.env.PATH,
+      NODE_ENV: "test",
+      FLOW_EXECUTION: "disabled",
+    },
+  });
+  child.once("error", (error) => {
+    console.error(JSON.stringify({ event: "qa_unit_tests_start_failed", error: error.message }));
+    process.exit(1);
+  });
+  child.once("exit", (code) => {
+    if (code !== 0) process.exitCode = code ?? 1;
+  });
+}
+
 function idle() {
   if (
     process.env.FLOW_ENV !== "test" ||
@@ -201,5 +229,6 @@ function idle() {
 if (operation === "bootstrap-staging-and-qa") await bootstrap();
 else if (operation === "migrate-qa") await migrate();
 else if (operation === "test-qa") await testQa();
+else if (operation === "test-unit") await testUnit();
 else if (operation === "idle") idle();
 else fail("FLOW_DB_OPERATION is unsupported.");
