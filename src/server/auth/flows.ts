@@ -491,9 +491,31 @@ async function finishGoogle(request: Request): Promise<Response> {
       response.headers.get("location") !==
         new URL(providerRedirect, auth.origin).href
     ) {
+      const responseLocation = response.headers.get("location");
+      let safeLocation:
+        | { originMatches: boolean; pathname: string; queryKeys: string[] }
+        | undefined;
+      if (responseLocation) {
+        try {
+          const parsedLocation = new URL(responseLocation, auth.origin);
+          safeLocation = {
+            originMatches: parsedLocation.origin === auth.origin,
+            pathname: parsedLocation.pathname,
+            queryKeys: [...new Set(parsedLocation.searchParams.keys())].sort(),
+          };
+        } catch {
+          safeLocation = {
+            originMatches: false,
+            pathname: "invalid",
+            queryKeys: [],
+          };
+        }
+      }
       log("error", "google_oauth_provider_callback_rejected", {
         status: response.status,
-        redirectMatched: response.headers.get("location") === new URL(providerRedirect, auth.origin).href,
+        location: safeLocation,
+        redirectMatched:
+          responseLocation === new URL(providerRedirect, auth.origin).href,
       });
       throw new ApiFailure(401, "INVALID_PROOF");
     }
