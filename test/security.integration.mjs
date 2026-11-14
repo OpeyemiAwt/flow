@@ -3182,6 +3182,7 @@ test("phase 6 end-to-end acceptance scenarios A–G: queued wallet onboarding, p
     // verified the wallet and all four network addresses.
     await page
       .getByRole("heading", { name: "Setup is waiting to start", exact: true })
+      .first()
       .waitFor();
     assert.equal(new URL(page.url()).pathname, "/onboarding");
     assert.equal(
