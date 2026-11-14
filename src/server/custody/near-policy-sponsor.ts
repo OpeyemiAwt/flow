@@ -938,6 +938,25 @@ export async function sponsorAndStoreWalletPolicy(
         expectedDecoded.bytes.equals(actualDecoded.bytes)
       : encrypted.wallet_pubkey.toLowerCase() === walletPubkey.toLowerCase();
   if (!keysMatch) {
+    log("error", "custody_policy_wallet_pubkey_mismatch", {
+      walletId,
+      providerWalletId,
+      expectedLen: walletPubkey.length,
+      expectedPrefix: walletPubkey.slice(0, 18),
+      expectedDecodedScheme: expectedDecoded?.scheme ?? null,
+      expectedDecodedBytes: expectedDecoded?.bytes.length ?? null,
+      actualLen: encrypted.wallet_pubkey.length,
+      actualHasColon: encrypted.wallet_pubkey.includes(":"),
+      actualPrefix: encrypted.wallet_pubkey.slice(0, 18),
+      actualSuffix: encrypted.wallet_pubkey.slice(-6),
+      actualDecodedScheme: actualDecoded?.scheme ?? null,
+      actualDecodedBytes: actualDecoded?.bytes.length ?? null,
+      sameDecodedBytes: Boolean(
+        expectedDecoded &&
+          actualDecoded &&
+          expectedDecoded.bytes.equals(actualDecoded.bytes),
+      ),
+    });
     throw new FlowError(
       "CORRELATION_ERROR",
       "Encrypted policy wallet_pubkey does not match FLOW wallet record.",
