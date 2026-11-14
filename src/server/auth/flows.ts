@@ -601,8 +601,8 @@ async function finishGoogle(request: Request): Promise<Response> {
     log("error", "google_oauth_diagnostic", {
       stage: failureStage,
       reason: "QUERY_OR_COOKIE_INVALID",
-      hasOauthCookie: !!secret,
-      hasStateCookie: !!readNonce(request.headers, auth.cookies.state),
+      oauthNoncePresent: !!secret,
+      stateNoncePresent: !!readNonce(request.headers, auth.cookies.state),
       hasState: !!state,
       stateFormatOk: !!state && /^[\w-]{32}$/.test(state),
       stateLength: state?.length ?? 0,
@@ -747,8 +747,8 @@ async function finishGoogle(request: Request): Promise<Response> {
         log("error", "google_oauth_diagnostic", {
           stage: failureStage,
           reason: "SESSION_NOT_FOUND_AFTER_CALLBACK",
-          hasNextSessionCookie: !!nextCookie,
-          setCookieCount: response.headers.getSetCookie().length,
+          nextSessionIssued: !!nextCookie,
+          setHeaderCount: response.headers.getSetCookie().length,
         });
         throw new ApiFailure(401, "INVALID_PROOF");
       }
