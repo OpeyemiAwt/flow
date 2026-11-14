@@ -150,8 +150,8 @@ test("readPolicySponsorConfig enforces fail-closed bounds, HTTPS URLs, signer ex
     FLOW_NEAR_SPONSOR_ACCOUNT_ID: "flow-policy-sponsor.near",
     FLOW_NEAR_SPONSOR_SIGNER_URL: "https://signer.internal.flow.example/sign",
     FLOW_NEAR_SPONSOR_SIGNER_TOKEN: "a".repeat(36),
-    FLOW_NEAR_SPONSOR_APPROVAL_ACCOUNT_ID: "flow-policy-admin.near",
-    FLOW_NEAR_SPONSOR_LOCK_INITIAL_POLICY: "true",
+    FLOW_POLICY_APPROVAL_ACCOUNT_ID: "flow-policy-admin.near",
+    FLOW_POLICY_APPROVAL_LOCKED: "enabled",
   });
   assert.equal(validRemote.enabled, true);
   if (validRemote.enabled) {
@@ -208,7 +208,7 @@ test("readPolicySponsorConfig enforces fail-closed bounds, HTTPS URLs, signer ex
         FLOW_POLICY_SPONSOR_ENABLED: "enabled",
         FLOW_NEAR_SPONSOR_ACCOUNT_ID: "flow-policy-sponsor.near",
         FLOW_NEAR_SPONSOR_PRIVATE_KEY: rawPrivateKey,
-        FLOW_NEAR_SPONSOR_MAX_PER_WALLET_YOCTO: (
+        FLOW_NEAR_SPONSOR_MAX_FEE_PER_WALLET_YOCTO: (
           MAX_HARD_PER_WALLET_SPONSOR_YOCTO + 1n
         ).toString(),
       }),
