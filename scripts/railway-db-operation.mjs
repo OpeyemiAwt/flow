@@ -1785,16 +1785,30 @@ async function testUnit() {
 }
 
 function idle() {
-  if (
-    process.env.FLOW_ENV !== "test" ||
-    process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
-    process.env.FLOW_DB_TARGET !== "qa-only" ||
-    process.env.FLOW_EXECUTION !== "disabled" ||
-    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
-  ) {
-    fail("Idle mode is restricted to the isolated Railway QA service.");
+  const stagingSafe =
+    process.env.FLOW_ENV === "test" &&
+    process.env.RAILWAY_ENVIRONMENT_ID === STAGING_ENVIRONMENT_ID &&
+    process.env.FLOW_DB_TARGET === "qa-only" &&
+    process.env.FLOW_EXECUTION === "disabled" &&
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE === "disabled";
+  const productionSafe =
+    process.env.FLOW_ENV === "production" &&
+    process.env.RAILWAY_ENVIRONMENT_ID === PRODUCTION_ENVIRONMENT_ID &&
+    process.env.FLOW_DB_TARGET === "production-empty-only" &&
+    process.env.FLOW_PUBLIC_SIGNUP_ENABLED === "disabled" &&
+    process.env.FLOW_WALLET_REGISTRATION_ENABLED === "disabled" &&
+    process.env.FLOW_EXECUTION === "disabled" &&
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE === "disabled";
+  if (!productionSafe && !stagingSafe) {
+    fail("Idle mode is restricted to explicitly gated isolated environments.");
   }
-  console.log(JSON.stringify({ event: "qa_database_operation_idle" }));
+  console.log(
+    JSON.stringify({
+      event: productionSafe
+        ? "production_database_operation_idle"
+        : "qa_database_operation_idle",
+    }),
+  );
 }
 
 if (operation === "bootstrap-staging-and-qa") await bootstrap();

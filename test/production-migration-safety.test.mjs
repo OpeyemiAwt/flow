@@ -25,6 +25,25 @@ test("production-shaped migration rehearsal refuses production or non-QA environ
   assert.ok(!result.stderr.includes(sentinel));
 });
 
+test("production helper can be held in gated idle mode without database credentials", () => {
+  const result = spawnSync(process.execPath, [script.pathname], {
+    env: {
+      ...process.env,
+      FLOW_DB_OPERATION: "idle",
+      FLOW_ENV: "production",
+      RAILWAY_ENVIRONMENT_ID: "7b8f3541-d3c5-483c-831a-5c0fb335a288",
+      FLOW_DB_TARGET: "production-empty-only",
+      FLOW_PUBLIC_SIGNUP_ENABLED: "disabled",
+      FLOW_WALLET_REGISTRATION_ENABLED: "disabled",
+      FLOW_EXECUTION: "disabled",
+      FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
+    },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /production_database_operation_idle/);
+});
+
 test("forward migration revokes privileges from only a non-login legacy worker role", () => {
   const migration = readFileSync(
     new URL(
