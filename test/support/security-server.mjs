@@ -339,6 +339,11 @@ export async function securityServer() {
                   /^[0-9A-Z]{5}$/.test(fields.sqlState)
                     ? fields.sqlState
                     : undefined,
+                databaseCode:
+                  typeof fields.databaseCode === "string" &&
+                  /^P\d{4}$/.test(fields.databaseCode)
+                    ? fields.databaseCode
+                    : undefined,
               });
             } catch {
               return "";
