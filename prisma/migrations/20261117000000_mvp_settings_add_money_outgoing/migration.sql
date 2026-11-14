@@ -658,12 +658,22 @@ REVOKE ALL ON FUNCTION flow.complete_outgoing_transfer_settlement(uuid, text, te
 
 DO $$
 DECLARE
+  db_name text := current_database();
   app_role text := current_database() || '_app';
   payment_role text := current_database() || '_payment_worker';
   custody_role text := current_database() || '_custody_worker';
   migrator_role text := current_database() || '_migrator';
+  fixture_role text := current_database() || '_fixture';
   definer_role text := current_user;
 BEGIN
+  IF db_name LIKE 'flow_test_%'
+     AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = fixture_role) THEN
+    EXECUTE format(
+      'GRANT ALL PRIVILEGES ON TABLE flow.user_profile_preferences, flow.account_notification_preferences, flow.add_money_intents, flow.outgoing_transfer_jobs TO %I',
+      fixture_role
+    );
+  END IF;
+
   -- SECURITY DEFINER worker functions execute as the migration/table owner.
   -- Under FORCE ROW LEVEL SECURITY, grant scoped owner policies so worker
   -- claim/transition functions operate across rows while non-owners stay locked down.
