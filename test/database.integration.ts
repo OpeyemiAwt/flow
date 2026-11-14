@@ -10335,7 +10335,7 @@ test("database integration: M38 canonical network matching across OutLayer short
         $1::uuid, $2, 'WALLET', 'DIRECT_TRANSFER', 'AVAILABLE',
         'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
         1000000, 1000000,
-        NULL, 'INDICATIVE_QUOTE'
+        NULL, 'QUOTE_OBSERVED'
       )`,
       [paymentRequestId, attemptPublicId],
     );
