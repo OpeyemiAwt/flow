@@ -135,6 +135,13 @@ export async function createOutLayerMockServer(
   let invalidateCacheCallCount = 0;
   let rateLimitRemaining = initialOptions.rateLimitCount ?? 0;
 
+  const readRequestBody = (req: IncomingMessage): Promise<string> =>
+    new Promise<string>((resolve) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (c: Buffer) => chunks.push(c));
+      req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    });
+
   const walletsByApiKey = new Map<string, SimulatedWalletContainer>();
   const policyOverridesByApiKey = new Map<
     string,
@@ -387,11 +394,7 @@ export async function createOutLayerMockServer(
         }
         const bearerKey = auth.slice("Bearer ".length).trim();
         const registered = walletsByApiKey.get(bearerKey);
-        const body = await new Promise<string>((resolve) => {
-          const chunks: Buffer[] = [];
-          req.on("data", (c: Buffer) => chunks.push(c));
-          req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-        });
+        const body = await readRequestBody(req);
         const nearHex = registered?.nearAccountId ?? DEFAULT_NEAR_ACCOUNT_ID;
         const policyHash = createHash("sha256").update(body || "{}").digest("hex");
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -416,11 +419,7 @@ export async function createOutLayerMockServer(
         }
         const bearerKey = auth.slice("Bearer ".length).trim();
         const registered = walletsByApiKey.get(bearerKey);
-        const body = await new Promise<string>((resolve) => {
-          const chunks: Buffer[] = [];
-          req.on("data", (c: Buffer) => chunks.push(c));
-          req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-        });
+        const body = await readRequestBody(req);
         const parsedBody = JSON.parse(body || "{}") as {
           encrypted_data?: string;
         };
@@ -445,6 +444,7 @@ export async function createOutLayerMockServer(
       // Route: POST /wallet/v1/invalidate-cache
       if (req.method === "POST" && pathname === "/wallet/v1/invalidate-cache") {
         invalidateCacheCallCount++;
+        await readRequestBody(req);
         const auth = req.headers.authorization;
         if (!auth || !auth.startsWith("Bearer wk_")) {
           res.writeHead(401, { "Content-Type": "application/json" });
