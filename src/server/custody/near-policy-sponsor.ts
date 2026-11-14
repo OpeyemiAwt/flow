@@ -139,14 +139,30 @@ function decodeWalletPublicKeyBytes(
   return { scheme, bytes };
 }
 
-function formatWalletPublicKeyCandidates(walletPubkey: string): string[] {
+const POLICY_UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidPolicyWalletKey(rawPubkey: string): boolean {
+  return (
+    POLICY_UUID_REGEX.test(rawPubkey.trim()) ||
+    decodeWalletPublicKeyBytes(rawPubkey) !== null
+  );
+}
+
+function formatWalletPublicKeyCandidates(
+  walletPubkey: string,
+  providerWalletId?: string,
+): string[] {
+  const candidates = new Set<string>();
+  if (providerWalletId && POLICY_UUID_REGEX.test(providerWalletId.trim())) {
+    candidates.add(providerWalletId.trim());
+  }
+  candidates.add(walletPubkey);
   const decoded = decodeWalletPublicKeyBytes(walletPubkey);
-  if (!decoded) return [walletPubkey];
-  const candidates = new Set<string>([
-    walletPubkey,
-    `${decoded.scheme}:${decoded.bytes.toString("hex")}`,
-    `${decoded.scheme}:${encodeBase58(decoded.bytes)}`,
-  ]);
+  if (decoded) {
+    candidates.add(`${decoded.scheme}:${decoded.bytes.toString("hex")}`);
+    candidates.add(`${decoded.scheme}:${encodeBase58(decoded.bytes)}`);
+  }
   return Array.from(candidates);
 }
 
@@ -340,7 +356,7 @@ export function buildStoreWalletPolicyTransactionBytes(
       "storage_refund_to must strictly equal sponsorAccountId.",
     );
   }
-  if (!decodeWalletPublicKeyBytes(input.args.wallet_pubkey)) {
+  if (!isValidPolicyWalletKey(input.args.wallet_pubkey)) {
     throw new FlowError("INVALID_INPUT", "Invalid wallet_pubkey for policy store.");
   }
   if (!Number.isSafeInteger(input.args.version) || input.args.version < 1) {
@@ -836,7 +852,10 @@ export async function sponsorAndStoreWalletPolicy(
 
   // 1. Check if policy is already stored on-chain (recovers crash-after-tx cleanly)
   let existingOnChain: OnChainWalletPolicyView | null = null;
-  for (const candidatePubkey of formatWalletPublicKeyCandidates(walletPubkey)) {
+  for (const candidatePubkey of formatWalletPublicKeyCandidates(
+    walletPubkey,
+    providerWalletId,
+  )) {
     existingOnChain = await nearRpc.getOnChainWalletPolicy(candidatePubkey);
     if (existingOnChain) break;
   }
@@ -930,33 +949,19 @@ export async function sponsorAndStoreWalletPolicy(
     policy: policyPayload,
   });
 
+  const matchesProviderWalletUuid =
+    POLICY_UUID_REGEX.test(providerWalletId.trim()) &&
+    encrypted.wallet_pubkey.trim().toLowerCase() ===
+      providerWalletId.trim().toLowerCase();
   const expectedDecoded = decodeWalletPublicKeyBytes(walletPubkey);
   const actualDecoded = decodeWalletPublicKeyBytes(encrypted.wallet_pubkey);
   const keysMatch =
-    expectedDecoded && actualDecoded
+    matchesProviderWalletUuid ||
+    (expectedDecoded && actualDecoded
       ? expectedDecoded.scheme === actualDecoded.scheme &&
         expectedDecoded.bytes.equals(actualDecoded.bytes)
-      : encrypted.wallet_pubkey.toLowerCase() === walletPubkey.toLowerCase();
+      : encrypted.wallet_pubkey.toLowerCase() === walletPubkey.toLowerCase());
   if (!keysMatch) {
-    log("error", "custody_policy_wallet_pubkey_mismatch", {
-      walletId,
-      providerWalletId,
-      expectedLen: walletPubkey.length,
-      expectedPrefix: walletPubkey.slice(0, 18),
-      expectedDecodedScheme: expectedDecoded?.scheme ?? null,
-      expectedDecodedBytes: expectedDecoded?.bytes.length ?? null,
-      actualLen: encrypted.wallet_pubkey.length,
-      actualHasColon: encrypted.wallet_pubkey.includes(":"),
-      actualPrefix: encrypted.wallet_pubkey.slice(0, 18),
-      actualSuffix: encrypted.wallet_pubkey.slice(-6),
-      actualDecodedScheme: actualDecoded?.scheme ?? null,
-      actualDecodedBytes: actualDecoded?.bytes.length ?? null,
-      sameDecodedBytes: Boolean(
-        expectedDecoded &&
-          actualDecoded &&
-          expectedDecoded.bytes.equals(actualDecoded.bytes),
-      ),
-    });
     throw new FlowError(
       "CORRELATION_ERROR",
       "Encrypted policy wallet_pubkey does not match FLOW wallet record.",
