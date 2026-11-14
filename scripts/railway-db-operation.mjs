@@ -1827,22 +1827,33 @@ async function inspectStagingReadiness() {
       "SELECT id, kind::text AS kind, name, personal_owner_id, created_at FROM flow.accounts ORDER BY created_at ASC LIMIT 50",
     );
     const users = await q(
-      "SELECT id, auth_user_id, onboarding_step, active_account_id, created_at FROM flow.users ORDER BY created_at ASC LIMIT 50",
+      "SELECT id, auth_user_id, active, created_at FROM flow.users ORDER BY created_at ASC LIMIT 50",
     );
-    const authUsers = await q(
-      "SELECT id, (google_sub IS NOT NULL) AS has_google, (email_enrolled_at IS NOT NULL) AS email_enrolled, created_at FROM flow.auth_users ORDER BY created_at ASC LIMIT 50",
-    );
+    const authUsers = await q(`
+      SELECT
+        au.id,
+        au.email_verified,
+        au.email_enrolled,
+        au.mailbox_paused,
+        EXISTS (
+          SELECT 1 FROM flow.google_subject_bindings g WHERE g.user_id = au.id
+        ) AS has_google,
+        au.created_at
+      FROM flow.auth_users au
+      ORDER BY au.created_at ASC
+      LIMIT 50
+    `);
     const wallets = await q(
-      "SELECT id, account_id, provider, environment, status::text AS status, key_id, left(key_digest, 12) AS key_digest_prefix, created_at FROM flow.wallets ORDER BY created_at ASC LIMIT 50",
+      "SELECT id, account_id, provider, environment, provider_wallet_id, near_account_id, status::text AS status, policy_state, key_id, left(key_digest, 12) AS key_digest_prefix, created_at FROM flow.wallets ORDER BY created_at ASC LIMIT 50",
     );
     const provisioningJobs = await q(
-      "SELECT id, account_id, status::text AS status, attempts, provider_request_id, last_error, created_at, updated_at FROM flow.wallet_provisioning_jobs ORDER BY created_at ASC LIMIT 50",
+      "SELECT id, account_id, status::text AS status, attempts, failure_classification, last_error, created_at, updated_at FROM flow.wallet_provisioning_jobs ORDER BY created_at ASC LIMIT 50",
     );
     const operators = await q(
-      "SELECT id, auth_user_id, role, status, created_at FROM flow.custody_operators ORDER BY created_at ASC LIMIT 25",
+      "SELECT id, auth_user_id, role, status, enrolled_at FROM flow.custody_operators ORDER BY enrolled_at ASC LIMIT 25",
     );
     const compatAuths = await q(
-      "SELECT id, provider, environment, max_registrations, registrations_used, status, expires_at FROM flow.provider_compatibility_authorizations ORDER BY created_at ASC LIMIT 25",
+      "SELECT id, account_id, environment, status, max_registrations, registrations_attempted, registrations_completed, expires_at FROM flow.provider_compatibility_authorizations ORDER BY created_at ASC LIMIT 25",
     );
     const counts = await q(`
       SELECT
