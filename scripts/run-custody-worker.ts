@@ -97,6 +97,12 @@ async function main(): Promise<void> {
     : "mainnet";
   const adapter = new OutLayerAdapter(walletConfig.apiUrl, 5_000, {
     compatibilityConfig: walletConfig.compatibility,
+    controlledRegistrationAuthorized:
+      mode === "provision" &&
+      registrationAuthorized &&
+      isValidRegistrationAccountId &&
+      config.environment === "staging" &&
+      walletConfig.compatibility.mode === "disabled",
   });
   const pollIntervalMs = Number(
     process.env.FLOW_CUSTODY_POLL_INTERVAL_MS ?? "5000",

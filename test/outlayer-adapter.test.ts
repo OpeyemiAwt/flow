@@ -624,3 +624,48 @@ test("OutLayerAdapter enforces fail-closed provider compatibility mode on remote
     code: "CUSTODY_EXECUTION_BLOCKED",
   });
 });
+
+test("OutLayerAdapter allows single controlled registration on https://api.outlayer.ai when explicitly authorized while keeping execution endpoints blocked", async () => {
+  const controlledAdapter = new OutLayerAdapter(
+    "https://api.outlayer.ai",
+    5000,
+    {
+      compatibilityConfig: { mode: "disabled", maxRegistrations: 0 },
+      controlledRegistrationAuthorized: true,
+    },
+  );
+  // Execution and mutation methods remain strictly blocked
+  await assert.rejects(() => controlledAdapter.sign(), {
+    code: "CUSTODY_EXECUTION_BLOCKED",
+  });
+  await assert.rejects(() => controlledAdapter.broadcastTransaction(), {
+    code: "CUSTODY_EXECUTION_BLOCKED",
+  });
+  await assert.rejects(() => controlledAdapter.transfer(), {
+    code: "CUSTODY_EXECUTION_BLOCKED",
+  });
+  await assert.rejects(() => controlledAdapter.mutatePolicy(), {
+    code: "CUSTODY_EXECUTION_BLOCKED",
+  });
+  // Controlled registration endpoints are permitted while transfer endpoints stay rejected
+  const testable = controlledAdapter as unknown as {
+    assertEndpointPermitted(action: "register" | "query", path: string): void;
+  };
+  assert.doesNotThrow(() => {
+    testable.assertEndpointPermitted("register", "/register");
+    testable.assertEndpointPermitted("query", "/wallet/v1/address");
+    testable.assertEndpointPermitted("query", "/wallet/v1/policy");
+  });
+  assert.throws(
+    () => testable.assertEndpointPermitted("query", "/wallet/v1/transfer"),
+    { code: "INVALID_CONFIGURATION" },
+  );
+  assert.throws(
+    () =>
+      testable.assertEndpointPermitted(
+        "query",
+        "/wallet/v1/evm/sign-transaction",
+      ),
+    { code: "INVALID_CONFIGURATION" },
+  );
+});

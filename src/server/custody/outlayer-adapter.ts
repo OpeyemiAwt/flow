@@ -284,16 +284,22 @@ export class OutLayerAdapter {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly compatibilityConfig?: ProviderCompatibilityConfig;
+  private readonly controlledRegistrationAuthorized: boolean;
   private liveRegistrationCount = 0;
 
   constructor(
     baseUrl = "https://api.outlayer.ai",
     timeoutMs = 5_000,
-    options?: { readonly compatibilityConfig?: ProviderCompatibilityConfig },
+    options?: {
+      readonly compatibilityConfig?: ProviderCompatibilityConfig;
+      readonly controlledRegistrationAuthorized?: boolean;
+    },
   ) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.timeoutMs = timeoutMs;
     this.compatibilityConfig = options?.compatibilityConfig;
+    this.controlledRegistrationAuthorized =
+      options?.controlledRegistrationAuthorized === true;
   }
 
   private assertEndpointPermitted(
@@ -349,7 +355,38 @@ export class OutLayerAdapter {
       return;
     }
 
-    // 2. Separate fail-closed Provider Compatibility Mode check when FLOW_EXECUTION=disabled
+    // 2. Separate fail-closed Provider Compatibility Mode / Controlled Registration check when FLOW_EXECUTION=disabled
+    if (
+      this.controlledRegistrationAuthorized &&
+      (!this.compatibilityConfig ||
+        this.compatibilityConfig.mode === "disabled")
+    ) {
+      if (!ALLOWED_OUTLAYER_HOSTS.includes(parsed.hostname.toLowerCase())) {
+        throw new FlowError(
+          "INVALID_CONFIGURATION",
+          `OutLayer host ${parsed.hostname} is not in the authorized OutLayer host allowlist.`,
+        );
+      }
+      const CONTROLLED_REGISTRATION_ENDPOINTS = new Set([
+        "/register",
+        "/wallet/v1/address",
+        "/wallet/v1/policy",
+      ]);
+      if (!CONTROLLED_REGISTRATION_ENDPOINTS.has(endpointPath)) {
+        throw new FlowError(
+          "INVALID_CONFIGURATION",
+          `OutLayer endpoint ${endpointPath} is not permitted during controlled wallet registration.`,
+        );
+      }
+      if (action === "register" && this.liveRegistrationCount >= 1) {
+        throw new FlowError(
+          "INVALID_CONFIGURATION",
+          "Controlled wallet registration allows at most one registration per worker authorization.",
+        );
+      }
+      return;
+    }
+
     if (
       !this.compatibilityConfig ||
       this.compatibilityConfig.mode !== "authorized"
