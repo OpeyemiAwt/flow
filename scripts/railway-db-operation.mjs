@@ -1786,6 +1786,142 @@ async function testUnit() {
   });
 }
 
+async function inspectStagingReadiness() {
+  if (
+    process.env.FLOW_ENV !== "staging" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "staging-only" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail(
+      "Staging inspection is restricted to the designated isolated staging environment.",
+    );
+  }
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("FLOW_BOOTSTRAP_DATABASE_URL is required.");
+  const stagingUrl = new URL(rawUrl);
+  if (
+    !stagingUrl.hostname.endsWith(".railway.internal") ||
+    stagingUrl.pathname !== "/railway" ||
+    decodeURIComponent(stagingUrl.username) !== "postgres"
+  ) {
+    fail(
+      "Staging inspection URL does not identify the isolated Railway PostgreSQL service.",
+    );
+  }
+  stagingUrl.pathname = "/flow_staging";
+  stagingUrl.search = "?sslmode=require&uselibpqcompat=true";
+
+  const admin = new pg.Client({
+    connectionString: stagingUrl.toString(),
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    const q = async (sql) => (await admin.query(sql)).rows;
+    const migrations = await q(
+      "SELECT COUNT(*)::int AS applied_count, MAX(migration_name) AS latest_migration FROM public._prisma_migrations WHERE finished_at IS NOT NULL",
+    );
+    const accounts = await q(
+      "SELECT id, kind::text AS kind, name, personal_owner_id, created_at FROM flow.accounts ORDER BY created_at ASC LIMIT 50",
+    );
+    const users = await q(
+      "SELECT id, auth_user_id, onboarding_step, active_account_id, created_at FROM flow.users ORDER BY created_at ASC LIMIT 50",
+    );
+    const authUsers = await q(
+      "SELECT id, (google_sub IS NOT NULL) AS has_google, (email_enrolled_at IS NOT NULL) AS email_enrolled, created_at FROM flow.auth_users ORDER BY created_at ASC LIMIT 50",
+    );
+    const wallets = await q(
+      "SELECT id, account_id, provider, environment, status::text AS status, key_id, left(key_digest, 12) AS key_digest_prefix, created_at FROM flow.wallets ORDER BY created_at ASC LIMIT 50",
+    );
+    const provisioningJobs = await q(
+      "SELECT id, account_id, status::text AS status, attempts, provider_request_id, last_error, created_at, updated_at FROM flow.wallet_provisioning_jobs ORDER BY created_at ASC LIMIT 50",
+    );
+    const operators = await q(
+      "SELECT id, auth_user_id, role, status, created_at FROM flow.custody_operators ORDER BY created_at ASC LIMIT 25",
+    );
+    const compatAuths = await q(
+      "SELECT id, provider, environment, max_registrations, registrations_used, status, expires_at FROM flow.provider_compatibility_authorizations ORDER BY created_at ASC LIMIT 25",
+    );
+    const counts = await q(`
+      SELECT
+        (SELECT COUNT(*)::int FROM flow.account_sync_jobs) AS account_sync_jobs,
+        (SELECT COUNT(*)::int FROM flow.payment_requests) AS payment_requests,
+        (SELECT COUNT(*)::int FROM flow.payment_attempts) AS payment_attempts,
+        (SELECT COUNT(*)::int FROM flow.add_money_intents) AS add_money_intents,
+        (SELECT COUNT(*)::int FROM flow.outgoing_transfer_jobs) AS outgoing_transfer_jobs,
+        (SELECT COUNT(*)::int FROM flow.wallet_balances) AS wallet_balances,
+        (SELECT COUNT(*)::int FROM flow.wallet_activities) AS wallet_activities
+    `);
+
+    const roleChecks = {};
+    for (const [label, roleName, passwordEnv] of [
+      [
+        "payment",
+        "flow_staging_payment_worker",
+        "FLOW_STAGING_PAYMENT_WORKER_PASSWORD",
+      ],
+      [
+        "indexer",
+        "flow_staging_indexer_worker",
+        "FLOW_STAGING_INDEXER_WORKER_PASSWORD",
+      ],
+      [
+        "custody",
+        "flow_staging_custody_worker",
+        "FLOW_STAGING_CUSTODY_WORKER_PASSWORD",
+      ],
+    ]) {
+      const pw = process.env[passwordEnv];
+      if (!pw) {
+        roleChecks[label] = { configured: false };
+        continue;
+      }
+      const roleUrl = new URL(stagingUrl.toString());
+      roleUrl.username = roleName;
+      roleUrl.password = pw;
+      const rc = new pg.Client({
+        connectionString: roleUrl.toString(),
+        connectionTimeoutMillis: 5000,
+      });
+      await rc.connect();
+      try {
+        const res = await rc.query(`
+          SELECT
+            current_user AS role,
+            has_function_privilege(current_user, 'flow.claim_active_add_money_intents(text,integer,integer)', 'EXECUTE') AS can_claim_add_money,
+            has_function_privilege(current_user, 'flow.claim_account_sync_job(text,integer)', 'EXECUTE') AS can_claim_sync,
+            has_function_privilege(current_user, 'flow.claim_outgoing_transfer_for_custody(text,integer)', 'EXECUTE') AS can_claim_outgoing,
+            has_table_privilege(current_user, 'flow.outgoing_transfer_jobs', 'UPDATE') AS can_direct_update_outgoing,
+            has_table_privilege(current_user, 'flow.wallets', 'DELETE') AS can_delete_wallets
+        `);
+        roleChecks[label] = res.rows[0];
+      } finally {
+        await rc.end();
+      }
+    }
+
+    console.log(
+      JSON.stringify({
+        event: "staging_readiness_snapshot",
+        migrations: migrations[0],
+        counts: counts[0],
+        accounts,
+        users,
+        authUsers,
+        wallets,
+        provisioningJobs,
+        operators,
+        compatAuths,
+        roleChecks,
+      }),
+    );
+  } finally {
+    await admin.end();
+  }
+}
+
 function idle() {
   const stagingSafe =
     process.env.FLOW_ENV === "test" &&
@@ -1823,6 +1959,8 @@ else if (operation === "rehearse-production-migrations")
 else if (operation === "export-production-postgres-ca")
   await exportProductionPostgresCa();
 else if (operation === "migrate-staging") await migrateStaging();
+else if (operation === "inspect-staging-readiness")
+  await inspectStagingReadiness();
 else if (operation === "provision-auth-ticket-role")
   await provisionAuthTicketRole();
 else if (operation === "provision-indexer-heartbeat-role")

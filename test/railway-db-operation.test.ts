@@ -97,3 +97,24 @@ test("repeatable QA integration operation fails closed outside the isolated test
   assert.match(result.stderr, /isolated Railway QA environment/);
   assert.ok(!result.stderr.includes(sentinel));
 });
+
+test("staging readiness inspection fails closed outside designated staging environment", () => {
+  const sentinel = "staging-admin-secret-sentinel";
+  const result = spawnSync(process.execPath, [script.pathname], {
+    env: {
+      ...process.env,
+      FLOW_DB_OPERATION: "inspect-staging-readiness",
+      FLOW_ENV: "production",
+      RAILWAY_ENVIRONMENT_ID: "7b8f3541-d3c5-483c-831a-5c0fb335a288",
+      FLOW_DB_TARGET: "staging-only",
+      FLOW_EXECUTION: "disabled",
+      FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
+      FLOW_BOOTSTRAP_DATABASE_URL: `postgresql://postgres:${sentinel}@db.railway.internal:5432/railway`,
+    },
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 78);
+  assert.match(result.stderr, /isolated staging environment/);
+  assert.ok(!result.stderr.includes(sentinel));
+});
