@@ -191,19 +191,28 @@ export async function requestPaymentQuote(
     const display = formatAtomicToDisplay(amount, source.decimals);
     return reply(200, {
       ...quoteBase,
-      routeStatus: "NOT_YET_ENABLED_FOR_PAYMENT",
+      routeStatus: execDisabled
+        ? "NOT_YET_ENABLED_FOR_PAYMENT"
+        : "SUPPORTED_AND_QUOTABLE",
       sourceAtomicAmount: amount,
       sourceDisplayAmount: display,
       destinationAtomicAmount: amount,
       destinationDisplayAmount: display,
       estimatedDurationSeconds: null,
       exchangeRateDescription: "",
-      fees: { isEstimate: true, description: "Network fee unavailable." },
+      fees: {
+        isEstimate: true,
+        description: execDisabled
+          ? "Network fee unavailable."
+          : "Standard network fee applies on transfer.",
+      },
       quoteCreatedAt: new Date().toISOString(),
       localPreviewExpiresAt: new Date(Date.now() + 60_000).toISOString(),
       providerQuoteExpiresAt: null,
       correlationId: null,
-      statusMessage: "Direct transfer preview. Payment execution is disabled.",
+      statusMessage: execDisabled
+        ? "Direct transfer preview. Payment execution is disabled."
+        : "Direct transfer supported.",
     } satisfies IndicativeQuote);
   }
 

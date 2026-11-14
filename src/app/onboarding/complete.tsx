@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { FlowLogo } from "../../components/flow-logo.tsx";
 import { describe, Feedback, send } from "../controls.tsx";
@@ -21,49 +21,32 @@ type OnboardingAccount = {
   addresses?: { network: string; chainId: string; address: string }[];
 };
 
-const stepProgressPercent: Record<
-  "welcome" | "details" | "security" | "confirm" | "status" | "ready" | "dashboard",
-  number
-> = {
-  welcome: 14,
-  details: 28,
-  security: 42,
-  confirm: 58,
-  status: 72,
-  ready: 92,
-  dashboard: 100,
-};
-
 const statusCopy: Record<WalletStatus, { title: string; detail: string }> = {
-  active: { title: "Wallet verified", detail: "Your wallet is ready." },
+  active: { title: "Wallet ready", detail: "Opening your dashboard..." },
   setup_pending: {
-    title: "Setup is waiting to start",
-    detail:
-      "Your request is saved. We are getting your wallet setup started.",
+    title: "Setting up your wallet",
+    detail: "Preparing your account and multi-network addresses.",
   },
   provisioning: {
     title: "Setting up your wallet",
-    detail:
-      "We are creating and verifying your addresses across supported networks.",
+    detail: "Creating and verifying your addresses across supported networks.",
   },
   setup_failed: {
     title: "Wallet setup needs attention",
     detail:
-      "The existing setup did not complete. Your account and any existing wallet remain unchanged.",
+      "Your wallet setup did not finish automatically. Try again or contact support.",
   },
   frozen: {
-    title: "Wallet access is restricted",
+    title: "Account access is restricted",
     detail: "Contact FLOW support before taking further action.",
   },
   recovery_pending: {
-    title: "Wallet recovery is in progress",
-    detail:
-      "FLOW is checking the existing wallet. Do not start another wallet setup.",
+    title: "Account recovery in progress",
+    detail: "FLOW is checking your existing wallet recovery.",
   },
 };
 
 export function CompleteOnboarding({
-  initialStep,
   userEmail,
   userName,
   initialAccount,
@@ -77,28 +60,95 @@ export function CompleteOnboarding({
   const [account, setAccount] = useState<OnboardingAccount | null>(
     initialAccount ?? null,
   );
-  const [step, setStep] = useState<
-    | "welcome"
-    | "details"
-    | "security"
-    | "confirm"
-    | "status"
-    | "ready"
-    | "dashboard"
-  >(initialStep === "status" || initialAccount ? "status" : "welcome");
-  const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [progressPercent, setProgressPercent] = useState<number>(() => {
+    if (initialAccount?.provisioningComplete) return 100;
+    if (initialAccount?.walletStatus === "provisioning") return 72;
+    if (initialAccount?.walletStatus === "setup_pending") return 45;
+    return 18;
+  });
+  const autoStartedRef = useRef(false);
+  const redirectedRef = useRef(false);
 
+  const beginProvisioning = useCallback(async () => {
+    setBusy(true);
+    setMessage("");
+    setProgressPercent((prev) => Math.max(prev, 28));
+    try {
+      const response = await send<{ account: OnboardingAccount }>(
+        "/api/onboarding/complete",
+      );
+      setAccount(response.account);
+      setProgressPercent(
+        response.account.provisioningComplete
+          ? 100
+          : response.account.walletStatus === "provisioning"
+            ? 74
+            : 48,
+      );
+    } catch (error) {
+      setMessage(describe(error));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  // Automatically start/resume wallet creation without requiring manual clicks
+  useEffect(() => {
+    if (autoStartedRef.current) return;
+    if (!account || account.walletStatus === "setup_pending") {
+      autoStartedRef.current = true;
+      let active = true;
+      send<{ account: OnboardingAccount }>("/api/onboarding/complete")
+        .then((response) => {
+          if (!active) return;
+          setAccount(response.account);
+          setProgressPercent(
+            response.account.provisioningComplete
+              ? 100
+              : response.account.walletStatus === "provisioning"
+                ? 74
+                : 48,
+          );
+        })
+        .catch((error) => {
+          if (!active) return;
+          setMessage(describe(error));
+        });
+      return () => {
+        active = false;
+      };
+    }
+  }, [account]);
+
+  // Redirect directly to dashboard as soon as the wallet is active and verified
+  useEffect(() => {
+    if (!account?.id) return;
+    if (
+      account.walletStatus === "active" &&
+      account.provisioningComplete &&
+      !redirectedRef.current
+    ) {
+      redirectedRef.current = true;
+      const timer = window.setTimeout(() => {
+        router.replace(`/accounts/${account.id}`);
+      }, 250);
+      return () => window.clearTimeout(timer);
+    }
+  }, [account?.id, account?.provisioningComplete, account?.walletStatus, router]);
+
+  // Poll wallet readiness while setting up
   useEffect(() => {
     const accountId = account?.id;
     const walletStatus = account?.walletStatus;
     if (
-      step !== "status" ||
       !accountId ||
       (walletStatus !== "setup_pending" && walletStatus !== "provisioning")
-    )
+    ) {
       return;
+    }
+
     let active = true;
     const refresh = async () => {
       try {
@@ -107,70 +157,54 @@ export function CompleteOnboarding({
           walletReady: boolean;
           addresses: NonNullable<OnboardingAccount["addresses"]>;
         }>(`/api/accounts/${accountId}/wallet/provision`, {}, "GET");
-        if (active) {
-          setAccount((previous) =>
-            previous
-              ? {
-                  ...previous,
-                  walletStatus: response.walletStatus,
-                  provisioningComplete: response.walletReady,
-                  addresses: response.addresses,
-                }
-              : previous,
-          );
-          if (response.walletReady) setStep("ready");
-        }
+        if (!active) return;
+        setAccount((previous) =>
+          previous
+            ? {
+                ...previous,
+                walletStatus: response.walletStatus,
+                provisioningComplete: response.walletReady,
+                addresses: response.addresses,
+              }
+            : previous,
+        );
+        setProgressPercent((prev) => {
+          if (response.walletReady) return 100;
+          if (response.walletStatus === "provisioning") {
+            return Math.min(92, Math.max(prev + 4, 72));
+          }
+          return Math.min(68, Math.max(prev + 3, 45));
+        });
       } catch {
-        // A polling error is transient. The page keeps showing the last persisted status.
+        // Transient polling error; keep existing persisted state
       }
     };
-    const kickoff = window.setTimeout(refresh, 600);
-    const timer = window.setInterval(refresh, 2000);
+
+    const kickoff = window.setTimeout(refresh, 400);
+    const timer = window.setInterval(refresh, 1200);
     return () => {
       active = false;
       window.clearTimeout(kickoff);
       window.clearInterval(timer);
     };
-  }, [account?.id, account?.walletStatus, step]);
+  }, [account?.id, account?.walletStatus]);
 
-  async function beginProvisioning() {
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await send<{ account: OnboardingAccount }>(
-        "/api/onboarding/complete",
-      );
-      setAccount(response.account);
-      setStep("status");
-    } catch (error) {
-      setMessage(describe(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const status = account
-    ? account.walletStatus === "active" && !account.provisioningComplete
+  const resolvedStatus: WalletStatus = account?.walletStatus ?? "setup_pending";
+  const isBlockedState =
+    resolvedStatus === "setup_failed" ||
+    resolvedStatus === "frozen" ||
+    resolvedStatus === "recovery_pending";
+  const isSettingUp =
+    !isBlockedState &&
+    !(account?.walletStatus === "active" && account.provisioningComplete);
+  const status =
+    account?.walletStatus === "active" && !account.provisioningComplete
       ? {
-          title: "Wallet verification is incomplete",
-          detail:
-            "Your wallet is still finishing its security checks. Dashboard access will unlock as soon as verification completes.",
+          title: "Setting up your wallet",
+          detail: "Finalizing security verification.",
         }
-      : statusCopy[account.walletStatus]
-    : null;
-
-  const progressPercent =
-    step === "status"
-      ? account?.walletStatus === "provisioning"
-        ? 82
-        : account?.walletStatus === "active" && account.provisioningComplete
-          ? 92
-          : 72
-      : stepProgressPercent[step];
-  const isActivelyCreating =
-    step === "status" &&
-    (account?.walletStatus === "setup_pending" ||
-      account?.walletStatus === "provisioning");
+      : statusCopy[resolvedStatus];
+  const displayUserName = userName.trim() || userEmail;
 
   async function leaveToSignIn(mode: "signed-out" | "switch-account") {
     setBusy(true);
@@ -213,325 +247,60 @@ export function CompleteOnboarding({
         </div>
       </header>
 
-      <main className="mx-auto mt-10 grid max-w-6xl gap-8 lg:mt-16 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-        <section className="max-w-xl">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E92935]">
-            FLOW WALLET SETUP
-          </p>
-          <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl dark:text-white">
-            {step === "status"
-              ? status?.title
-              : step === "welcome"
-                ? "Welcome to FLOW"
-                : step === "details"
-                  ? "Your Personal account"
-                  : step === "security"
-                    ? "Your wallet, carefully set up"
-                    : step === "confirm"
-                      ? "Confirm wallet setup"
-                      : step === "ready"
-                        ? "Your FLOW wallet is ready"
-                        : step === "dashboard"
-                          ? "Enter your FLOW dashboard"
-                          : "Wallet setup status"}
-          </h1>
-          <p className="mt-4 text-base leading-7 text-[#5A5A5A] dark:text-neutral-400">
-            {step === "status"
-              ? status?.detail
-              : step === "details"
-                ? "These details come from your authenticated identity and will be used for your Personal FLOW account."
-                : "Set up your Personal FLOW account and verify its wallet before entering the dashboard."}
-          </p>
-          <div
-            role="progressbar"
-            aria-label="Wallet onboarding progress"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progressPercent}
-            className="mt-8 h-2.5 w-full overflow-hidden rounded-full bg-[#ECE7DF] dark:bg-white/[0.08]"
-          >
-            <div
-              className={`h-full rounded-full bg-gradient-to-r from-[#FF1A1A] via-[#FF4D4D] to-[#FF1A1A] transition-all duration-700 ease-out ${
-                isActivelyCreating ? "animate-pulse" : ""
-              }`}
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-        </section>
-
-        <section className="rounded-[28px] border border-[#E8E4DC] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-[0_12px_36px_rgba(20,15,10,0.05)] sm:p-10">
-          <div className="flex items-start justify-between gap-4 border-b border-[#F0EDE6] dark:border-white/[0.08] pb-6">
-            <div>
-              <p className="text-sm font-semibold dark:text-white">
-                {userName.trim() || userEmail}
-              </p>
-              <p className="mt-1 text-sm text-[#777] dark:text-neutral-400">
+      <main className="mx-auto mt-14 max-w-xl">
+        <section className="rounded-[28px] border border-[#E8E4DC] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-7 shadow-[0_12px_36px_rgba(20,15,10,0.05)] sm:p-10">
+          <div className="border-b border-[#F0EDE6] dark:border-white/[0.08] pb-5">
+            <p className="text-base font-semibold text-neutral-950 dark:text-white">
+              {displayUserName}
+            </p>
+            {userEmail && displayUserName !== userEmail && (
+              <p className="mt-0.5 text-sm text-[#777] dark:text-neutral-400">
                 {userEmail}
               </p>
-            </div>
+            )}
           </div>
 
-          {step === "welcome" && (
-            <div className="pt-6">
-              <h2 className="font-serif text-2xl dark:text-white">
-                One account for your FLOW wallet
-              </h2>
-              <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                FLOW will create or resume one Personal account for this
-                signed-in identity. You can return here later without creating
-                another wallet.
+          <div className="pt-6">
+            <h1 className="font-serif text-3xl leading-tight dark:text-white">
+              {status.title}
+            </h1>
+            {isBlockedState ? (
+              <p className="mt-3 text-sm leading-6 text-[#5A5A5A] dark:text-neutral-400">
+                {status.detail}
               </p>
-              <button
-                type="button"
-                onClick={() => setStep("details")}
-                className="flow-liquid-btn-primary mt-8 h-12 w-full rounded-full font-semibold cursor-pointer"
-              >
-                Continue
-              </button>
-            </div>
-          )}
+            ) : null}
 
-          {step === "details" && (
-            <div className="pt-6">
-              <h2 className="font-serif text-2xl dark:text-white">
-                Signed-in identity
-              </h2>
-              <dl className="mt-5 space-y-3 rounded-2xl bg-[#F7F5F1] dark:bg-[#1A1A1A] p-5 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[#777] dark:text-neutral-400">Name</dt>
-                  <dd className="font-medium dark:text-white">
-                    {userName.trim() || userEmail}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[#777] dark:text-neutral-400">Email</dt>
-                  <dd className="break-all text-right font-medium dark:text-white">
-                    {userEmail}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[#777] dark:text-neutral-400">
-                    Account type
-                  </dt>
-                  <dd className="font-medium dark:text-white">Personal</dd>
-                </div>
-              </dl>
-              <p className="mt-4 text-sm leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                FLOW keeps this account connected to the identity you used to
-                sign in. Returning to FLOW restores the same account.
-              </p>
-              <button
-                type="button"
-                onClick={() => setStep("security")}
-                className="flow-liquid-btn-primary mt-8 h-12 w-full rounded-full font-semibold cursor-pointer"
+            {!isBlockedState && (
+              <div
+                role="progressbar"
+                aria-label="Wallet setup progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progressPercent}
+                className="mt-7 h-2.5 w-full overflow-hidden rounded-full bg-[#ECE7DF] dark:bg-white/[0.08]"
               >
-                Continue
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep("welcome")}
-                className="mt-3 w-full py-2 text-sm text-[#666] dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
-              >
-                Back
-              </button>
-            </div>
-          )}
-
-          {step === "security" && (
-            <div className="pt-6">
-              <h2 className="font-serif text-2xl dark:text-white">
-                Automatic wallet setup
-              </h2>
-              <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                FLOW sets up your multi-network wallet automatically and displays
-                your deposit addresses once verification finishes.
-              </p>
-              <p className="mt-4 rounded-2xl bg-[#FFF8E8] dark:bg-amber-950/30 p-4 text-sm leading-6 text-[#76521A] dark:text-amber-200 border border-transparent dark:border-amber-800/40">
-                Your account recovery options will appear in Settings once your
-                wallet setup is complete.
-              </p>
-              <button
-                type="button"
-                onClick={() => setStep("confirm")}
-                className="flow-liquid-btn-primary mt-8 h-12 w-full rounded-full font-semibold cursor-pointer"
-              >
-                Continue
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep("welcome")}
-                className="mt-3 w-full py-2 text-sm text-[#666] dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
-              >
-                Back
-              </button>
-            </div>
-          )}
-
-          {step === "confirm" && (
-            <div className="pt-6">
-              <h2 className="font-serif text-2xl dark:text-white">
-                Start wallet setup?
-              </h2>
-              <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                This creates your Personal account and starts setting up your
-                wallet. Your dashboard unlocks automatically as soon as your
-                addresses are ready.
-              </p>
-              <label className="mt-6 flex items-start gap-3 rounded-2xl border border-[#E8E4DC] dark:border-white/[0.1] bg-transparent dark:bg-[#1A1A1A] p-4 text-sm leading-6 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={confirmed}
-                  onChange={(event) => setConfirmed(event.target.checked)}
-                  className="mt-1 accent-[#E92935]"
+                <div
+                  className={`h-full rounded-full bg-gradient-to-r from-[#FF1A1A] via-[#FF4D4D] to-[#FF1A1A] transition-all duration-700 ease-out ${
+                    isSettingUp ? "animate-pulse" : ""
+                  }`}
+                  style={{ width: `${progressPercent}%` }}
                 />
-                <span>
-                  I want FLOW to create or resume one wallet setup for this
-                  Personal account.
-                </span>
-              </label>
-              <button
-                type="button"
-                disabled={!confirmed || busy}
-                onClick={beginProvisioning}
-                className="flow-liquid-btn-primary mt-6 h-12 w-full rounded-full font-semibold disabled:cursor-not-allowed disabled:opacity-45 cursor-pointer"
-              >
-                {busy ? "Saving request…" : "Confirm and continue"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep("security")}
-                className="mt-3 w-full py-2 text-sm text-[#666] dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
-              >
-                Back
-              </button>
-            </div>
-          )}
+              </div>
+            )}
 
-          {step === "status" && (
-            <div className="pt-6">
-              {status ? (
-                <>
-                  <h2 className="font-serif text-2xl dark:text-white">
-                    {status.title}
-                  </h2>
-                  <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                    {status.detail}
-                  </p>
-                  {account?.walletStatus === "setup_failed" && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setMessage(
-                          "Your wallet setup is paused and needs attention. Please try again shortly or contact support.",
-                        )
-                      }
-                      className="flow-liquid-btn mt-5 h-12 w-full rounded-full font-semibold cursor-pointer"
-                    >
-                      Review recovery options
-                    </button>
-                  )}
-                  {(account?.walletStatus === "setup_pending" ||
-                    account?.walletStatus === "provisioning") && (
-                    <>
-                      <div
-                        aria-hidden="true"
-                        className="mt-6 h-2 w-full overflow-hidden rounded-full bg-[#ECE7DF] dark:bg-white/[0.08]"
-                      >
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-[#FF1A1A] via-[#FF4D4D] to-[#FF1A1A] animate-pulse transition-all duration-700 ease-out"
-                          style={{ width: `${progressPercent}%` }}
-                        />
-                      </div>
-                      {account.walletStatus === "setup_pending" && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={beginProvisioning}
-                          className="flow-liquid-btn-primary mt-6 h-12 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
-                        >
-                          {busy ? "Resuming…" : "Resume wallet setup"}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </>
-              ) : (
-                <>
-                  <h2 className="font-serif text-2xl dark:text-white">
-                    Continue your wallet setup
-                  </h2>
-                  <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                    Your Personal account is ready. Review the next steps, then
-                    confirm to start or resume your wallet setup.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setStep("security")}
-                    className="flow-liquid-btn-primary mt-6 h-12 w-full rounded-full font-semibold cursor-pointer"
-                  >
-                    Review setup
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {step === "ready" &&
-            account?.provisioningComplete &&
-            account.addresses && (
-              <div className="pt-6">
-                <h2 className="font-serif text-2xl dark:text-white">
-                  Four verified networks
-                </h2>
-                <p className="mt-3 text-sm leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                  These verified deposit addresses are ready for your account.
-                </p>
-                <ul className="mt-5 space-y-3">
-                  {account.addresses.map((address) => (
-                    <li
-                      key={address.network}
-                      className="rounded-2xl border border-[#E8E4DC] dark:border-white/[0.08] bg-transparent dark:bg-[#1A1A1A] p-4"
-                    >
-                      <div className="text-sm font-semibold capitalize dark:text-white">
-                        {address.network}{" "}
-                        <span className="font-normal text-[#777] dark:text-neutral-400">
-                          · {address.chainId}
-                        </span>
-                      </div>
-                      <code className="mt-2 block break-all text-xs text-[#444] dark:text-neutral-300">
-                        {address.address}
-                      </code>
-                    </li>
-                  ))}
-                </ul>
+            {(message || resolvedStatus === "setup_failed") && (
+              <div className="mt-6 space-y-3">
+                <Feedback text={message} />
                 <button
                   type="button"
-                  onClick={() => setStep("dashboard")}
-                  className="flow-liquid-btn-primary mt-6 h-12 w-full rounded-full font-semibold cursor-pointer"
+                  disabled={busy}
+                  onClick={() => void beginProvisioning()}
+                  className="flow-liquid-btn-primary h-11 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
                 >
-                  Continue
+                  {busy ? "Retrying…" : "Try again"}
                 </button>
               </div>
             )}
-          {step === "dashboard" && account?.provisioningComplete && (
-            <div className="pt-6">
-              <h2 className="font-serif text-2xl dark:text-white">
-                Wallet verified and ready
-              </h2>
-              <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                Your account and network addresses are verified and ready to
-                use.
-              </p>
-              <button
-                type="button"
-                onClick={() => router.replace(`/accounts/${account.id}`)}
-                className="flow-liquid-btn-primary mt-8 h-12 w-full rounded-full font-semibold cursor-pointer"
-              >
-                Enter dashboard
-              </button>
-            </div>
-          )}
-          <div className="mt-5">
-            <Feedback text={message} />
           </div>
         </section>
       </main>

@@ -5,6 +5,7 @@ import {
   accountId,
 } from "../../../../server/accounts.ts";
 import { getAccountBalances } from "../../../../server/assets/asset-service.ts";
+import { requestAccountSync } from "../../../../server/account-sync.ts";
 import { pageData, pagePrincipal } from "../../../../server/pages.ts";
 import { serializePortfolio } from "../../../../server/portfolio.ts";
 import { getUserProfilePreference } from "../../../../server/preferences-service.ts";
@@ -62,6 +63,19 @@ export default async function AccountPage({
     return serializePortfolio(projection);
   });
 
+  if (
+    actor.session.token &&
+    initialPortfolio.wallet?.status === "ACTIVE" &&
+    initialPortfolio.wallet.environment === "mainnet" &&
+    initialPortfolio.balances.length === 0
+  ) {
+    void requestAccountSync(
+      account.id,
+      actor.session.token,
+      "BALANCE_REFRESH",
+    ).catch(() => {});
+  }
+
   const initialView: WorkspaceTab =
     query.view && VALID_VIEWS.has(query.view as WorkspaceTab)
       ? (query.view as WorkspaceTab)
@@ -76,7 +90,10 @@ export default async function AccountPage({
         allAccounts={allAccounts}
         initialView={initialView}
         userEmail={actor.email}
-        initialDisplayName={initialProfilePreference.displayName}
+        userAvatarUrl={actor.image}
+        initialDisplayName={
+          initialProfilePreference.displayName || actor.name || null
+        }
         profileId={actor.userId}
         executionDisabled={isFinancialExecutionDisabled()}
       />

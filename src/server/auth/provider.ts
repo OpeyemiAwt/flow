@@ -378,6 +378,14 @@ export function provider(
             typeof claims.name === "string"
               ? claims.name.trim().slice(0, 80)
               : "Personal";
+          const picture =
+            typeof claims.picture === "string" &&
+            claims.picture.length <= 512 &&
+            /^https:\/\/([a-z0-9-]+\.)?(googleusercontent\.com|ggpht\.com)\//i.test(
+              claims.picture,
+            )
+              ? claims.picture
+              : "";
           const data = {
             sub: subject,
             iss: claims.iss ?? "",
@@ -390,7 +398,7 @@ export function provider(
             name,
             given_name: "",
             family_name: "",
-            picture: "",
+            picture,
           };
           const identity = await db.authIdentity.findUnique({
             where: {
@@ -433,11 +441,33 @@ export function provider(
           }
           if (!authoritative || !email.success)
             return rejectGoogleIdentity("email_not_authoritative");
+          if (identity && !linkUserId) {
+            const updates: { image?: string; name?: string } = {};
+            if (picture && identity.user.image !== picture) {
+              updates.image = picture;
+            }
+            if (
+              name &&
+              name !== "Personal" &&
+              (!identity.user.name?.trim() ||
+                identity.user.name === "Personal" ||
+                identity.user.name === identity.user.email)
+            ) {
+              updates.name = name;
+            }
+            if (Object.keys(updates).length > 0) {
+              await db.authUser.update({
+                where: { id: identity.userId },
+                data: updates,
+              });
+            }
+          }
           return {
             user: {
               email: email.data,
               emailVerified: true,
               name,
+              ...(picture ? { image: picture } : {}),
             },
             data,
           };

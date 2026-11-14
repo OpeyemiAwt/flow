@@ -23,6 +23,7 @@ export interface DiscoveredToken {
   readonly ecosystem: "evm" | "solana" | "near" | "other";
   readonly standard: "NATIVE" | "ERC20" | "SPL" | "NEP141" | "OTHER";
   readonly contractAddress: string | null;
+  readonly coingeckoId?: string | null;
   readonly priceUsd: number | null;
   readonly priceUpdatedAt: string | null;
   readonly isNative: boolean;
@@ -134,6 +135,101 @@ const CHAIN_MAPPING: Record<
     networkName: "X Layer",
     ecosystem: "evm",
   },
+  abs: {
+    networkKey: "abstract-mainnet",
+    networkName: "Abstract",
+    ecosystem: "evm",
+  },
+  aleo: {
+    networkKey: "aleo-mainnet",
+    networkName: "Aleo",
+    ecosystem: "other",
+  },
+  bch: {
+    networkKey: "bitcoin-cash-mainnet",
+    networkName: "Bitcoin Cash",
+    ecosystem: "other",
+  },
+  cardano: {
+    networkKey: "cardano-mainnet",
+    networkName: "Cardano",
+    ecosystem: "other",
+  },
+  dash: {
+    networkKey: "dash-mainnet",
+    networkName: "Dash",
+    ecosystem: "other",
+  },
+  doge: {
+    networkKey: "dogecoin-mainnet",
+    networkName: "Dogecoin",
+    ecosystem: "other",
+  },
+  fogo: {
+    networkKey: "fogo-mainnet",
+    networkName: "Fogo",
+    ecosystem: "other",
+  },
+  hood: {
+    networkKey: "hoodi-mainnet",
+    networkName: "Robinhood Chain",
+    ecosystem: "evm",
+  },
+  hypercore: {
+    networkKey: "hypercore-mainnet",
+    networkName: "Hyperliquid",
+    ecosystem: "other",
+  },
+  ltc: {
+    networkKey: "litecoin-mainnet",
+    networkName: "Litecoin",
+    ecosystem: "other",
+  },
+  miden: {
+    networkKey: "miden-mainnet",
+    networkName: "Miden",
+    ecosystem: "other",
+  },
+  movement: {
+    networkKey: "movement-mainnet",
+    networkName: "Movement",
+    ecosystem: "other",
+  },
+  prl: {
+    networkKey: "prl-mainnet",
+    networkName: "Pearl",
+    ecosystem: "other",
+  },
+  qtc: {
+    networkKey: "qtc-mainnet",
+    networkName: "Quantus",
+    ecosystem: "other",
+  },
+  starknet: {
+    networkKey: "starknet-mainnet",
+    networkName: "Starknet",
+    ecosystem: "other",
+  },
+  stellar: {
+    networkKey: "stellar-mainnet",
+    networkName: "Stellar",
+    ecosystem: "other",
+  },
+  ton: {
+    networkKey: "ton-mainnet",
+    networkName: "TON",
+    ecosystem: "other",
+  },
+  xrp: {
+    networkKey: "xrp-mainnet",
+    networkName: "XRP Ledger",
+    ecosystem: "other",
+  },
+  zec: {
+    networkKey: "zcash-mainnet",
+    networkName: "Zcash",
+    ecosystem: "other",
+  },
 };
 
 /**
@@ -225,6 +321,7 @@ export function normalizeDiscoveredToken(raw: Raw1ClickToken): DiscoveredToken {
     const curated = curatedToken(custodyMatch);
     return {
       ...curated,
+      coingeckoId: raw.coingeckoId ?? null,
       capabilities: [...curated.capabilities, "DISCOVERABLE_BY_PROVIDER"],
       priceUsd:
         typeof raw.price === "number" &&
@@ -246,6 +343,7 @@ export function normalizeDiscoveredToken(raw: Raw1ClickToken): DiscoveredToken {
     ...chainInfo,
     standard,
     contractAddress: isNative ? null : (raw.contractAddress ?? null),
+    coingeckoId: raw.coingeckoId ?? null,
     priceUsd:
       typeof raw.price === "number" &&
       Number.isFinite(raw.price) &&

@@ -69,6 +69,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  const rawPollMs = Number(process.env.FLOW_INDEXER_POLL_INTERVAL_MS ?? "400");
+  const pollIntervalMs = Number.isFinite(rawPollMs)
+    ? Math.max(250, Math.min(5_000, Math.trunc(rawPollMs)))
+    : 400;
+
   while (!controller.signal.aborted) {
     try {
       const jobs = await db.$queryRaw<
@@ -85,7 +90,7 @@ async function main(): Promise<void> {
       `;
       const job = jobs[0];
       if (!job) {
-        await sleep(1_500, controller.signal);
+        await sleep(pollIntervalMs, controller.signal);
         continue;
       }
       try {

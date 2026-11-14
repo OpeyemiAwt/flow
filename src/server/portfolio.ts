@@ -3,6 +3,7 @@ import {
   REFRESH_COOLDOWN_MS,
   serializePortfolio,
 } from "../domain/portfolio.ts";
+import { isFinancialExecutionDisabled } from "../domain/custody.ts";
 import { runtime } from "../foundation/prisma.ts";
 import { access, principal } from "./accounts.ts";
 import { getAccountBalances } from "./assets/asset-service.ts";
@@ -135,7 +136,7 @@ export async function provisionAccountWallet(
       ? walletProjection.status.toLowerCase()
       : "setup_pending",
     stage: job.status.toLowerCase(),
-    executionEnabled: false,
+    executionEnabled: !isFinancialExecutionDisabled(),
   });
 }
 
@@ -227,6 +228,6 @@ export async function readWalletProvisioningStatus(
         )
       : [],
     walletReady,
-    executionEnabled: false,
+    executionEnabled: !isFinancialExecutionDisabled(),
   });
 }

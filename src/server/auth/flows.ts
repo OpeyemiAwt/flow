@@ -895,6 +895,8 @@ export async function securitySnapshot(headers: Headers) {
       where: { id: session.userId },
       select: {
         email: true,
+        name: true,
+        image: true,
         emailEnrolled: true,
         mailboxPaused: true,
         identities: { select: { providerId: true } },
@@ -913,6 +915,8 @@ export async function securitySnapshot(headers: Headers) {
     });
     return {
       email: user.email,
+      name: user.name,
+      image: user.image,
       emailEnrolled: user.emailEnrolled,
       mailboxPaused: user.mailboxPaused,
       googleLinked: user.identities.some(

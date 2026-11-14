@@ -9,6 +9,10 @@ import {
   serializePortfolio,
   REFRESH_COOLDOWN_MS,
 } from "../src/domain/portfolio.ts";
+import {
+  COINGECKO_ASSET_IMAGES,
+  COINGECKO_CHAIN_IMAGES,
+} from "../src/components/asset-image-registry.ts";
 
 test("portfolio: serializePortfolio derives exact decimals and strings for BigInt values", () => {
   const dummyBalance: WalletBalanceRecord = {
@@ -187,4 +191,42 @@ test("portfolio: stale-while-revalidate detection and cooldown definition", () =
   const serialized = serializePortfolio(staleProjection);
   assert.equal(serialized.isStale, true);
   assert.equal(serialized.lastSyncedAt, oldDate.toISOString());
+});
+
+test("portfolio: serializePortfolio enables mainnet transfer eligibility when FLOW_EXECUTION=enabled", () => {
+  const prev = process.env.FLOW_EXECUTION;
+  process.env.FLOW_EXECUTION = "enabled";
+  try {
+    const serialized = serializePortfolio({
+      accountId: "acc-live",
+      wallet: {
+        id: "wal-live",
+        environment: "mainnet",
+        isTestnet: false,
+        status: "ACTIVE",
+        policyState: "stored",
+        eligibleForDeposits: true,
+        depositWarning: null,
+        addresses: [],
+      },
+      balances: [],
+      lastSyncedAt: null,
+      isStale: false,
+    });
+    assert.ok(serialized.wallet);
+    assert.equal(serialized.wallet.executionDisabled, false);
+    assert.equal(serialized.wallet.transferEligible, true);
+  } finally {
+    if (prev === undefined) delete process.env.FLOW_EXECUTION;
+    else process.env.FLOW_EXECUTION = prev;
+  }
+});
+
+test("asset registry maps curated and multi-chain 1Click assets and chains", () => {
+  for (const sym of ["USDC", "USDT", "ETH", "SOL", "NEAR", "ABG", "GNEAR", "ITLX", "CNEAR"]) {
+    assert.ok(COINGECKO_ASSET_IMAGES[sym]?.src, `Missing asset image for ${sym}`);
+  }
+  for (const chain of ["ethereum", "base", "solana", "near", "arbitrum", "optimism", "polygon", "avalanche", "bnb", "sui", "bitcoin", "miden", "monad", "hood", "xlayer"]) {
+    assert.ok(COINGECKO_CHAIN_IMAGES[chain]?.src, `Missing chain image for ${chain}`);
+  }
 });

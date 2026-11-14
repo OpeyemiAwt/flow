@@ -183,3 +183,17 @@ test("payment-requests: computeEligibleSourceRoutes partitions direct vs 1Click 
   assert.equal(cross.isOperationalNow, false);
   assert.ok(cross.availabilityNotice.includes("FLOW_EXECUTION is disabled"));
 });
+
+test("payment-requests: computeEligibleSourceRoutes marks routes operational when FLOW_EXECUTION=enabled", () => {
+  const prev = process.env.FLOW_EXECUTION;
+  process.env.FLOW_EXECUTION = "enabled";
+  try {
+    const routes = computeEligibleSourceRoutes("base-mainnet", "base-mainnet:USDC");
+    const direct = routes.find((r) => r.id === "base-mainnet:USDC");
+    assert.ok(direct);
+    assert.equal(direct.isOperationalNow, true);
+  } finally {
+    if (prev === undefined) delete process.env.FLOW_EXECUTION;
+    else process.env.FLOW_EXECUTION = prev;
+  }
+});

@@ -36,6 +36,7 @@ export interface FloatingNavProps {
   onOpenAssistant?: () => void;
   userEmail?: string;
   userName?: string;
+  userAvatarUrl?: string | null;
   profileId?: string;
 }
 
@@ -152,6 +153,7 @@ export function FloatingNav({
   onOpenAssistant,
   userEmail = "user@flow.xyz",
   userName,
+  userAvatarUrl,
   profileId,
 }: FloatingNavProps) {
   const effectiveUserName = userName || userEmail;
@@ -378,6 +380,9 @@ export function FloatingNav({
             >
               <UserAvatar
                 profileId={profileId}
+                fallbackImage={userAvatarUrl}
+                email={userEmail}
+                name={currentUserName}
                 alt={currentUserName}
                 size={32}
               />

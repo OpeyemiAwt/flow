@@ -28,6 +28,8 @@ export interface SessionRecord {
 export interface SecurityPanelProps {
   readonly profileId: string;
   readonly email: string;
+  readonly name?: string | null;
+  readonly image?: string | null;
   readonly emailEnrolled: boolean;
   readonly mailboxPaused: boolean;
   readonly googleLinked: boolean;
@@ -94,6 +96,8 @@ async function compressAvatarDataUrl(file: File): Promise<string> {
 export function SecurityPanel({
   profileId,
   email,
+  name,
+  image,
   emailEnrolled,
   mailboxPaused,
   googleLinked,
@@ -138,7 +142,7 @@ export function SecurityPanel({
     }
   })();
   const initialResolvedName =
-    initialProfilePreference?.displayName?.trim() || email;
+    initialProfilePreference?.displayName?.trim() || name?.trim() || email;
   const [displayName, setDisplayName] = useState(initialResolvedName);
   const [savedDisplayName, setSavedDisplayName] = useState(initialResolvedName);
   const [editingDisplayName, setEditingDisplayName] = useState(false);
@@ -157,7 +161,8 @@ export function SecurityPanel({
 
   const backHref = primaryAccount ? `/accounts/${primaryAccount.id}` : "/";
 
-  const defaultName = initialProfilePreference?.displayName?.trim() || email;
+  const defaultName =
+    initialProfilePreference?.displayName?.trim() || name?.trim() || email;
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       if (initialProfilePreference) {
@@ -348,6 +353,7 @@ export function SecurityPanel({
         }}
         userEmail={email}
         userName={savedDisplayName || email}
+        userAvatarUrl={image}
         profileId={profileId}
       />
 
@@ -1024,8 +1030,12 @@ export function SecurityPanel({
                   <div className="flex items-center gap-4">
                     <UserAvatar
                       profileId={profileId}
+                      fallbackImage={image}
+                      email={email}
+                      name={savedDisplayName || name}
+                      alt={savedDisplayName || email}
                       size={64}
-                      className="rounded-full border-2 border-white dark:border-neutral-700 shadow-sm"
+                      className="rounded-full border-2 border-white dark:border-neutral-700 shadow-sm object-cover"
                     />
                     <div>
                       <p className="font-display font-bold text-sm text-neutral-950 dark:text-white">

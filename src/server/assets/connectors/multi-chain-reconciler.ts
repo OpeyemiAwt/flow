@@ -167,6 +167,12 @@ export async function reconcileWalletBalances(
     }
   > = [];
 
+  const tasks: Array<{
+    addr: (typeof addresses)[number];
+    asset: (typeof networkAssets)[number];
+    fetchObs: () => Promise<BalanceObservation>;
+  }> = [];
+
   for (const addr of addresses) {
     // Find matching assets for this network and chain
     const matchingAssets = networkAssets.filter(
@@ -174,36 +180,38 @@ export async function reconcileWalletBalances(
     );
 
     for (const asset of matchingAssets) {
-      let obs: BalanceObservation;
-
       if (asset.network === "ethereum") {
         const ethRpc =
           rpc.ethereum?.primary ?? "https://ethereum-rpc.publicnode.com";
         const fallback = rpc.ethereum?.fallback ?? "https://cloudflare-eth.com";
 
         if (asset.tokenStandard === "NATIVE") {
-          obs = await fetchBaseNativeBalance(
-            ethRpc,
-            addr.address,
-            asset.chainId,
-            {
-              networkAssetId: asset.id,
-              fallbackEndpoint: fallback,
-            },
-          );
+          tasks.push({
+            addr,
+            asset,
+            fetchObs: () =>
+              fetchBaseNativeBalance(ethRpc, addr.address, asset.chainId, {
+                networkAssetId: asset.id,
+                fallbackEndpoint: fallback,
+              }),
+          });
         } else if (asset.contractAddress) {
-          obs = await fetchBaseTokenBalance(
-            ethRpc,
-            addr.address,
-            asset.contractAddress,
-            asset.chainId,
-            {
-              networkAssetId: asset.id,
-              fallbackEndpoint: fallback,
-            },
-          );
-        } else {
-          continue;
+          const contractAddress = asset.contractAddress;
+          tasks.push({
+            addr,
+            asset,
+            fetchObs: () =>
+              fetchBaseTokenBalance(
+                ethRpc,
+                addr.address,
+                contractAddress,
+                asset.chainId,
+                {
+                  networkAssetId: asset.id,
+                  fallbackEndpoint: fallback,
+                },
+              ),
+          });
         }
       } else if (asset.network === "near") {
         const nearRpc = rpc.near?.primary ?? "https://rpc.testnet.near.org";
@@ -211,51 +219,64 @@ export async function reconcileWalletBalances(
         const net = asset.chainId as "near-mainnet" | "near-testnet";
 
         if (asset.tokenStandard === "NATIVE") {
-          obs = await fetchNearNativeBalance(nearRpc, addr.address, net, {
-            networkAssetId: asset.id,
-            fallbackEndpoint: fallback,
+          tasks.push({
+            addr,
+            asset,
+            fetchObs: () =>
+              fetchNearNativeBalance(nearRpc, addr.address, net, {
+                networkAssetId: asset.id,
+                fallbackEndpoint: fallback,
+              }),
           });
         } else if (asset.contractAddress) {
-          obs = await fetchNearTokenBalance(
-            nearRpc,
-            addr.address,
-            asset.contractAddress,
-            net,
-            {
-              networkAssetId: asset.id,
-              fallbackEndpoint: fallback,
-            },
-          );
-        } else {
-          continue;
+          const contractAddress = asset.contractAddress;
+          tasks.push({
+            addr,
+            asset,
+            fetchObs: () =>
+              fetchNearTokenBalance(
+                nearRpc,
+                addr.address,
+                contractAddress,
+                net,
+                {
+                  networkAssetId: asset.id,
+                  fallbackEndpoint: fallback,
+                },
+              ),
+          });
         }
       } else if (asset.network === "base") {
         const baseRpc = rpc.base?.primary ?? "https://sepolia.base.org";
         const fallback = rpc.base?.fallback;
 
         if (asset.tokenStandard === "NATIVE") {
-          obs = await fetchBaseNativeBalance(
-            baseRpc,
-            addr.address,
-            asset.chainId,
-            {
-              networkAssetId: asset.id,
-              fallbackEndpoint: fallback,
-            },
-          );
+          tasks.push({
+            addr,
+            asset,
+            fetchObs: () =>
+              fetchBaseNativeBalance(baseRpc, addr.address, asset.chainId, {
+                networkAssetId: asset.id,
+                fallbackEndpoint: fallback,
+              }),
+          });
         } else if (asset.contractAddress) {
-          obs = await fetchBaseTokenBalance(
-            baseRpc,
-            addr.address,
-            asset.contractAddress,
-            asset.chainId,
-            {
-              networkAssetId: asset.id,
-              fallbackEndpoint: fallback,
-            },
-          );
-        } else {
-          continue;
+          const contractAddress = asset.contractAddress;
+          tasks.push({
+            addr,
+            asset,
+            fetchObs: () =>
+              fetchBaseTokenBalance(
+                baseRpc,
+                addr.address,
+                contractAddress,
+                asset.chainId,
+                {
+                  networkAssetId: asset.id,
+                  fallbackEndpoint: fallback,
+                },
+              ),
+          });
         }
       } else if (asset.network === "solana") {
         const solanaRpc =
@@ -264,50 +285,66 @@ export async function reconcileWalletBalances(
         const net = asset.chainId as "solana-mainnet" | "solana-devnet";
 
         if (asset.tokenStandard === "NATIVE") {
-          obs = await fetchSolanaNativeBalance(solanaRpc, addr.address, net, {
-            networkAssetId: asset.id,
-            fallbackEndpoint: fallback,
+          tasks.push({
+            addr,
+            asset,
+            fetchObs: () =>
+              fetchSolanaNativeBalance(solanaRpc, addr.address, net, {
+                networkAssetId: asset.id,
+                fallbackEndpoint: fallback,
+              }),
           });
         } else if (asset.contractAddress) {
-          obs = await fetchSolanaTokenBalance(
-            solanaRpc,
-            addr.address,
-            asset.contractAddress,
-            net,
-            {
-              networkAssetId: asset.id,
-              fallbackEndpoint: fallback,
-            },
-          );
-        } else {
-          continue;
+          const contractAddress = asset.contractAddress;
+          tasks.push({
+            addr,
+            asset,
+            fetchObs: () =>
+              fetchSolanaTokenBalance(
+                solanaRpc,
+                addr.address,
+                contractAddress,
+                net,
+                {
+                  networkAssetId: asset.id,
+                  fallbackEndpoint: fallback,
+                },
+              ),
+          });
         }
-      } else {
-        continue;
       }
-
-      // Persist observation into flow.wallet_balances
-      await upsertWalletBalance(db, {
-        walletId,
-        networkAssetId: obs.networkAssetId,
-        tokenAccountAddress: obs.tokenAccountAddress,
-        atomicBalance: obs.atomicBalance,
-        blockHeight: obs.blockHeight,
-        blockTimestamp: obs.blockTimestamp,
-        finality: obs.finality,
-        syncStatus: obs.syncStatus,
-        lastError: obs.lastError,
-      });
-
-      results.push({
-        ...obs,
-        symbol: asset.symbol,
-        network: asset.network,
-        chainId: asset.chainId,
-        address: addr.address,
-        contractAddress: asset.contractAddress,
-      });
     }
+  }
+
+  const fetched = await Promise.all(
+    tasks.map(async (task) => ({
+      task,
+      obs: await task.fetchObs(),
+    })),
+  );
+
+  for (const { task, obs } of fetched) {
+    // Persist observation into flow.wallet_balances
+    await upsertWalletBalance(db, {
+      walletId,
+      networkAssetId: obs.networkAssetId,
+      tokenAccountAddress: obs.tokenAccountAddress,
+      atomicBalance: obs.atomicBalance,
+      blockHeight: obs.blockHeight,
+      blockTimestamp: obs.blockTimestamp,
+      finality: obs.finality,
+      syncStatus: obs.syncStatus,
+      lastError: obs.lastError,
+    });
+
+    results.push({
+      ...obs,
+      symbol: task.asset.symbol,
+      network: task.asset.network,
+      chainId: task.asset.chainId,
+      address: task.addr.address,
+      contractAddress: task.asset.contractAddress,
+    });
   }
 
   return {

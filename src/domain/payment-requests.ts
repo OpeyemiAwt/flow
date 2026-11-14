@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { formatAtomicToDisplay } from "./atomic-amounts.ts";
+import { isFinancialExecutionDisabled } from "./custody.ts";
 import type { PaymentDepositInstructions } from "./quote-discovery.ts";
 import {
   CURATED_SUPPORTED_DEPLOYMENTS,
@@ -209,6 +210,7 @@ export function computeEligibleSourceRoutes(
     destinationNetwork.includes("devnet");
 
   const targetEnv = isTestnet ? "testnet" : "mainnet";
+  const executionEnabled = !isFinancialExecutionDisabled();
 
   return CURATED_SUPPORTED_DEPLOYMENTS.filter(
     (dep) => dep.environment === targetEnv,
@@ -227,10 +229,14 @@ export function computeEligibleSourceRoutes(
       contractIdentifier: dep.contractIdentifier,
       decimals: dep.decimals,
       routeType: isDirect ? "DIRECT_TRANSFER" : "CROSS_CHAIN_1CLICK",
-      isOperationalNow: false, // Execution remains disabled until M6
-      availabilityNotice: isDirect
-        ? "Direct transfer path. Deposit address issuance and signing are staged for M5 Phase 2 / M6. FLOW_EXECUTION is disabled."
-        : "1Click cross-chain route. Executable quoting and cross-chain routing are staged for M6. FLOW_EXECUTION is disabled.",
+      isOperationalNow: executionEnabled,
+      availabilityNotice: executionEnabled
+        ? isDirect
+          ? "Direct transfer ready on destination network."
+          : "Cross-chain payment route active."
+        : isDirect
+          ? "Direct transfer path. Deposit address issuance and signing are staged for M5 Phase 2 / M6. FLOW_EXECUTION is disabled."
+          : "1Click cross-chain route. Executable quoting and cross-chain routing are staged for M6. FLOW_EXECUTION is disabled.",
     };
   });
 }

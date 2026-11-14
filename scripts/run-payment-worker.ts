@@ -5,9 +5,10 @@ import { PaymentMonitoringWorker } from "../src/server/payments/payment-monitori
 
 async function main(): Promise<void> {
   assertPaymentEnvironment(process.env);
-  if (process.env.FLOW_EXECUTION !== "disabled") {
+  const executionMode = process.env.FLOW_EXECUTION ?? "disabled";
+  if (executionMode !== "disabled" && executionMode !== "enabled") {
     throw new Error(
-      "Payment worker requires FLOW_EXECUTION=disabled in staging.",
+      "Payment worker requires FLOW_EXECUTION=enabled or FLOW_EXECUTION=disabled.",
     );
   }
   if (process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled") {
@@ -35,7 +36,7 @@ async function main(): Promise<void> {
     await db.$queryRaw`SELECT 1`;
     log("info", "payment_worker_heartbeat_ready", {
       workerId,
-      execution: "disabled",
+      execution: executionMode,
       mode,
     });
     const heartbeat = setInterval(() => {
@@ -54,7 +55,7 @@ async function main(): Promise<void> {
     );
   }
 
-  log("info", "payment_worker_ready", { workerId, execution: "disabled" });
+  log("info", "payment_worker_ready", { workerId, execution: executionMode });
   try {
     await new PaymentMonitoringWorker({ workerId }).runLoop({
       pollIntervalMs: Number(

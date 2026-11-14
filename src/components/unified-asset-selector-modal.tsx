@@ -255,7 +255,11 @@ export function UnifiedAssetSelectorModal({
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative">
-                      <AssetAvatar symbol={token.symbol} size={28} />
+                      <AssetAvatar
+                        symbol={token.symbol}
+                        coingeckoId={token.coingeckoId}
+                        size={28}
+                      />
                       <div className="absolute -bottom-1 -right-1">
                         <ChainBadge chainKey={token.networkKey} size={14} />
                       </div>

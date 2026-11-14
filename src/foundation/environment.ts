@@ -4,7 +4,7 @@ import { FlowError } from "./errors.ts";
 
 const environmentSchema = z.object({
   FLOW_ENV: z.enum(["local", "test", "staging", "production"]),
-  FLOW_EXECUTION: z.literal("disabled"),
+  FLOW_EXECUTION: z.enum(["disabled", "enabled"]),
   FLOW_TEST_DATABASE_REMOTE: z.literal("enabled").optional(),
   FLOW_TEST_DATABASE_NAME: z
     .string()
@@ -249,11 +249,16 @@ export function assertPaymentEnvironment(source: EnvironmentInput): void {
     );
   }
   if (
-    source.FLOW_EXECUTION !== "disabled" ||
-    source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+    source.FLOW_EXECUTION !== "disabled" &&
+    source.FLOW_EXECUTION !== "enabled"
   ) {
     invalidConfig(
-      "Payment worker requires financial execution and provider compatibility to remain disabled.",
+      "Payment worker requires FLOW_EXECUTION to be enabled or disabled.",
+    );
+  }
+  if (source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled") {
+    invalidConfig(
+      "Payment worker requires provider compatibility to remain disabled.",
     );
   }
 }
@@ -268,11 +273,16 @@ export function assertIndexerEnvironment(source: EnvironmentInput): void {
     invalidConfig("Indexer workers cannot receive custody credentials.");
   }
   if (
-    source.FLOW_EXECUTION !== "disabled" ||
-    source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+    source.FLOW_EXECUTION !== "disabled" &&
+    source.FLOW_EXECUTION !== "enabled"
   ) {
     invalidConfig(
-      "Indexer workers require financial execution and provider compatibility to remain disabled.",
+      "Indexer workers require FLOW_EXECUTION to be enabled or disabled.",
+    );
+  }
+  if (source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled") {
+    invalidConfig(
+      "Indexer workers require provider compatibility to remain disabled.",
     );
   }
 }
@@ -280,24 +290,25 @@ export function assertIndexerEnvironment(source: EnvironmentInput): void {
 export function assertCustodyEnvironment(source: EnvironmentInput): void {
   assertCredentialScope(source, "custody");
   const heartbeatOnly = source.FLOW_CUSTODY_WORKER_MODE === "heartbeat-only";
-  const executeMode = source.FLOW_CUSTODY_WORKER_MODE === "execute";
   if (!heartbeatOnly && !source.FLOW_WALLET_ENCRYPTION_KEY) {
     invalidConfig("Custody worker encryption configuration is required.");
   }
-  if (executeMode) {
-    if (
-      source.FLOW_EXECUTION === "enabled" &&
-      source.FLOW_PROVIDER_COMPATIBILITY_MODE &&
-      source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
-    ) {
-      invalidConfig(
-        "Custody worker execute mode requires provider compatibility mode to remain disabled.",
-      );
-    }
-    return;
+  if (
+    source.FLOW_EXECUTION !== "disabled" &&
+    source.FLOW_EXECUTION !== "enabled"
+  ) {
+    invalidConfig(
+      "Custody worker requires FLOW_EXECUTION to be enabled or disabled.",
+    );
   }
-  if (source.FLOW_EXECUTION !== "disabled") {
-    invalidConfig("Custody worker requires FLOW_EXECUTION=disabled.");
+  if (
+    source.FLOW_EXECUTION === "enabled" &&
+    source.FLOW_PROVIDER_COMPATIBILITY_MODE &&
+    source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    invalidConfig(
+      "Custody worker execution requires provider compatibility mode to remain disabled.",
+    );
   }
 }
 

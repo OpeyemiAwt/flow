@@ -47,7 +47,13 @@ export async function principal(
       id: true,
       active: true,
       authUser: {
-        select: { email: true, emailVerified: true, mailboxPaused: true },
+        select: {
+          email: true,
+          name: true,
+          image: true,
+          emailVerified: true,
+          mailboxPaused: true,
+        },
       },
     },
   });
@@ -57,6 +63,8 @@ export async function principal(
     session,
     userId: user.id,
     email: user.authUser.email,
+    name: user.authUser.name,
+    image: user.authUser.image,
     verifiedEmail: user.authUser.emailVerified && !user.authUser.mailboxPaused,
   };
 }

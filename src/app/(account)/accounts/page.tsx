@@ -76,6 +76,9 @@ export default async function AccountsPage() {
           <div className="flex items-center gap-2.5 min-w-0">
             <UserAvatar
               profileId={actor.userId}
+              fallbackImage={actor.image}
+              email={actor.email}
+              name={actor.name}
               className="h-9 w-9 rounded-full object-cover border border-white/20 shrink-0"
             />
             <div className="min-w-0">

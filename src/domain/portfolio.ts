@@ -2,6 +2,7 @@ import {
   type AccountPortfolioProjection,
   type WalletAddressProjection,
 } from "./assets.ts";
+import { isFinancialExecutionDisabled } from "./custody.ts";
 import {
   canonicalizeNetworkId,
   type CatalogTokenDeployment,
@@ -89,6 +90,7 @@ export function getMainnetWalletAddress(
 export function serializePortfolio(
   projection: AccountPortfolioProjection,
 ): SerializedAccountPortfolio {
+  const executionDisabled = isFinancialExecutionDisabled();
   return {
     accountId: projection.accountId,
     wallet: projection.wallet
@@ -97,12 +99,17 @@ export function serializePortfolio(
           status: projection.wallet.status,
           environment: projection.wallet.environment,
           policy: projection.wallet.policyState,
-          executionDisabled: true,
+          executionDisabled,
           depositEligible: !projection.wallet.isTestnet,
-          transferEligible: false,
+          transferEligible:
+            !executionDisabled &&
+            !projection.wallet.isTestnet &&
+            projection.wallet.status === "ACTIVE",
           disclaimer: projection.wallet.isTestnet
-            ? "This testnet wallet is in PROVISIONING state with execution disabled. It is strictly ineligible for deposits, transfers, or execution. Testnet assets have no monetary value."
-            : "Mainnet custody wallet. Inbound payments verified on-chain. Outgoing transfer execution is disabled by security policy.",
+            ? `This testnet wallet is in ${projection.wallet.status} state${executionDisabled ? " with execution disabled" : ""}. It is strictly ineligible for deposits, transfers, or execution. Testnet assets have no monetary value.`
+            : executionDisabled
+              ? "Mainnet custody wallet. Inbound payments verified on-chain. Outgoing transfer execution is disabled by security policy."
+              : "Mainnet wallet active and ready for deposits, transfers, and cross-chain execution.",
           addresses: projection.wallet.addresses ?? [],
         }
       : null,

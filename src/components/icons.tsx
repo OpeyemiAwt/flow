@@ -1,4 +1,16 @@
 import type { SVGProps } from "react";
+import {
+  type AssetImageEntry,
+  COINGECKO_ASSET_IMAGES,
+  COINGECKO_CHAIN_IMAGES,
+  COINGECKO_ID_IMAGES,
+} from "./asset-image-registry.ts";
+
+export {
+  COINGECKO_ASSET_IMAGES,
+  COINGECKO_CHAIN_IMAGES,
+  COINGECKO_ID_IMAGES,
+};
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
@@ -706,247 +718,6 @@ export function BaseChainIcon({
   );
 }
 
-export const COINGECKO_ASSET_IMAGES: Record<
-  string,
-  { src: string; coingeckoUrl: string; alt: string; bg?: string }
-> = {
-  USDC: {
-    src: "/assets/tokens/usdc.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/6319/large/USDC.png",
-    alt: "USD Coin (USDC)",
-  },
-  USDT: {
-    src: "/assets/tokens/usdt.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/325/large/Tether.png",
-    alt: "Tether (USDT)",
-  },
-  ETH: {
-    src: "/assets/tokens/eth.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/279/large/ethereum.png",
-    alt: "Ethereum (ETH)",
-    bg: "bg-neutral-900",
-  },
-  WETH: {
-    src: "/assets/tokens/eth.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/279/large/ethereum.png",
-    alt: "Wrapped Ether (WETH)",
-    bg: "bg-neutral-900",
-  },
-  CBETH: {
-    src: "/assets/tokens/eth.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/279/large/ethereum.png",
-    alt: "Coinbase Wrapped Staked ETH (cbETH)",
-    bg: "bg-neutral-900",
-  },
-  SOL: {
-    src: "/assets/tokens/sol.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/4128/large/solana.png",
-    alt: "Solana (SOL)",
-    bg: "bg-black",
-  },
-  MSOL: {
-    src: "/assets/tokens/sol.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/4128/large/solana.png",
-    alt: "Marinade staked SOL (mSOL)",
-    bg: "bg-black",
-  },
-  NEAR: {
-    src: "/assets/tokens/near.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/10365/large/near.jpg",
-    alt: "NEAR Protocol (NEAR)",
-  },
-  WNEAR: {
-    src: "/assets/tokens/near.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/10365/large/near.jpg",
-    alt: "Wrapped NEAR (wNEAR)",
-  },
-  AAVE: {
-    src: "https://coin-images.coingecko.com/coins/images/12645/large/aave-token-round.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/12645/large/aave-token-round.png",
-    alt: "Aave (AAVE)",
-  },
-  LINK: {
-    src: "https://coin-images.coingecko.com/coins/images/877/large/chainlink-new-logo.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/877/large/chainlink-new-logo.png",
-    alt: "Chainlink (LINK)",
-  },
-  AVAX: {
-    src: "https://coin-images.coingecko.com/coins/images/12559/large/Avalanche_Circle_RedWhite_Trans.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/12559/large/Avalanche_Circle_RedWhite_Trans.png",
-    alt: "Avalanche (AVAX)",
-  },
-  BNB: {
-    src: "https://coin-images.coingecko.com/coins/images/825/large/bnb-icon2_2x.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/825/large/bnb-icon2_2x.png",
-    alt: "BNB (BNB)",
-  },
-  SUI: {
-    src: "https://coin-images.coingecko.com/coins/images/26375/large/sui-ocean-square.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/26375/large/sui-ocean-square.png",
-    alt: "Sui (SUI)",
-  },
-  OP: {
-    src: "https://coin-images.coingecko.com/coins/images/25244/large/Optimism.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/25244/large/Optimism.png",
-    alt: "Optimism (OP)",
-  },
-  BTC: {
-    src: "https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png",
-    alt: "Bitcoin (BTC)",
-  },
-  WBTC: {
-    src: "https://coin-images.coingecko.com/coins/images/7598/large/wrapped_bitcoin_wbtc.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/7598/large/wrapped_bitcoin_wbtc.png",
-    alt: "Wrapped Bitcoin (WBTC)",
-  },
-  ARB: {
-    src: "https://coin-images.coingecko.com/coins/images/16547/large/arbitrum_logo.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/16547/large/arbitrum_logo.png",
-    alt: "Arbitrum (ARB)",
-  },
-  MATIC: {
-    src: "https://coin-images.coingecko.com/coins/images/4713/large/polygon.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/4713/large/polygon.png",
-    alt: "Polygon (MATIC)",
-  },
-  POL: {
-    src: "https://coin-images.coingecko.com/coins/images/4713/large/polygon.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/4713/large/polygon.png",
-    alt: "Polygon (POL)",
-  },
-  TRX: {
-    src: "https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png",
-    alt: "TRON (TRX)",
-  },
-  PEPE: {
-    src: "https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.png",
-    alt: "Pepe (PEPE)",
-  },
-  SHIB: {
-    src: "https://coin-images.coingecko.com/coins/images/11939/large/shiba.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/11939/large/shiba.png",
-    alt: "Shiba Inu (SHIB)",
-  },
-  UNI: {
-    src: "https://coin-images.coingecko.com/coins/images/12504/large/uniswap-uni.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/12504/large/uniswap-uni.png",
-    alt: "Uniswap (UNI)",
-  },
-  DAI: {
-    src: "https://coin-images.coingecko.com/coins/images/9956/large/Badge_Dai.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/9956/large/Badge_Dai.png",
-    alt: "Dai (DAI)",
-  },
-};
-
-export const COINGECKO_CHAIN_IMAGES: Record<
-  string,
-  { src: string; coingeckoUrl: string; alt: string; bg?: string }
-> = {
-  ethereum: {
-    src: "/assets/tokens/eth.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/279/large/ethereum.png",
-    alt: "Ethereum Mainnet",
-    bg: "bg-neutral-900",
-  },
-  base: {
-    src: "/assets/tokens/base.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/131/large/base.png",
-    alt: "Base Mainnet",
-  },
-  solana: {
-    src: "/assets/tokens/sol.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/5/large/solana.png",
-    alt: "Solana Mainnet",
-    bg: "bg-black",
-  },
-  near: {
-    src: "/assets/tokens/near.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/34/large/near.jpeg",
-    alt: "NEAR Mainnet",
-  },
-  tron: {
-    src: "https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/1094/large/tron-logo.png",
-    alt: "Tron Network",
-  },
-  arbitrum: {
-    src: "https://coin-images.coingecko.com/asset_platforms/images/16547/large/arbitrum_logo.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/16547/large/arbitrum_logo.png",
-    alt: "Arbitrum One",
-  },
-  avalanche: {
-    src: "https://coin-images.coingecko.com/asset_platforms/images/12559/large/Avalanche_Circle_RedWhite_Trans.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/12559/large/Avalanche_Circle_RedWhite_Trans.png",
-    alt: "Avalanche",
-  },
-  bnb: {
-    src: "https://coin-images.coingecko.com/asset_platforms/images/825/large/bnb-icon2_2x.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/825/large/bnb-icon2_2x.png",
-    alt: "BNB Chain",
-  },
-  sui: {
-    src: "https://coin-images.coingecko.com/asset_platforms/images/26375/large/sui-ocean-square.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/26375/large/sui-ocean-square.png",
-    alt: "Sui Network",
-  },
-  optimism: {
-    src: "https://coin-images.coingecko.com/asset_platforms/images/25244/large/Optimism.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/25244/large/Optimism.png",
-    alt: "Optimism",
-  },
-  polygon: {
-    src: "https://coin-images.coingecko.com/asset_platforms/images/4713/large/polygon.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/asset_platforms/images/4713/large/polygon.png",
-    alt: "Polygon",
-  },
-  bitcoin: {
-    src: "https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png",
-    coingeckoUrl:
-      "https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png",
-    alt: "Bitcoin",
-  },
-};
-
 export function ChainBadge({
   chainKey,
   size = 24,
@@ -958,10 +729,54 @@ export function ChainBadge({
 }) {
   const lower = chainKey.toLowerCase();
   let matchKey: string | null = null;
-  if (lower.includes("base")) matchKey = "base";
-  else if (lower.includes("sol")) matchKey = "solana";
+  if (lower.includes("abstract") || lower === "abs" || lower.startsWith("abs-"))
+    matchKey = "abstract";
+  else if (lower === "adi" || lower.startsWith("adi-")) matchKey = "adi";
+  else if (lower.includes("aleo")) matchKey = "aleo";
+  else if (lower.includes("aptos")) matchKey = "aptos";
+  else if (lower.includes("aurora")) matchKey = "aurora";
+  else if (lower.includes("base")) matchKey = "base";
+  else if (lower === "bch" || lower.startsWith("bch-") || lower.includes("bitcoin-cash"))
+    matchKey = "bch";
+  else if (lower.includes("bera")) matchKey = "berachain";
+  else if (lower.includes("cardano")) matchKey = "cardano";
+  else if (lower.includes("dash")) matchKey = "dash";
+  else if (lower.includes("doge")) matchKey = "dogecoin";
+  else if (lower.includes("fogo")) matchKey = "fogo";
+  else if (lower.includes("gnosis") || lower.includes("xdai"))
+    matchKey = "gnosis";
+  else if (lower.includes("hood") || lower.includes("robinhood"))
+    matchKey = "hood";
+  else if (lower.includes("hyper")) matchKey = "hypercore";
+  else if (lower === "ltc" || lower.startsWith("ltc-") || lower.includes("litecoin"))
+    matchKey = "litecoin";
+  else if (lower.includes("miden")) matchKey = "miden";
+  else if (lower.includes("monad")) matchKey = "monad";
+  else if (lower.includes("movement")) matchKey = "movement";
+  else if (lower.includes("plasma")) matchKey = "plasma";
+  else if (lower === "prl" || lower.startsWith("prl-") || lower.includes("pearl"))
+    matchKey = "prl";
+  else if (lower === "qtc" || lower.startsWith("qtc-") || lower.includes("quantus"))
+    matchKey = "qtc";
+  else if (lower.includes("scroll")) matchKey = "scroll";
+  else if (lower.includes("starknet")) matchKey = "starknet";
+  else if (lower.includes("stellar")) matchKey = "stellar";
+  else if (lower === "ton" || lower.startsWith("ton-")) matchKey = "ton";
+  else if (lower.includes("xlayer") || lower.includes("x-layer"))
+    matchKey = "xlayer";
+  else if (lower.includes("xrp")) matchKey = "xrp";
+  else if (lower === "zec" || lower.startsWith("zec-") || lower.includes("zcash"))
+    matchKey = "zcash";
+  else if (lower === "sol" || lower.startsWith("sol-") || lower.includes("solana"))
+    matchKey = "solana";
   else if (lower.includes("near")) matchKey = "near";
-  else if (lower.includes("eth") || lower.includes("evm"))
+  else if (
+    lower === "eth" ||
+    lower.startsWith("eth-") ||
+    lower.includes("ethereum") ||
+    lower.includes("evm") ||
+    lower.includes("sepolia")
+  )
     matchKey = "ethereum";
   else if (lower.includes("tron") || lower.includes("trx")) matchKey = "tron";
   else if (lower.includes("arb")) matchKey = "arbitrum";
@@ -974,11 +789,16 @@ export function ChainBadge({
   )
     matchKey = "bnb";
   else if (lower.includes("sui")) matchKey = "sui";
-  else if (lower.includes("op") || lower.includes("optimism"))
+  else if (lower === "op" || lower.startsWith("op-") || lower.includes("optimism"))
     matchKey = "optimism";
-  else if (lower.includes("poly") || lower.includes("matic"))
+  else if (
+    lower.includes("poly") ||
+    lower.includes("matic") ||
+    lower === "pol" ||
+    lower.startsWith("pol-")
+  )
     matchKey = "polygon";
-  else if (lower.includes("btc") || lower.includes("bitcoin"))
+  else if (lower === "btc" || lower.startsWith("btc-") || lower.includes("bitcoin"))
     matchKey = "bitcoin";
 
   const chain = matchKey ? COINGECKO_CHAIN_IMAGES[matchKey] : undefined;
@@ -1065,15 +885,35 @@ export function IconQrCode({ size = 18, className = "", ...props }: IconProps) {
 
 export function AssetAvatar({
   symbol,
+  coingeckoId,
+  iconUrl,
   size = 32,
   className = "",
 }: {
   symbol: string;
+  coingeckoId?: string | null;
+  iconUrl?: string | null;
   size?: number;
   className?: string;
 }) {
-  const upper = symbol.toUpperCase();
-  const token = COINGECKO_ASSET_IMAGES[upper];
+  const upper = symbol.trim().toUpperCase();
+  const baseSymbol = upper.split(/[(\s]/)[0] ?? upper;
+  const cgImage: AssetImageEntry | undefined =
+    coingeckoId && COINGECKO_ID_IMAGES[coingeckoId]
+      ? {
+          src: COINGECKO_ID_IMAGES[coingeckoId]!,
+          coingeckoUrl: COINGECKO_ID_IMAGES[coingeckoId]!,
+          alt: symbol,
+        }
+      : undefined;
+  const customImage: AssetImageEntry | undefined = iconUrl
+    ? { src: iconUrl, coingeckoUrl: iconUrl, alt: symbol }
+    : undefined;
+  const token =
+    customImage ??
+    COINGECKO_ASSET_IMAGES[upper] ??
+    cgImage ??
+    COINGECKO_ASSET_IMAGES[baseSymbol];
 
   if (token) {
     return (

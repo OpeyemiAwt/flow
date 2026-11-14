@@ -436,6 +436,7 @@ export function PortfolioView({
   account,
   initialView = "dashboard",
   userEmail,
+  userAvatarUrl,
   initialDisplayName,
   profileId,
   executionDisabled = false,
@@ -446,6 +447,7 @@ export function PortfolioView({
   allAccounts?: ReadonlyArray<WorkspaceAccountSummary>;
   initialView?: WorkspaceTab;
   userEmail?: string;
+  userAvatarUrl?: string | null;
   initialDisplayName?: string | null;
   profileId?: string;
   executionDisabled?: boolean;
@@ -804,6 +806,31 @@ export function PortfolioView({
     load: loadCrossChainQuote,
   } = useQuotePreview<OneClickPreview>(addMoneyKey);
 
+  const hasBalanceSyncError = useMemo(
+    () => portfolio.balances.some((balance) => balance.syncStatus === "ERROR"),
+    [portfolio.balances],
+  );
+
+  const isInitialIndexing = useMemo(() => {
+    if (!portfolio.wallet || portfolio.wallet.status !== "ACTIVE") return false;
+    if (portfolio.wallet.environment !== "mainnet") return false;
+    if (hasBalanceSyncError) return false;
+    const provisioned = MAINNET_SUPPORTED_DEPLOYMENTS.filter((deployment) =>
+      getMainnetWalletAddress(portfolio.wallet, deployment.networkKey),
+    );
+    if (provisioned.length === 0) return false;
+    return provisioned.some(
+      (deployment) =>
+        !portfolio.balances.some(
+          (balance) =>
+            balance.syncStatus === "SYNCED" &&
+            balance.networkAsset.isVerified &&
+            balance.networkAsset.status === "ACTIVE" &&
+            isBalanceMatchingDeployment(balance, deployment),
+        ),
+    );
+  }, [hasBalanceSyncError, portfolio.wallet, portfolio.balances]);
+
   const totalBalanceUsd = useMemo(() => {
     const provisioned = MAINNET_SUPPORTED_DEPLOYMENTS.filter((deployment) =>
       getMainnetWalletAddress(portfolio.wallet, deployment.networkKey),
@@ -821,7 +848,7 @@ export function PortfolioView({
           ),
       )
     ) {
-      return "Balance unavailable";
+      return isInitialIndexing ? null : "Balance unavailable";
     }
     let total = 0n;
     for (const item of heldAssets) {
@@ -832,7 +859,13 @@ export function PortfolioView({
       total += cents;
     }
     return formatUsdCents(total);
-  }, [heldAssets, portfolio.wallet, portfolio.balances, tokenPrices]);
+  }, [
+    heldAssets,
+    isInitialIndexing,
+    portfolio.wallet,
+    portfolio.balances,
+    tokenPrices,
+  ]);
 
   // Carousel banners content
   const carouselSlides = [
@@ -905,12 +938,12 @@ export function PortfolioView({
 
   // Trigger one initial background balance sync when an active mainnet wallet
   // opens without synced balance rows yet so newly onboarded users do not stay
-  // on "Balance unavailable".
+  // on initial loading skeletons.
   useEffect(() => {
     if (
       portfolio.wallet?.status !== "ACTIVE" ||
       portfolio.wallet.environment !== "mainnet" ||
-      totalBalanceUsd !== "Balance unavailable" ||
+      !isInitialIndexing ||
       (portfolio.cooldownRemainingSeconds ?? 0) > 0 ||
       autoRefreshRequestedRef.current === accountId
     ) {
@@ -938,13 +971,13 @@ export function PortfolioView({
     };
   }, [
     accountId,
+    isInitialIndexing,
     portfolio.wallet?.status,
     portfolio.wallet?.environment,
     portfolio.cooldownRemainingSeconds,
-    totalBalanceUsd,
   ]);
 
-  // Poll balances every 10s
+  // Poll balances fast during initial indexing, then every 10s
   useEffect(() => {
     let active = true;
     const poll = () => {
@@ -963,12 +996,12 @@ export function PortfolioView({
         })
         .catch(() => {});
     };
-    const interval = setInterval(poll, 10000);
+    const interval = setInterval(poll, isInitialIndexing ? 1500 : 10000);
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, [accountId]);
+  }, [accountId, isInitialIndexing]);
 
   // Handle manual balance refresh
   const handleRefresh = useCallback(async () => {
@@ -1338,6 +1371,7 @@ export function PortfolioView({
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         onOpenAssistant={() => setIsAssistantOpen(true)}
         userName={initialDisplayName?.trim() || userEmail || account?.name || "Personal"}
+        userAvatarUrl={userAvatarUrl}
         profileId={profileId}
         userEmail={userEmail}
       />
@@ -1381,9 +1415,20 @@ export function PortfolioView({
               className="text-center pt-2 pb-2"
             >
               <div className="inline-flex items-center justify-center gap-3">
-                <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-neutral-950 dark:text-white select-none">
-                  {hideBalance ? "$••••••" : totalBalanceUsd}
-                </span>
+                {hideBalance ? (
+                  <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-neutral-950 dark:text-white select-none">
+                    $••••••
+                  </span>
+                ) : totalBalanceUsd === null ? (
+                  <span
+                    aria-label="Loading account balance"
+                    className="inline-block h-12 sm:h-14 lg:h-16 w-48 sm:w-64 rounded-2xl bg-neutral-200/80 dark:bg-white/[0.08] animate-pulse"
+                  />
+                ) : (
+                  <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-neutral-950 dark:text-white select-none">
+                    {totalBalanceUsd}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={toggleBalanceVisibility}
@@ -1436,11 +1481,19 @@ export function PortfolioView({
                   onClick={() => setIsHeldAssetsOpen(true)}
                   className="inline-flex items-center gap-1 font-semibold text-neutral-800 dark:text-neutral-200 hover:text-neutral-950 dark:hover:text-white transition-colors cursor-pointer"
                 >
-                  <span>
-                    {heldAssets.length} asset
-                    {heldAssets.length === 1 ? "" : "s"} •{" "}
-                    {hideBalance ? "$••••••" : totalBalanceUsd}
-                  </span>
+                  {hideBalance ? (
+                    <span>
+                      {heldAssets.length} asset
+                      {heldAssets.length === 1 ? "" : "s"} • $••••••
+                    </span>
+                  ) : totalBalanceUsd === null ? (
+                    <span className="inline-block h-3.5 w-28 rounded-full bg-neutral-200/80 dark:bg-white/[0.08] animate-pulse" />
+                  ) : (
+                    <span>
+                      {heldAssets.length} asset
+                      {heldAssets.length === 1 ? "" : "s"} • {totalBalanceUsd}
+                    </span>
+                  )}
                   <span className="text-neutral-400">&gt;</span>
                 </button>
                 <button
@@ -1573,7 +1626,25 @@ export function PortfolioView({
                 </span>
               </div>
 
-              {heldAssets.length === 0 ? (
+              {isInitialIndexing && heldAssets.length === 0 ? (
+                <div className="space-y-2 py-2" aria-label="Loading assets">
+                  {[0, 1, 2].map((row) => (
+                    <div
+                      key={row}
+                      className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-neutral-50/70 dark:bg-white/[0.03] animate-pulse"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-7 w-7 rounded-full bg-neutral-200 dark:bg-white/10" />
+                        <div className="space-y-1.5">
+                          <div className="h-3 w-24 rounded bg-neutral-200 dark:bg-white/10" />
+                          <div className="h-2.5 w-16 rounded bg-neutral-200/80 dark:bg-white/[0.07]" />
+                        </div>
+                      </div>
+                      <div className="h-3 w-16 rounded bg-neutral-200 dark:bg-white/10" />
+                    </div>
+                  ))}
+                </div>
+              ) : heldAssets.length === 0 ? (
                 <div className="flex min-h-[210px] flex-col items-center justify-center px-4 py-10 text-center sm:py-12 gap-5">
                   <p className="max-w-md text-sm text-neutral-500 dark:text-neutral-400">
                     No assets held yet. Deposit crypto or create a payment link
@@ -3214,7 +3285,7 @@ export function PortfolioView({
         isOpen={isHeldAssetsOpen}
         onClose={() => setIsHeldAssetsOpen(false)}
         heldAssets={heldAssets}
-        totalBalanceUsd={totalBalanceUsd}
+        totalBalanceUsd={totalBalanceUsd ?? "Syncing balances..."}
         hideBalance={hideBalance}
         onSelectAction={(action, deployment) => {
           setIsHeldAssetsOpen(false);
