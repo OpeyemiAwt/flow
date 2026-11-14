@@ -5,6 +5,7 @@ const commands = {
   web: ["node", ["server.js"]],
   payments: ["node", ["scripts/run-payment-worker.ts"]],
   custody: ["node", ["scripts/run-custody-worker.ts"]],
+  indexer: ["node", ["scripts/run-indexer-worker.ts"]],
 };
 
 if (!role || !Object.hasOwn(commands, role)) {
