@@ -1638,6 +1638,7 @@ export async function resumePolicyVerificationJob(
 
     const resumableClassifications = new Set<string>([
       "POLICY_VERIFICATION_FAILED",
+      "CORRUPTED_RESPONSE",
       "SPONSOR_CIRCUIT_OPEN",
       "SPONSOR_LOW_BALANCE",
       "SPONSOR_DAILY_CAP_EXCEEDED",

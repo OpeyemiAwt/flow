@@ -100,6 +100,46 @@ export function decodeBase58(encoded: string): Buffer {
   return out;
 }
 
+function decodeWalletPublicKeyBytes(
+  rawPubkey: string,
+): { scheme: "ed25519" | "secp256k1"; bytes: Buffer } | null {
+  const match = /^(ed25519|secp256k1):(.+)$/i.exec(rawPubkey.trim());
+  if (!match) return null;
+  const scheme = match[1]!.toLowerCase() as "ed25519" | "secp256k1";
+  const body = match[2]!;
+  let bytes: Buffer;
+  if (/^[0-9a-f]+$/i.test(body) && body.length % 2 === 0) {
+    bytes = Buffer.from(body, "hex");
+  } else {
+    try {
+      bytes = decodeBase58(body);
+    } catch {
+      return null;
+    }
+  }
+  if (scheme === "ed25519" && bytes.length !== 32) return null;
+  if (
+    scheme === "secp256k1" &&
+    bytes.length !== 33 &&
+    bytes.length !== 64 &&
+    bytes.length !== 65
+  ) {
+    return null;
+  }
+  return { scheme, bytes };
+}
+
+function formatWalletPublicKeyCandidates(walletPubkey: string): string[] {
+  const decoded = decodeWalletPublicKeyBytes(walletPubkey);
+  if (!decoded) return [walletPubkey];
+  const candidates = new Set<string>([
+    walletPubkey,
+    `${decoded.scheme}:${decoded.bytes.toString("hex")}`,
+    `${decoded.scheme}:${encodeBase58(decoded.bytes)}`,
+  ]);
+  return Array.from(candidates);
+}
+
 export interface ParsedNearEd25519KeyPair {
   readonly publicKeyString: string;
   readonly publicKeyBytes: Buffer;
@@ -290,7 +330,7 @@ export function buildStoreWalletPolicyTransactionBytes(
       "storage_refund_to must strictly equal sponsorAccountId.",
     );
   }
-  if (!/^(ed25519|secp256k1):[0-9a-f]{64,66}$/i.test(input.args.wallet_pubkey)) {
+  if (!decodeWalletPublicKeyBytes(input.args.wallet_pubkey)) {
     throw new FlowError("INVALID_INPUT", "Invalid wallet_pubkey for policy store.");
   }
   if (!Number.isSafeInteger(input.args.version) || input.args.version < 1) {
@@ -785,7 +825,11 @@ export async function sponsorAndStoreWalletPolicy(
   } = input;
 
   // 1. Check if policy is already stored on-chain (recovers crash-after-tx cleanly)
-  const existingOnChain = await nearRpc.getOnChainWalletPolicy(walletPubkey);
+  let existingOnChain: OnChainWalletPolicyView | null = null;
+  for (const candidatePubkey of formatWalletPublicKeyCandidates(walletPubkey)) {
+    existingOnChain = await nearRpc.getOnChainWalletPolicy(candidatePubkey);
+    if (existingOnChain) break;
+  }
   if (existingOnChain) {
     await db.$executeRaw`
       UPDATE flow.custody_policy_sponsorships
@@ -876,7 +920,14 @@ export async function sponsorAndStoreWalletPolicy(
     policy: policyPayload,
   });
 
-  if (encrypted.wallet_pubkey.toLowerCase() !== walletPubkey.toLowerCase()) {
+  const expectedDecoded = decodeWalletPublicKeyBytes(walletPubkey);
+  const actualDecoded = decodeWalletPublicKeyBytes(encrypted.wallet_pubkey);
+  const keysMatch =
+    expectedDecoded && actualDecoded
+      ? expectedDecoded.scheme === actualDecoded.scheme &&
+        expectedDecoded.bytes.equals(actualDecoded.bytes)
+      : encrypted.wallet_pubkey.toLowerCase() === walletPubkey.toLowerCase();
+  if (!keysMatch) {
     throw new FlowError(
       "CORRELATION_ERROR",
       "Encrypted policy wallet_pubkey does not match FLOW wallet record.",

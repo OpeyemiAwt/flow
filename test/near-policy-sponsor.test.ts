@@ -359,3 +359,33 @@ test("buildDefaultDenyCustodyPolicy supports optional locked multi-sig admin app
     locked: true,
   });
 });
+
+test("buildStoreWalletPolicyTransactionBytes accepts Base58 ed25519 wallet_pubkey format", () => {
+  const { publicKeyBytes } = parseNearEd25519PrivateKey(
+    generateEphemeralNearKey().rawPrivateKey,
+  );
+  const blockHashBase58 = encodeBase58(randomBytes(32));
+  const base58WalletPubkey = `ed25519:${encodeBase58(randomBytes(32))}`;
+
+  const built = buildStoreWalletPolicyTransactionBytes({
+    signerId: "flow-policy-sponsor.near",
+    publicKeyBytes,
+    nonce: 7n,
+    receiverId: OUTLAYER_POLICY_CONTRACT_ID,
+    blockHashBase58,
+    depositYocto: 8_550_000_000_000_000_000_000n,
+    maxDepositYocto: 30_000_000_000_000_000_000_000n,
+    args: {
+      wallet_pubkey: base58WalletPubkey,
+      encrypted_data: "ZW5jcnlwdGVk",
+      wallet_signature: "cc".repeat(64),
+      version: 1,
+      locked: false,
+      valid_until: 1_900_000_000,
+      storage_refund_to: "flow-policy-sponsor.near",
+    },
+  });
+
+  assert.equal(typeof built.txHash, "string");
+  assert.ok(built.txBytes.length > 0);
+});

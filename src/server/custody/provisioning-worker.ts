@@ -968,6 +968,19 @@ export class WalletProvisioningWorker {
     chain?: OutLayerChain,
   ): Promise<ProcessAccountJobResult> {
     const classification = mapErrorToFailureClassification(error);
+    log("error", "custody_provisioning_step_failed", {
+      accountId,
+      jobId,
+      walletId,
+      endpoint,
+      ...(chain ? { chain } : {}),
+      classification,
+      errorCode: error instanceof FlowError ? error.code : "UNKNOWN",
+      reason:
+        error instanceof Error
+          ? error.message.slice(0, 160).replace(/wk_[\w-]+/g, "[REDACTED]")
+          : "UNKNOWN",
+    });
     await recordJobTerminalFailure(
       this.db,
       jobId,

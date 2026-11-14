@@ -187,23 +187,27 @@ const addressResponseSchema = z.object({
 
 const policyResponseSchema = z.object({
   wallet_id: z.string().uuid(),
-  controller: z.string().optional(),
+  controller: z.string().nullish(),
   frozen: z.boolean(),
-  version: z.number().int().optional(),
-  locked: z.boolean().optional(),
-  policy: z.enum(["none", "stored"]).optional(),
-  rules: z.record(z.string(), z.unknown()).optional(),
-  approval: z.record(z.string(), z.unknown()).optional(),
-  capabilities: z.record(z.string(), z.unknown()).optional(),
-  authorized_key_hashes: z.array(z.string()).optional(),
-  refund_addresses: z.record(z.string(), z.string()).optional(),
-  usage: z.record(z.string(), z.unknown()).optional(),
+  version: z.number().int().nullish(),
+  locked: z.boolean().nullish(),
+  policy: z.enum(["none", "stored"]).nullish(),
+  rules: z.record(z.string(), z.unknown()).nullish(),
+  approval: z.record(z.string(), z.unknown()).nullish(),
+  capabilities: z.record(z.string(), z.unknown()).nullish(),
+  authorized_key_hashes: z.array(z.string()).nullish(),
+  refund_addresses: z.record(z.string(), z.string().nullish()).nullish(),
+  usage: z.record(z.string(), z.unknown()).nullish(),
 });
 
 const encryptPolicyResponseSchema = z.object({
   encrypted_base64: z.string().min(1),
-  wallet_pubkey: z.string().regex(/^(ed25519|secp256k1):[0-9a-fA-F]+$/),
-  policy_hash: z.string().regex(/^[0-9a-fA-F]{64}$/),
+  wallet_pubkey: z
+    .string()
+    .regex(
+      /^(ed25519|secp256k1):([0-9a-fA-F]{64,66}|[1-9A-HJ-NP-Za-km-z]{32,52})$/,
+    ),
+  policy_hash: z.string().regex(/^(?:sha256:)?[0-9a-fA-F]{64}$/),
 });
 
 const signPolicyResponseSchema = z.union([
@@ -213,15 +217,15 @@ const signPolicyResponseSchema = z.union([
     version: z.number().int().nonnegative(),
     locked: z.boolean(),
     valid_until: z.number().int().positive(),
-    policy_hash: z.string().regex(/^[0-9a-fA-F]{64}$/),
-    request_hash: z.string().optional(),
+    policy_hash: z.string().regex(/^(?:sha256:)?[0-9a-fA-F]{64}$/),
+    request_hash: z.string().nullish(),
   }),
   z.object({
     status: z.literal("pending_approval"),
     approval_id: z.string().min(1),
     request_id: z.string().min(1),
     required_approvals: z.number().int().positive(),
-    expires_at: z.string().optional(),
+    expires_at: z.string().nullish(),
   }),
 ]);
 
@@ -775,6 +779,13 @@ export class OutLayerAdapter {
 
     const parsed = policyResponseSchema.safeParse(json);
     if (!parsed.success) {
+      log("error", "outlayer_schema_mismatch", {
+        endpoint: "/wallet/v1/policy",
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join(".") || "root",
+          code: issue.code,
+        })),
+      });
       throw new FlowError(
         "CUSTODY_PROVIDER_ERROR",
         "OutLayer policy schema mismatch.",
@@ -788,7 +799,26 @@ export class OutLayerAdapter {
       );
     }
 
-    return mintTrustedAdapterPolicyEvidence(parsed.data);
+    const normalizedRefunds = parsed.data.refund_addresses
+      ? Object.fromEntries(
+          Object.entries(parsed.data.refund_addresses).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string",
+          ),
+        )
+      : undefined;
+
+    return mintTrustedAdapterPolicyEvidence({
+      wallet_id: parsed.data.wallet_id,
+      controller: parsed.data.controller ?? undefined,
+      frozen: parsed.data.frozen,
+      policy: parsed.data.policy ?? undefined,
+      rules: parsed.data.rules ?? undefined,
+      approval: parsed.data.approval ?? undefined,
+      capabilities: parsed.data.capabilities ?? undefined,
+      authorized_key_hashes: parsed.data.authorized_key_hashes ?? undefined,
+      refund_addresses: normalizedRefunds,
+      usage: parsed.data.usage ?? undefined,
+    });
   }
 
   /**
@@ -829,6 +859,13 @@ export class OutLayerAdapter {
     });
     const parsed = encryptPolicyResponseSchema.safeParse(json);
     if (!parsed.success) {
+      log("error", "outlayer_schema_mismatch", {
+        endpoint: "/wallet/v1/encrypt-policy",
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join(".") || "root",
+          code: issue.code,
+        })),
+      });
       throw new FlowError(
         "CUSTODY_PROVIDER_ERROR",
         "OutLayer encrypt-policy response schema mismatch.",
@@ -882,6 +919,13 @@ export class OutLayerAdapter {
     });
     const parsed = signPolicyResponseSchema.safeParse(json);
     if (!parsed.success) {
+      log("error", "outlayer_schema_mismatch", {
+        endpoint: "/wallet/v1/sign-policy",
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join(".") || "root",
+          code: issue.code,
+        })),
+      });
       throw new FlowError(
         "CUSTODY_PROVIDER_ERROR",
         "OutLayer sign-policy response schema mismatch.",
