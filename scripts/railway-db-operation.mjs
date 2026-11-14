@@ -748,6 +748,97 @@ async function provisionAuthTicketRole() {
   }
 }
 
+async function provisionStagingIndexerHeartbeatRole() {
+  if (
+    process.env.FLOW_ENV !== "staging" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "staging-only" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled" ||
+    process.env.FLOW_INDEXER_WORKER_MODE !== "heartbeat-only"
+  )
+    fail(
+      "Indexer heartbeat role provisioning is restricted to isolated staging.",
+    );
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  const password = process.env.FLOW_STAGING_INDEXER_WORKER_PASSWORD;
+  if (!rawUrl || !password || !/^[a-f0-9]{64}$/.test(password))
+    fail(
+      "Staging administrator URL and generated indexer credential are required.",
+    );
+  const adminUrl = new URL(rawUrl);
+  if (
+    !adminUrl.hostname.endsWith(".railway.internal") ||
+    adminUrl.pathname !== "/railway" ||
+    decodeURIComponent(adminUrl.username) !== "postgres"
+  )
+    fail(
+      "Bootstrap URL does not identify the isolated Railway PostgreSQL service.",
+    );
+  const client = new pg.Client({
+    connectionString: rawUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  await client.connect();
+  try {
+    const identity = await client.query(
+      "SELECT current_database() AS database, current_user AS role",
+    );
+    if (
+      identity.rows[0]?.database !== "railway" ||
+      identity.rows[0]?.role !== "postgres"
+    )
+      fail("Unexpected staging bootstrap identity.");
+    const roleName = "flow_staging_indexer_worker";
+    const existing = await client.query(
+      "SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = $1",
+      [roleName],
+    );
+    if (existing.rowCount) {
+      const role = existing.rows[0];
+      if (
+        !role.rolcanlogin ||
+        role.rolsuper ||
+        role.rolcreatedb ||
+        role.rolcreaterole ||
+        role.rolreplication ||
+        role.rolbypassrls
+      )
+        fail(
+          "Existing indexer role violates restricted-role policy; refusing to alter it.",
+        );
+    } else {
+      await client.query(
+        `CREATE ROLE "${roleName}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(password)}`,
+      );
+    }
+    const memberships = await client.query(
+      "SELECT 1 FROM pg_auth_members WHERE member = (SELECT oid FROM pg_roles WHERE rolname = $1)",
+      [roleName],
+    );
+    if (memberships.rowCount)
+      fail(
+        "Indexer role has inherited memberships; refusing heartbeat activation.",
+      );
+    await client.query(
+      `REVOKE ALL PRIVILEGES ON DATABASE flow_staging FROM "${roleName}"`,
+    );
+    await client.query(
+      `GRANT CONNECT ON DATABASE flow_staging TO "${roleName}"`,
+    );
+    console.log(
+      JSON.stringify({
+        event: "staging_indexer_heartbeat_role_ready",
+        database: "flow_staging",
+        role: roleName,
+        privileges: ["CONNECT"],
+      }),
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 async function testQa() {
   if (
     process.env.FLOW_ENV !== "test" ||
@@ -1381,6 +1472,8 @@ else if (operation === "export-production-postgres-ca")
 else if (operation === "migrate-staging") await migrateStaging();
 else if (operation === "provision-auth-ticket-role")
   await provisionAuthTicketRole();
+else if (operation === "provision-indexer-heartbeat-role")
+  await provisionStagingIndexerHeartbeatRole();
 else if (operation === "migrate-qa") await migrate();
 else if (operation === "test-qa") await testQa();
 else if (operation === "create-qa-validation")
