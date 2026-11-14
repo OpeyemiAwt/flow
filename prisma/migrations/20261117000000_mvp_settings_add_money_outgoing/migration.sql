@@ -388,7 +388,7 @@ BEGIN
     v_job.provider_correlation_id::text,
     v_job.fencing_token,
     w.provider_wallet_id::text,
-    w.credential_envelope::text,
+    w.encrypted_credential::text,
     w.key_id::text,
     w.environment::text,
     wa.address::text

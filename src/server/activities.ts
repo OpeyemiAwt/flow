@@ -24,7 +24,7 @@ function accountActivityRows(accountId: string) {
           WHEN 'solana-mainnet' THEN 'solana' ELSE 'near' END AS ecosystem,
         'FLOW_CROSS_CHAIN_SETTLEMENT'::text AS activity_type, 'INCOMING'::text AS direction,
         pv.tx_hash, pv.event_index, pv.from_address, pv.to_address,
-        registry.asset_id, registry.id AS network_asset_id, pr.destination_asset_symbol AS asset_symbol,
+        registry.asset_id::text AS asset_id, registry.id AS network_asset_id, pr.destination_asset_symbol AS asset_symbol,
         pv.atomic_amount, pr.destination_decimals AS decimals,
         pv.block_height, pv.block_hash, NULL::timestamptz AS block_timestamp,
         pv.finality, 'CANONICAL'::text AS reorg_status, NULL::numeric AS fee_atomic_amount,
@@ -65,7 +65,7 @@ function accountActivityRows(accountId: string) {
         )
     ), account_activity AS (
       SELECT wa.id, wa.account_id, wa.wallet_id, wa.network, wa.chain_id, wa.ecosystem, wa.activity_type,
-        wa.direction, wa.tx_hash, wa.event_index, wa.from_address, wa.to_address, wa.asset_id,
+        wa.direction, wa.tx_hash, wa.event_index, wa.from_address, wa.to_address, wa.asset_id::text AS asset_id,
         wa.network_asset_id, wa.asset_symbol, wa.atomic_amount, wa.decimals, wa.block_height,
         wa.block_hash, wa.block_timestamp, wa.finality, wa.reorg_status, wa.fee_atomic_amount,
         wa.metadata, wa.observed_at, wa.created_at, wa.updated_at
@@ -104,7 +104,7 @@ function accountActivityRows(accountId: string) {
         0::integer AS event_index,
         COALESCE(wa_src.address, '') AS from_address,
         ot.recipient_address AS to_address,
-        ot.source_asset_id AS asset_id,
+        ot.source_asset_id::text AS asset_id,
         NULL::uuid AS network_asset_id,
         ot.source_asset_symbol AS asset_symbol,
         ot.source_atomic_amount AS atomic_amount,
@@ -159,7 +159,7 @@ function accountActivityRows(accountId: string) {
         0::integer AS event_index,
         COALESCE(am.deposit_address, am.refund_address) AS from_address,
         am.destination_address AS to_address,
-        am.destination_asset_id AS asset_id,
+        am.destination_asset_id::text AS asset_id,
         NULL::uuid AS network_asset_id,
         am.destination_asset_symbol AS asset_symbol,
         am.quoted_destination_atomic_amount AS atomic_amount,

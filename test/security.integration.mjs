@@ -1927,27 +1927,12 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
     await snap(page, "08-activity-and-audit-mobile.png");
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    // 8. Accounts Directory & Business Creation (/accounts)
+    // 8. Accounts Directory (/accounts)
     await page.goto(`${app.origin}/accounts`);
-    await page.getByRole("heading", { name: "Your FLOW accounts" }).waitFor();
+    await page.getByRole("heading", { name: "Your FLOW account" }).waitFor();
+    await page.getByRole("link", { name: "Open Personal Dashboard" }).waitFor();
+    await page.getByRole("link", { name: "Account Settings" }).waitFor();
     await snap(page, "09-accounts-directory.png");
-
-    const bizName = "Acme Global Treasury";
-    await page.getByLabel("Business name").fill(bizName);
-    await page.getByRole("button", { name: "Create business" }).click();
-
-    // 9. Business Dashboard & Treasury (/accounts/[id])
-    await page.getByText(bizName).first().waitFor();
-    assert.ok(await page.getByText("BUSINESS WORKSPACE").first().isVisible());
-    await snap(page, "10-business-treasury-dashboard.png");
-
-    // 10. Business Team Management (/accounts/[id]/team)
-    await page
-      .getByRole("link", { name: /Manage team/i })
-      .first()
-      .click();
-    await page.getByRole("heading", { name: `${bizName} team` }).waitFor();
-    await snap(page, "11-business-team-management.png");
 
     // 11. Security, Profile & Preferences (/security) + Dark Theme Toggle
     await page.goto(`${app.origin}/security`);
