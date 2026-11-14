@@ -259,7 +259,8 @@ export function assertIndexerEnvironment(source: EnvironmentInput): void {
 
 export function assertCustodyEnvironment(source: EnvironmentInput): void {
   assertCredentialScope(source, "custody");
-  if (!source.FLOW_WALLET_ENCRYPTION_KEY) {
+  const heartbeatOnly = source.FLOW_CUSTODY_WORKER_MODE === "heartbeat-only";
+  if (!heartbeatOnly && !source.FLOW_WALLET_ENCRYPTION_KEY) {
     invalidConfig("Custody worker encryption configuration is required.");
   }
   if (source.FLOW_EXECUTION !== "disabled") {

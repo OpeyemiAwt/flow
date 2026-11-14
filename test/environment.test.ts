@@ -486,6 +486,13 @@ test("custody runtime accepts only its dedicated database role and encryption ke
     readConfig(source, "custody").database.role,
     "flow_local_custody_worker",
   );
+  assert.doesNotThrow(() =>
+    assertCustodyEnvironment({
+      ...source,
+      FLOW_CUSTODY_WORKER_MODE: "heartbeat-only",
+      FLOW_WALLET_ENCRYPTION_KEY: undefined,
+    }),
+  );
   assert.throws(
     () =>
       assertCustodyEnvironment({
