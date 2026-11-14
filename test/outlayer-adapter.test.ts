@@ -726,7 +726,7 @@ test("OutLayerAdapter.getPolicy binds verifiedOnChainController only when coordi
     )) as typeof fetch;
 
   try {
-    const adapter = new OutLayerAdapter("https://api.outlayer.ai", 5_000);
+    const adapter = new OutLayerAdapter("http://127.0.0.1:4599", 5_000);
 
     // Without verifiedOnChainController, null controller must still fail verification
     const withoutFallback = await adapter.getPolicy("wk_test_key", walletId);
