@@ -5031,7 +5031,15 @@ test("FLOW portfolio distinguishes a posted deposit from P&L and signs out the b
     await preference.waitFor();
     await captureRecoveryScreen(page, "flow-settings-notifications");
 
-    await preference.click();
+    const [notifPatchRes] = await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          res.url().includes("/notification-preferences") &&
+          res.request().method() === "PATCH",
+      ),
+      preference.click(),
+    ]);
+    assert.equal(notifPatchRes.status(), 200);
     await page.reload();
     await preference.waitFor();
     await page.waitForFunction(

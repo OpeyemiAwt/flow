@@ -661,7 +661,31 @@ DECLARE
   app_role text := current_database() || '_app';
   payment_role text := current_database() || '_payment_worker';
   custody_role text := current_database() || '_custody_worker';
+  migrator_role text := current_database() || '_migrator';
+  definer_role text := current_user;
 BEGIN
+  -- SECURITY DEFINER worker functions execute as the migration/table owner.
+  -- Under FORCE ROW LEVEL SECURITY, grant scoped owner policies so worker
+  -- claim/transition functions operate across rows while non-owners stay locked down.
+  EXECUTE format(
+    'CREATE POLICY add_money_intents_definer_all ON flow.add_money_intents FOR ALL TO %I USING (true) WITH CHECK (true)',
+    definer_role
+  );
+  EXECUTE format(
+    'CREATE POLICY outgoing_transfer_jobs_definer_all ON flow.outgoing_transfer_jobs FOR ALL TO %I USING (true) WITH CHECK (true)',
+    definer_role
+  );
+  IF migrator_role <> definer_role AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = migrator_role) THEN
+    EXECUTE format(
+      'CREATE POLICY add_money_intents_migrator_all ON flow.add_money_intents FOR ALL TO %I USING (true) WITH CHECK (true)',
+      migrator_role
+    );
+    EXECUTE format(
+      'CREATE POLICY outgoing_transfer_jobs_migrator_all ON flow.outgoing_transfer_jobs FOR ALL TO %I USING (true) WITH CHECK (true)',
+      migrator_role
+    );
+  END IF;
+
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = app_role) THEN
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON flow.user_profile_preferences TO %I', app_role);
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON flow.account_notification_preferences TO %I', app_role);
