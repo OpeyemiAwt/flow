@@ -202,12 +202,8 @@ const policyResponseSchema = z.object({
 
 const encryptPolicyResponseSchema = z.object({
   encrypted_base64: z.string().min(1),
-  wallet_pubkey: z
-    .string()
-    .regex(
-      /^(ed25519|secp256k1):([0-9a-fA-F]{64,66}|[1-9A-HJ-NP-Za-km-z]{32,52})$/,
-    ),
-  policy_hash: z.string().regex(/^(?:sha256:)?[0-9a-fA-F]{64}$/),
+  wallet_pubkey: z.string().trim().min(32).max(160),
+  policy_hash: z.string().trim().min(32).max(128),
 });
 
 const signPolicyResponseSchema = z.union([
@@ -217,7 +213,7 @@ const signPolicyResponseSchema = z.union([
     version: z.number().int().nonnegative(),
     locked: z.boolean(),
     valid_until: z.number().int().positive(),
-    policy_hash: z.string().regex(/^(?:sha256:)?[0-9a-fA-F]{64}$/),
+    policy_hash: z.string().trim().min(32).max(128),
     request_hash: z.string().nullish(),
   }),
   z.object({

@@ -103,19 +103,29 @@ export function decodeBase58(encoded: string): Buffer {
 function decodeWalletPublicKeyBytes(
   rawPubkey: string,
 ): { scheme: "ed25519" | "secp256k1"; bytes: Buffer } | null {
-  const match = /^(ed25519|secp256k1):(.+)$/i.exec(rawPubkey.trim());
+  const trimmed = rawPubkey.trim();
+  const match = /^(?:(ed25519|secp256k1):)?(.+)$/i.exec(trimmed);
   if (!match) return null;
-  const scheme = match[1]!.toLowerCase() as "ed25519" | "secp256k1";
-  const body = match[2]!;
+  const scheme = (match[1]?.toLowerCase() ?? "ed25519") as
+    | "ed25519"
+    | "secp256k1";
+  let body = match[2]!.trim();
+  if (body.startsWith("0x") || body.startsWith("0X")) {
+    body = body.slice(2);
+  }
   let bytes: Buffer;
   if (/^[0-9a-f]+$/i.test(body) && body.length % 2 === 0) {
     bytes = Buffer.from(body, "hex");
-  } else {
+  } else if (/^[1-9A-HJ-NP-Za-km-z]+$/.test(body)) {
     try {
       bytes = decodeBase58(body);
     } catch {
       return null;
     }
+  } else if (/^[A-Za-z0-9+/]+={0,2}$/.test(body)) {
+    bytes = Buffer.from(body, "base64");
+  } else {
+    return null;
   }
   if (scheme === "ed25519" && bytes.length !== 32) return null;
   if (
