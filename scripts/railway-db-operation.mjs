@@ -237,6 +237,70 @@ async function bootstrapProduction() {
   }
 }
 
+async function exportProductionPostgresCa() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "production-empty-only" ||
+    process.env.FLOW_PRODUCTION_BOOTSTRAP_APPROVED !== "enabled" ||
+    process.env.FLOW_PUBLIC_SIGNUP_ENABLED !== "disabled" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled" ||
+    process.env.FLOW_WALLET_REGISTRATION_ENABLED !== "disabled"
+  ) {
+    fail(
+      "Production CA export is restricted to the isolated production environment.",
+    );
+  }
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("FLOW_BOOTSTRAP_DATABASE_URL is required.");
+  const adminUrl = new URL(rawUrl);
+  if (
+    !["postgresql:", "postgres:"].includes(adminUrl.protocol) ||
+    !adminUrl.hostname.endsWith(".railway.internal") ||
+    adminUrl.pathname !== "/railway" ||
+    decodeURIComponent(adminUrl.username) !== "postgres"
+  ) {
+    fail(
+      "Production CA export requires the isolated Railway PostgreSQL administrator.",
+    );
+  }
+  const admin = new pg.Client({
+    connectionString: rawUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    const identity = await admin.query(
+      "SELECT current_database() AS database, current_user AS role",
+    );
+    if (
+      identity.rows[0]?.database !== "railway" ||
+      identity.rows[0]?.role !== "postgres"
+    ) {
+      fail(
+        "Production CA export connection has an unexpected database identity.",
+      );
+    }
+    const result = await admin.query(
+      "SELECT pg_read_file('/var/lib/postgresql/data/certs/root.crt') AS certificate",
+    );
+    const certificate = result.rows[0]?.certificate;
+    if (
+      typeof certificate !== "string" ||
+      !certificate.startsWith("-----BEGIN CERTIFICATE-----") ||
+      !certificate.trimEnd().endsWith("-----END CERTIFICATE-----")
+    ) {
+      fail("Production PostgreSQL root certificate is unavailable or invalid.");
+    }
+    console.log(
+      JSON.stringify({ event: "production_postgres_root_ca", certificate }),
+    );
+  } finally {
+    await admin.end();
+  }
+}
+
 async function migrateProduction() {
   if (
     process.env.FLOW_ENV !== "production" ||
@@ -1278,6 +1342,8 @@ if (operation === "bootstrap-staging-and-qa") await bootstrap();
 else if (operation === "bootstrap-production-empty")
   await bootstrapProduction();
 else if (operation === "migrate-production") await migrateProduction();
+else if (operation === "export-production-postgres-ca")
+  await exportProductionPostgresCa();
 else if (operation === "migrate-staging") await migrateStaging();
 else if (operation === "provision-auth-ticket-role")
   await provisionAuthTicketRole();
