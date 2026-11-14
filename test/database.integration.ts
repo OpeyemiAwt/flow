@@ -10310,7 +10310,7 @@ test("database integration: M38 canonical network matching across OutLayer short
     );
 
     const publicId = `pr_m38_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-    const attemptPublicId = `pa_m38_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const attemptPublicId = `pa_m38_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
     const prInsert = await appClient.query<{ id: string }>(
       `INSERT INTO flow.payment_requests (
         account_id, public_id, title, destination_network, destination_asset_id,
@@ -10332,10 +10332,10 @@ test("database integration: M38 canonical network matching across OutLayer short
         quoted_source_atomic_amount, quoted_destination_atomic_amount,
         payer_refund_address, status
       ) VALUES (
-        $1::uuid, $2, 'WALLET', 'DIRECT', 'AVAILABLE',
+        $1::uuid, $2, 'WALLET', 'DIRECT_TRANSFER', 'AVAILABLE',
         'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
         1000000, 1000000,
-        NULL, 'QUOTE_OBSERVED'
+        NULL, 'INDICATIVE_QUOTE'
       )`,
       [paymentRequestId, attemptPublicId],
     );
