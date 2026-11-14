@@ -10050,19 +10050,11 @@ test("database integration: M37 automated NEAR policy sponsorship RLS isolation,
     });
 
     const happyRes = await sponsoredWorker.processAccountJob(accHappy.accountId);
-    if (happyRes.outcome !== "activated") {
-      const diagJob = await custodyDb.$queryRaw<
-        Array<{ status: string; failure_classification: string | null; last_error: string | null }>
-      >`SELECT status::text, failure_classification, last_error FROM flow.wallet_provisioning_jobs WHERE id = ${happyJob.id}::uuid`;
-      const diagSponsor = await custodyDb.$queryRaw<
-        Array<{ status: string; error_code: string | null }>
-      >`SELECT status, error_code FROM flow.custody_policy_sponsorships WHERE account_id = ${accHappy.accountId}::uuid`;
-      assert.equal(
-        happyRes.outcome,
-        "activated",
-        `happyRes failed: ${JSON.stringify({ happyRes, diagJob, diagSponsor })}`,
-      );
-    }
+    assert.equal(
+      happyRes.outcome,
+      "activated",
+      `Expected happyRes to activate, got ${happyRes.outcome} (${happyRes.failureClassification ?? "none"})`,
+    );
     assert.equal(mockServer.getRegisterCallCount(), 1);
     assert.equal(mockServer.getEncryptPolicyCallCount(), 1);
     assert.equal(mockServer.getSignPolicyCallCount(), 1);
@@ -10170,7 +10162,7 @@ test("database integration: M37 automated NEAR policy sponsorship RLS isolation,
       FLOW_POLICY_SPONSOR_ENABLED: "enabled",
       FLOW_NEAR_SPONSOR_ACCOUNT_ID: sponsorAccountId,
       FLOW_NEAR_SPONSOR_PRIVATE_KEY: sponsorPrivKey,
-      FLOW_NEAR_SPONSOR_MAX_FEE_PER_WALLET_YOCTO: "30000000000000000000000",
+      FLOW_NEAR_SPONSOR_MAX_FEE_PER_WALLET_YOCTO: "20000000000000000000000",
       FLOW_NEAR_SPONSOR_DAILY_CAP_YOCTO: "25000000000000000000000",
       FLOW_NEAR_SPONSOR_MIN_BALANCE_YOCTO: "100000000000000000000000",
     });
