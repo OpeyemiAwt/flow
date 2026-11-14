@@ -49,6 +49,37 @@ export async function lockAuthUser(db: FlowDb, id: string): Promise<void> {
   await db.$queryRaw`SELECT id FROM flow.auth_users WHERE id = ${id} FOR UPDATE`;
 }
 
+function logAuthHookError(hook: string, error: unknown): never {
+  const err = error as {
+    status?: number;
+    code?: string;
+    name?: string;
+    message?: string;
+    meta?: { code?: string; message?: string };
+  };
+  const rawMessage =
+    typeof err?.meta?.message === "string"
+      ? err.meta.message
+      : typeof err?.message === "string"
+        ? err.message
+        : "";
+  const sanitizedMessage = rawMessage
+    .replaceAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[REDACTED_EMAIL]")
+    .replaceAll(/\b[a-f0-9]{24,}\b/gi, "[REDACTED_HEX]")
+    .replaceAll(/\s+/g, " ")
+    .slice(0, 160);
+  log("error", "auth_provider_hook_failed", {
+    hook,
+    apiFailure: error instanceof ApiFailure,
+    status: error instanceof ApiFailure ? error.status : err?.status,
+    code: typeof err?.code === "string" ? err.code : undefined,
+    pgCode: typeof err?.meta?.code === "string" ? err.meta.code : undefined,
+    name: typeof err?.name === "string" ? err.name : undefined,
+    detail: sanitizedMessage || undefined,
+  });
+  throw error;
+}
+
 type AuthContext = {
   emailLogin?: string;
   emailSlot?: string;
@@ -176,58 +207,62 @@ export function provider(
                 return async (args: {
                   data?: { userId?: string; user_id?: string };
                 }) => {
-                  let ticketIdToUse = activeTicketId;
-                  activeTicketId = undefined;
+                  try {
+                    let ticketIdToUse = activeTicketId;
+                    activeTicketId = undefined;
 
-                  const userId =
-                    args?.data?.userId ??
-                    args?.data?.user_id ??
-                    (google && verifiedGoogle?.identity
-                      ? verifiedGoogle.identity.userId
-                      : undefined);
+                    const userId =
+                      args?.data?.userId ??
+                      args?.data?.user_id ??
+                      (google && verifiedGoogle?.identity
+                        ? verifiedGoogle.identity.userId
+                        : undefined);
 
-                  if (
-                    google &&
-                    verifiedGoogle?.identity &&
-                    !ticketIdToUse &&
-                    userId
-                  ) {
-                    const authDb = getPrismaClient("auth");
-                    const [ticket] = await authDb.$queryRaw<{ id: string }[]>`
-                      SELECT flow.issue_google_auth_ticket(${verifiedGoogle.subject}, ${userId}, ${google.startOrder}) AS id
-                    `;
-                    ticketIdToUse = ticket?.id;
-                  }
-
-                  const dbWithTx = target as {
-                    $transaction?: <T>(
-                      fn: (tx: FlowDb) => Promise<T>,
-                    ) => Promise<T>;
-                  };
-                  if (
-                    typeof dbWithTx.$transaction === "function" &&
-                    ticketIdToUse
-                  ) {
-                    return await dbWithTx.$transaction(async (tx) => {
-                      if (google && verifiedGoogle?.identity && userId) {
-                        await lockAuthUser(tx, userId);
-                        if (google) await requireCurrentGoogleBinding(userId);
-                      }
-                      await tx.$executeRaw`
-                        SELECT set_config('flow.active_auth_ticket_id', ${ticketIdToUse}, true)
+                    if (
+                      google &&
+                      verifiedGoogle?.identity &&
+                      !ticketIdToUse &&
+                      userId
+                    ) {
+                      const authDb = getPrismaClient("auth");
+                      const [ticket] = await authDb.$queryRaw<{ id: string }[]>`
+                        SELECT flow.issue_google_auth_ticket(${verifiedGoogle.subject}, ${userId}, ${google.startOrder}) AS id
                       `;
-                      return await tx.authSession.create(
-                        args as Parameters<typeof tx.authSession.create>[0],
-                      );
-                    });
+                      ticketIdToUse = ticket?.id;
+                    }
+
+                    const dbWithTx = target as {
+                      $transaction?: <T>(
+                        fn: (tx: FlowDb) => Promise<T>,
+                      ) => Promise<T>;
+                    };
+                    if (
+                      typeof dbWithTx.$transaction === "function" &&
+                      ticketIdToUse
+                    ) {
+                      return await dbWithTx.$transaction(async (tx) => {
+                        if (google && verifiedGoogle?.identity && userId) {
+                          await lockAuthUser(tx, userId);
+                          if (google) await requireCurrentGoogleBinding(userId);
+                        }
+                        await tx.$executeRaw`
+                          SELECT set_config('flow.active_auth_ticket_id', ${ticketIdToUse}, true)
+                        `;
+                        return await tx.authSession.create(
+                          args as Parameters<typeof tx.authSession.create>[0],
+                        );
+                      });
+                    }
+                    const createDelegate = (
+                      sTarget as { create?: (a: unknown) => Promise<unknown> }
+                    ).create;
+                    if (typeof createDelegate === "function") {
+                      return await createDelegate(args);
+                    }
+                    return undefined;
+                  } catch (error) {
+                    return logAuthHookError("authSession.create", error);
                   }
-                  const createDelegate = (
-                    sTarget as { create?: (a: unknown) => Promise<unknown> }
-                  ).create;
-                  if (typeof createDelegate === "function") {
-                    return await createDelegate(args);
-                  }
-                  return undefined;
                 };
               }
               return Reflect.get(sTarget, sProp);
@@ -412,65 +447,73 @@ export function provider(
       user: {
         create: {
           async before(user) {
-            if (context.emailLogin && user.email !== context.emailLogin) {
-              throw new ApiFailure(401, "INVALID_PROOF");
+            try {
+              if (context.emailLogin && user.email !== context.emailLogin) {
+                throw new ApiFailure(401, "INVALID_PROOF");
+              }
+              if (
+                google &&
+                verifiedGoogle &&
+                !verifiedGoogle.identity &&
+                !google.linkUserId &&
+                !config.publicSignupEnabled
+              ) {
+                throw new ApiFailure(403, "SIGNUP_UNAVAILABLE");
+              }
+              return { data: { ...user, emailEnrolled: !!context.emailLogin } };
+            } catch (error) {
+              return logAuthHookError("user.create.before", error);
             }
-            if (
-              google &&
-              verifiedGoogle &&
-              !verifiedGoogle.identity &&
-              !google.linkUserId &&
-              !config.publicSignupEnabled
-            ) {
-              throw new ApiFailure(403, "SIGNUP_UNAVAILABLE");
-            }
-            return { data: { ...user, emailEnrolled: !!context.emailLogin } };
           },
         },
       },
       session: {
         create: {
           async before(session) {
-            if (google && verifiedGoogle?.identity) {
-              const dbWithTx = db as {
-                $transaction?: <T>(
-                  fn: (tx: FlowDb) => Promise<T>,
-                ) => Promise<T>;
-              };
-              if (typeof dbWithTx.$transaction === "function") {
-                return;
+            try {
+              if (google && verifiedGoogle?.identity) {
+                const dbWithTx = db as {
+                  $transaction?: <T>(
+                    fn: (tx: FlowDb) => Promise<T>,
+                  ) => Promise<T>;
+                };
+                if (typeof dbWithTx.$transaction === "function") {
+                  return;
+                }
               }
-            }
-            await lockAuthUser(db, session.userId);
-            if (google) await requireCurrentGoogleBinding(session.userId);
-            if (context.emailLogin) {
-              const user = await db.authUser.findUnique({
-                where: { id: session.userId },
-              });
-              if (
-                !user?.emailEnrolled ||
-                user.mailboxPaused ||
-                user.email !== context.emailLogin
-              ) {
-                throw new ApiFailure(401, "INVALID_PROOF");
-              }
-              if (context.emailSlot && context.emailDigest) {
+              await lockAuthUser(db, session.userId);
+              if (google) await requireCurrentGoogleBinding(session.userId);
+              if (context.emailLogin) {
+                const user = await db.authUser.findUnique({
+                  where: { id: session.userId },
+                });
+                if (
+                  !user?.emailEnrolled ||
+                  user.mailboxPaused ||
+                  user.email !== context.emailLogin
+                ) {
+                  throw new ApiFailure(401, "INVALID_PROOF");
+                }
+                if (context.emailSlot && context.emailDigest) {
+                  const authDb = getPrismaClient("auth");
+                  const [ticket] = await authDb.$queryRaw<{ id: string }[]>`
+                    SELECT flow.issue_email_auth_ticket(${context.emailSlot}, ${context.emailDigest}) AS id
+                  `;
+                  if (ticket?.id) {
+                    activeTicketId = ticket.id;
+                  }
+                }
+              } else if (google && verifiedGoogle) {
                 const authDb = getPrismaClient("auth");
                 const [ticket] = await authDb.$queryRaw<{ id: string }[]>`
-                  SELECT flow.issue_email_auth_ticket(${context.emailSlot}, ${context.emailDigest}) AS id
+                  SELECT flow.issue_google_auth_ticket(${verifiedGoogle.subject}, ${session.userId}, ${google.startOrder}) AS id
                 `;
                 if (ticket?.id) {
                   activeTicketId = ticket.id;
                 }
               }
-            } else if (google && verifiedGoogle) {
-              const authDb = getPrismaClient("auth");
-              const [ticket] = await authDb.$queryRaw<{ id: string }[]>`
-                SELECT flow.issue_google_auth_ticket(${verifiedGoogle.subject}, ${session.userId}, ${google.startOrder}) AS id
-              `;
-              if (ticket?.id) {
-                activeTicketId = ticket.id;
-              }
+            } catch (error) {
+              return logAuthHookError("session.create.before", error);
             }
           },
         },
@@ -478,31 +521,35 @@ export function provider(
       account: {
         create: {
           async before(account) {
-            const proof = verifiedGoogle;
-            if (
-              !google ||
-              proof?.subject !== account.accountId ||
-              account.providerId !== "google" ||
-              (google.linkUserId && google.linkUserId !== account.userId)
-            ) {
-              throw new ApiFailure(401, "INVALID_PROOF");
-            }
-            const inserted = await db.$executeRaw`
-              INSERT INTO flow.google_subject_bindings (subject, user_id)
-              VALUES (${account.accountId}, ${account.userId}) ON CONFLICT (subject) DO NOTHING
-            `;
-            const binding = await db.googleSubjectBinding.findUnique({
-              where: { subject: account.accountId },
-            });
-            if (binding?.userId !== account.userId)
-              throw new ApiFailure(401, "INVALID_PROOF");
-            if (!google.linkUserId) {
-              // Only a first registration in this transaction can create its own binding.
-              if (proof.identity || inserted !== 1)
+            try {
+              const proof = verifiedGoogle;
+              if (
+                !google ||
+                proof?.subject !== account.accountId ||
+                account.providerId !== "google" ||
+                (google.linkUserId && google.linkUserId !== account.userId)
+              ) {
                 throw new ApiFailure(401, "INVALID_PROOF");
-              proof.registeredUserId = account.userId;
+              }
+              const inserted = await db.$executeRaw`
+                INSERT INTO flow.google_subject_bindings (subject, user_id)
+                VALUES (${account.accountId}, ${account.userId}) ON CONFLICT (subject) DO NOTHING
+              `;
+              const binding = await db.googleSubjectBinding.findUnique({
+                where: { subject: account.accountId },
+              });
+              if (binding?.userId !== account.userId)
+                throw new ApiFailure(401, "INVALID_PROOF");
+              if (!google.linkUserId) {
+                // Only a first registration in this transaction can create its own binding.
+                if (proof.identity || inserted !== 1)
+                  throw new ApiFailure(401, "INVALID_PROOF");
+                proof.registeredUserId = account.userId;
+              }
+              return { data: { ...account, ...discardedCredentials } };
+            } catch (error) {
+              return logAuthHookError("account.create.before", error);
             }
-            return { data: { ...account, ...discardedCredentials } };
           },
         },
         update: {

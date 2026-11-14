@@ -1866,6 +1866,36 @@ async function inspectStagingReadiness() {
         (SELECT COUNT(*)::int FROM flow.wallet_activities) AS wallet_activities
     `);
 
+    const authIdentities = await q(
+      "SELECT id, user_id, provider_id, google_binding_order::text AS google_binding_order, created_at FROM flow.auth_identities ORDER BY created_at ASC LIMIT 50",
+    );
+    const googleBindingsSummary = await q(
+      "SELECT COUNT(*)::int AS count, array_agg(user_id ORDER BY created_at ASC) AS user_ids FROM flow.google_subject_bindings",
+    );
+    const authSessionsSummary = await q(
+      "SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE expires_at > CURRENT_TIMESTAMP)::int AS active_count, MAX(created_at) AS latest_created_at FROM flow.auth_sessions",
+    );
+    const authIntents = await q(
+      "SELECT purpose, verified, attempts, google_start_order::text AS google_start_order, user_id, issued_at, expires_at FROM flow.auth_intents ORDER BY issued_at DESC LIMIT 25",
+    );
+    const authTicketsSummary = await q(
+      "SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE consumed_at IS NULL)::int AS unconsumed_count, MAX(created_at) AS latest_created_at FROM flow.auth_issuance_tickets",
+    );
+    const authThrottlesSummary = await q(
+      "SELECT split_part(key, ':', 1) || ':' || split_part(key, ':', 2) AS bucket, count, expires_at FROM flow.auth_throttles ORDER BY expires_at DESC LIMIT 25",
+    );
+    const recentAuditEvents = await q(
+      "SELECT event, user_id, account_id, created_at FROM flow.security_audit_events ORDER BY created_at DESC LIMIT 30",
+    );
+    const dbClock = await q(
+      "SELECT current_setting('TIMEZONE') AS timezone, CURRENT_TIMESTAMP AS current_ts, (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS current_ts_utc",
+    );
+    const authFunctionChecks = await q(`
+      SELECT
+        pg_get_functiondef('flow.issue_google_auth_ticket(text,text,bigint)'::regprocedure) AS issue_google_def,
+        pg_get_functiondef('flow.issue_email_auth_ticket(text,text)'::regprocedure) AS issue_email_def,
+        pg_get_functiondef('flow.trg_auth_sessions_validate_insert()'::regprocedure) AS trg_session_def
+    `);
     const roleChecks = {};
     for (const [label, roleName, passwordEnv] of [
       [
@@ -1883,6 +1913,12 @@ async function inspectStagingReadiness() {
         "flow_staging_custody_worker",
         "FLOW_STAGING_CUSTODY_WORKER_PASSWORD",
       ],
+      ["app", "flow_staging_app", "FLOW_STAGING_APP_PASSWORD"],
+      [
+        "auth_ticket",
+        "flow_staging_auth_worker",
+        "FLOW_STAGING_AUTH_TICKET_PASSWORD",
+      ],
     ]) {
       const pw = process.env[passwordEnv];
       if (!pw) {
@@ -1896,18 +1932,49 @@ async function inspectStagingReadiness() {
         connectionString: roleUrl.toString(),
         connectionTimeoutMillis: 5000,
       });
-      await rc.connect();
+      try {
+        await rc.connect();
+      } catch (err) {
+        roleChecks[label] = {
+          connectError: err instanceof Error ? err.message : String(err),
+        };
+        continue;
+      }
       try {
         const res = await rc.query(`
           SELECT
             current_user AS role,
+            session_user AS session_user,
+            has_schema_privilege(current_user, 'flow', 'USAGE') AS can_use_flow_schema,
             has_function_privilege(current_user, 'flow.claim_active_add_money_intents(text,integer,integer)', 'EXECUTE') AS can_claim_add_money,
             has_function_privilege(current_user, 'flow.claim_account_sync_job(text,integer)', 'EXECUTE') AS can_claim_sync,
             has_function_privilege(current_user, 'flow.claim_outgoing_transfer_for_custody(text,integer)', 'EXECUTE') AS can_claim_outgoing,
+            has_function_privilege(current_user, 'flow.issue_google_auth_ticket(text,text,bigint)', 'EXECUTE') AS can_issue_google_ticket,
+            has_function_privilege(current_user, 'flow.issue_email_auth_ticket(text,text)', 'EXECUTE') AS can_issue_email_ticket,
+            has_sequence_privilege(current_user, 'flow.google_oauth_order', 'USAGE') AS can_use_google_order_seq,
+            has_table_privilege(current_user, 'flow.auth_users', 'INSERT') AS can_insert_auth_users,
+            has_table_privilege(current_user, 'flow.auth_identities', 'INSERT') AS can_insert_auth_identities,
+            has_table_privilege(current_user, 'flow.google_subject_bindings', 'INSERT') AS can_insert_google_bindings,
+            has_table_privilege(current_user, 'flow.auth_sessions', 'INSERT') AS can_insert_auth_sessions,
             has_table_privilege(current_user, 'flow.outgoing_transfer_jobs', 'UPDATE') AS can_direct_update_outgoing,
             has_table_privilege(current_user, 'flow.wallets', 'DELETE') AS can_delete_wallets
         `);
-        roleChecks[label] = res.rows[0];
+        let ticketProbe = null;
+        if (label === "auth_ticket") {
+          try {
+            await rc.query(
+              "SELECT flow.issue_google_auth_ticket('__diag_nonexistent_sub__', '__diag_nonexistent_user__', 1)",
+            );
+            ticketProbe = "unexpected_success";
+          } catch (probeErr) {
+            ticketProbe =
+              probeErr instanceof Error ? probeErr.message : String(probeErr);
+          }
+        }
+        roleChecks[label] = {
+          ...res.rows[0],
+          ...(ticketProbe ? { ticketProbe } : {}),
+        };
       } finally {
         await rc.end();
       }
@@ -1921,6 +1988,32 @@ async function inspectStagingReadiness() {
         accounts,
         users,
         authUsers,
+        authIdentities,
+        googleBindingsSummary: googleBindingsSummary[0],
+        authSessionsSummary: authSessionsSummary[0],
+        authIntents,
+        authTicketsSummary: authTicketsSummary[0],
+        authThrottlesSummary,
+        recentAuditEvents,
+        dbClock: dbClock[0],
+        authFunctionFlags: {
+          googleRequiresWorkerSuffix:
+            authFunctionChecks[0]?.issue_google_def?.includes(
+              "LIKE '%_worker'",
+            ) ?? null,
+          emailRequiresWorkerSuffix:
+            authFunctionChecks[0]?.issue_email_def?.includes(
+              "LIKE '%_worker'",
+            ) ?? null,
+          emailUsesUtcAtZone:
+            authFunctionChecks[0]?.issue_email_def?.includes(
+              "AT TIME ZONE 'UTC'",
+            ) ?? null,
+          trgRequiresActiveTicket:
+            authFunctionChecks[0]?.trg_session_def?.includes(
+              "flow.active_auth_ticket_id",
+            ) ?? null,
+        },
         wallets,
         provisioningJobs,
         operators,

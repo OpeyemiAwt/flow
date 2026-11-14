@@ -309,6 +309,10 @@ async function verifyCode(
   const key = security ? auth.cookies.security : auth.cookies.email;
   const secret = readNonce(request.headers, key);
   if (!secret || !(await clientBudget(request, "verify"))) {
+    log("info", "otp_verify_diagnostic", {
+      operation: security ? "security-verify" : "login-verify",
+      reason: secret ? "CLIENT_RATE_LIMIT" : "MISSING_COOKIE",
+    });
     throw new ApiFailure(401, "INVALID_PROOF");
   }
   const headers = privateHeaders();
@@ -373,21 +377,39 @@ async function verifyCode(
     data: { attempts: { increment: 1 } },
   });
   if (!changed.count) {
+    log("info", "otp_verify_diagnostic", {
+      operation: "login-verify",
+      reason: "INTENT_NOT_CLAIMABLE",
+    });
     throw new ApiFailure(401, "INVALID_PROOF");
   }
   const intent = await db.authIntent.findUniqueOrThrow({
     where: { digest: digest(secret) },
   });
   if (!intent.email) {
+    log("info", "otp_verify_diagnostic", {
+      operation: "login-verify",
+      reason: "INTENT_MISSING_EMAIL",
+    });
     throw new ApiFailure(401, "INVALID_PROOF");
   }
   const user = await db.authUser.findUnique({
     where: { email: intent.email },
   });
-  if (user && (!user.emailEnrolled || user.mailboxPaused))
+  if (user && (!user.emailEnrolled || user.mailboxPaused)) {
+    log("info", "otp_verify_diagnostic", {
+      operation: "login-verify",
+      reason: user.mailboxPaused ? "MAILBOX_PAUSED" : "EMAIL_NOT_ENROLLED",
+    });
     throw new ApiFailure(401, "INVALID_PROOF");
-  if (intent.purpose === "recover-email" && !user)
+  }
+  if (intent.purpose === "recover-email" && !user) {
+    log("info", "otp_verify_diagnostic", {
+      operation: "login-verify",
+      reason: "RECOVERY_USER_MISSING",
+    });
     throw new ApiFailure(401, "INVALID_PROOF");
+  }
   const previous = await readSession(db, request.headers);
   try {
     const result = await provider(db, auth, {
@@ -429,7 +451,20 @@ async function verifyCode(
     headers.append("set-cookie", cookie(auth, auth.cookies.email, "", 0));
     return reply(204, undefined, headers);
   } catch (error) {
-    if (rejectedCode(error)) throw new ApiFailure(401, "INVALID_PROOF");
+    if (rejectedCode(error)) {
+      log("info", "otp_verify_diagnostic", {
+        operation: "login-verify",
+        reason: "CODE_REJECTED",
+        existingUser: !!user,
+      });
+      throw new ApiFailure(401, "INVALID_PROOF");
+    }
+    log("error", "otp_verify_diagnostic", {
+      operation: "login-verify",
+      reason: "UNEXPECTED_ERROR",
+      existingUser: !!user,
+      error,
+    });
     throw error;
   }
 }
@@ -532,6 +567,12 @@ async function beginGoogle(
       "set-cookie",
       cookie(auth, auth.cookies.oauth, secret, otpSeconds),
     );
+    log("info", "google_oauth_diagnostic", {
+      stage: "start",
+      purpose: linking ? "link" : recovery ? "recovery" : "sign-in",
+      hasSession: !!current,
+      stateLength: state.length,
+    });
     return url.href;
   });
   return reply(200, { url: destination }, headers);
@@ -556,6 +597,22 @@ async function finishGoogle(request: Request): Promise<Response> {
     query.getAll("state").length !== 1 ||
     query.getAll("code").length !== 1
   ) {
+    const providerErrorRaw = query.get("error") ?? "";
+    log("error", "google_oauth_diagnostic", {
+      stage: failureStage,
+      reason: "QUERY_OR_COOKIE_INVALID",
+      hasOauthCookie: !!secret,
+      hasStateCookie: !!readNonce(request.headers, auth.cookies.state),
+      hasState: !!state,
+      stateFormatOk: !!state && /^[\w-]{32}$/.test(state),
+      stateLength: state?.length ?? 0,
+      hasCode: !!code,
+      stateCount: query.getAll("state").length,
+      codeCount: query.getAll("code").length,
+      providerError: /^[a-z][a-z0-9_]{0,63}$/.test(providerErrorRaw)
+        ? providerErrorRaw
+        : undefined,
+    });
     return authRedirect(fixedSignInError, headers);
   }
   const intent = await db.authIntent.findUnique({
@@ -565,8 +622,18 @@ async function finishGoogle(request: Request): Promise<Response> {
     !intent?.nonceHash ||
     !intent.stateHash ||
     intent.stateHash !== digest(state)
-  )
+  ) {
+    log("error", "google_oauth_diagnostic", {
+      stage: failureStage,
+      reason: "INTENT_OR_STATE_MISMATCH",
+      hasIntent: !!intent,
+      hasNonceHash: !!intent?.nonceHash,
+      hasStateHash: !!intent?.stateHash,
+      stateMatched: !!intent?.stateHash && intent.stateHash === digest(state),
+      intentPurpose: intent?.purpose,
+    });
     return authRedirect(fixedSignInError, headers);
+  }
   const claimed = await db.authIntent.deleteMany({
     where: {
       digest: intent.digest,
@@ -575,8 +642,17 @@ async function finishGoogle(request: Request): Promise<Response> {
     },
   });
   const startOrder = intent.googleStartOrder;
-  if (claimed.count !== 1 || startOrder === null)
+  if (claimed.count !== 1 || startOrder === null) {
+    log("error", "google_oauth_diagnostic", {
+      stage: failureStage,
+      reason: "INTENT_CLAIM_FAILED",
+      claimedCount: claimed.count,
+      hasStartOrder: startOrder !== null,
+      expired: intent.expiresAt <= new Date(),
+      intentPurpose: intent.purpose,
+    });
     return authRedirect(fixedSignInError, headers);
+  }
   failureStage = "session-proof";
   const link = intent.purpose === "link-google-callback";
   const binding = intent.nonceHash;
@@ -667,7 +743,15 @@ async function finishGoogle(request: Request): Promise<Response> {
             new Headers({ cookie: nextCookie.split(";")[0]! }),
           )
         : null;
-      if (!session) throw new ApiFailure(401, "INVALID_PROOF");
+      if (!session) {
+        log("error", "google_oauth_diagnostic", {
+          stage: failureStage,
+          reason: "SESSION_NOT_FOUND_AFTER_CALLBACK",
+          hasNextSessionCookie: !!nextCookie,
+          setCookieCount: response.headers.getSetCookie().length,
+        });
+        throw new ApiFailure(401, "INVALID_PROOF");
+      }
       if (intent.purpose === "recover-google") {
         await transaction(async (tx) => {
           await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${session.token}, true)`;
