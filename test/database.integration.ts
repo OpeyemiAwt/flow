@@ -10327,15 +10327,15 @@ test("database integration: M38 canonical network matching across OutLayer short
 
     await fixtureClient.query(
       `INSERT INTO flow.payment_attempts (
-        payment_request_id, attempt_public_id, route_type, source_network, source_asset_id,
-        source_asset_symbol, source_decimals, destination_network, destination_asset_id,
+        payment_request_id, attempt_public_id, payer_mode, route_type, route_status,
+        source_network, source_asset_id, source_asset_symbol, source_decimals,
         quoted_source_atomic_amount, quoted_destination_atomic_amount,
         payer_refund_address, status
       ) VALUES (
-        $1::uuid, $2, 'DIRECT', 'base-mainnet', 'base-mainnet:USDC',
-        'USDC', 6, 'base-mainnet', 'base-mainnet:USDC',
+        $1::uuid, $2, 'EXTERNAL_WALLET', 'DIRECT', 'AVAILABLE',
+        'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
         1000000, 1000000,
-        NULL, 'QUOTED'::flow.payment_attempt_status
+        NULL, 'QUOTE_OBSERVED'
       )`,
       [paymentRequestId, attemptPublicId],
     );
