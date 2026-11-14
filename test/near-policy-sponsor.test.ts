@@ -149,7 +149,7 @@ test("readPolicySponsorConfig enforces fail-closed bounds, HTTPS URLs, signer ex
     FLOW_POLICY_SPONSOR_ENABLED: "enabled",
     FLOW_NEAR_SPONSOR_ACCOUNT_ID: "flow-policy-sponsor.near",
     FLOW_NEAR_SPONSOR_SIGNER_URL: "https://signer.internal.flow.example/sign",
-    FLOW_NEAR_SPONSOR_SIGNER_TOKEN: "a".repeat(24),
+    FLOW_NEAR_SPONSOR_SIGNER_TOKEN: "a".repeat(36),
     FLOW_NEAR_SPONSOR_APPROVAL_ACCOUNT_ID: "flow-policy-admin.near",
     FLOW_NEAR_SPONSOR_LOCK_INITIAL_POLICY: "true",
   });
@@ -195,7 +195,7 @@ test("readPolicySponsorConfig enforces fail-closed bounds, HTTPS URLs, signer ex
         FLOW_NEAR_SPONSOR_ACCOUNT_ID: "flow-policy-sponsor.near",
         FLOW_NEAR_SPONSOR_PRIVATE_KEY: rawPrivateKey,
         FLOW_NEAR_SPONSOR_SIGNER_URL: "https://signer.internal.flow.example/sign",
-        FLOW_NEAR_SPONSOR_SIGNER_TOKEN: "a".repeat(24),
+        FLOW_NEAR_SPONSOR_SIGNER_TOKEN: "a".repeat(36),
       }),
     { code: "INVALID_CONFIGURATION" },
   );
