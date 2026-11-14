@@ -7087,7 +7087,7 @@ test("m3 phase 3.2: authentication ticket and refresh lease privilege audit — 
 
   // Exploit 11: Cooldown enforcement via guarded function
   // Worker completes refresh with success=true using valid lease_token
-  const released = await workerPool.query<{
+  const released = await legacyWorkerPool!.query<{
     release_portfolio_refresh_lease: boolean;
   }>(
     `SELECT flow.release_portfolio_refresh_lease($1::uuid, $2::bigint, $3::uuid, true)`,
@@ -7323,7 +7323,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
       [attackerSlot, attackerDigest, attacker.email],
     );
     const [attTicketRow] = (
-      await workerPool.query<{ issue_email_auth_ticket: string }>(
+      await authTicketPool!.query<{ issue_email_auth_ticket: string }>(
         `SELECT flow.issue_email_auth_ticket($1, $2)`,
         [attackerSlot, attackerDigest],
       )
