@@ -2391,21 +2391,22 @@ async function resumeStagingFailedWallets() {
       SET status = 'PROVISIONING', updated_at = CURRENT_TIMESTAMP
       FROM flow.wallet_provisioning_jobs j
       WHERE j.account_id = w.account_id
-        AND j.status = 'FAILED'
-        AND w.status = 'SETUP_FAILED'
+        AND j.status IN ('FAILED', 'SETUP_PENDING')
+        AND w.status IN ('SETUP_FAILED', 'PROVISIONING')
         AND w.provider_wallet_id IS NOT NULL
       RETURNING w.id AS wallet_id, w.account_id
     `);
     const jobRows = await admin.query(`
       UPDATE flow.wallet_provisioning_jobs wpj
       SET
-        status = 'SETUP_PENDING',
+        status = 'REGISTERED',
+        attempts = 0,
         failure_classification = NULL,
         last_error = NULL,
         lease_holder = NULL,
         lease_expires_at = NULL,
         updated_at = CURRENT_TIMESTAMP
-      WHERE wpj.status = 'FAILED'
+      WHERE wpj.status IN ('FAILED', 'SETUP_PENDING')
         AND EXISTS (
           SELECT 1 FROM flow.wallets w
           WHERE w.account_id = wpj.account_id
