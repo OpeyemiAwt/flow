@@ -873,12 +873,21 @@ export class WalletProvisioningWorker {
             this.policySponsor.allowTestContractOverride,
         });
         sponsoredControllerAccountId = sponsorOutcome.controllerAccountId;
+        if (sponsorOutcome.status === "ALREADY_ON_CHAIN") {
+          await this.adapter.invalidatePolicyCache(apiKey, providerWalletId);
+        }
 
-        policyEvidence = await this.adapter.getPolicy(apiKey, providerWalletId);
-        inspection = inspectCustodyPolicyEvidence(
-          policyEvidence,
-          providerWalletId,
-        );
+        for (let pollAttempt = 0; pollAttempt < 5; pollAttempt++) {
+          policyEvidence = await this.adapter.getPolicy(apiKey, providerWalletId);
+          inspection = inspectCustodyPolicyEvidence(
+            policyEvidence,
+            providerWalletId,
+          );
+          if (inspection.isStored || pollAttempt === 4) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1_500));
+        }
       }
 
       if (inspection.isStored) {
@@ -934,6 +943,18 @@ export class WalletProvisioningWorker {
           ...(recoveredFromStage ? { recoveredFromStage } : {}),
         };
       } else {
+        log("error", "custody_policy_verification_detail", {
+          walletId,
+          policyState: inspection.policyState,
+          inspection: Object.fromEntries(
+            Object.entries(inspection).map(([k, v]) => [
+              k,
+              typeof v === "string" && v.length > 24
+                ? `${v.slice(0, 12)}...${v.slice(-6)}`
+                : v,
+            ]),
+          ),
+        });
         throw new FlowError(
           "POLICY_VERIFICATION_FAILED",
           "Production wallet provisioning requires verified stored custody policy evidence.",
