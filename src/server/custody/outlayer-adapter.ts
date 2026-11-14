@@ -320,6 +320,7 @@ export class OutLayerAdapter {
   private readonly timeoutMs: number;
   private readonly compatibilityConfig?: ProviderCompatibilityConfig;
   private readonly controlledRegistrationAuthorized: boolean;
+  private readonly openRegistrationAuthorized: boolean;
   private readonly policyPreparationAuthorized: boolean;
   private liveRegistrationCount = 0;
 
@@ -329,6 +330,7 @@ export class OutLayerAdapter {
     options?: {
       readonly compatibilityConfig?: ProviderCompatibilityConfig;
       readonly controlledRegistrationAuthorized?: boolean;
+      readonly openRegistrationAuthorized?: boolean;
       readonly policyPreparationAuthorized?: boolean;
     },
   ) {
@@ -337,6 +339,8 @@ export class OutLayerAdapter {
     this.compatibilityConfig = options?.compatibilityConfig;
     this.controlledRegistrationAuthorized =
       options?.controlledRegistrationAuthorized === true;
+    this.openRegistrationAuthorized =
+      options?.openRegistrationAuthorized === true;
     this.policyPreparationAuthorized =
       options?.policyPreparationAuthorized === true;
   }
@@ -397,10 +401,14 @@ export class OutLayerAdapter {
       return;
     }
 
-    // Explicit policy setup / verification for an already-registered wallet when FLOW_EXECUTION=disabled:
-    // NEVER permits /register, /wallet/v1/transfer, /wallet/v1/call, or tx signing.
+    // Explicit registration & policy setup when FLOW_EXECUTION=disabled:
+    // NEVER permits /wallet/v1/transfer, /wallet/v1/call, or tx signing.
+    const anySetupModeAuthorized =
+      this.policyPreparationAuthorized ||
+      this.controlledRegistrationAuthorized ||
+      this.openRegistrationAuthorized;
     if (
-      this.policyPreparationAuthorized &&
+      anySetupModeAuthorized &&
       (!this.compatibilityConfig ||
         this.compatibilityConfig.mode === "disabled")
     ) {
@@ -410,45 +418,31 @@ export class OutLayerAdapter {
           `OutLayer host ${parsed.hostname} is not in the authorized OutLayer host allowlist.`,
         );
       }
-      const POLICY_PREPARATION_ENDPOINTS = new Set([
-        "/wallet/v1/policy",
-        "/wallet/v1/encrypt-policy",
-        "/wallet/v1/sign-policy",
-        "/wallet/v1/invalidate-cache",
-      ]);
-      if (!POLICY_PREPARATION_ENDPOINTS.has(endpointPath)) {
+      const permittedEndpoints = new Set<string>(["/wallet/v1/policy"]);
+      if (
+        this.controlledRegistrationAuthorized ||
+        this.openRegistrationAuthorized
+      ) {
+        permittedEndpoints.add("/register");
+        permittedEndpoints.add("/wallet/v1/address");
+      }
+      if (this.policyPreparationAuthorized) {
+        permittedEndpoints.add("/wallet/v1/encrypt-policy");
+        permittedEndpoints.add("/wallet/v1/sign-policy");
+        permittedEndpoints.add("/wallet/v1/invalidate-cache");
+      }
+      if (!permittedEndpoints.has(endpointPath)) {
         throw new FlowError(
           "INVALID_CONFIGURATION",
-          `OutLayer endpoint ${endpointPath} is not permitted during controlled policy activation.`,
+          `OutLayer endpoint ${endpointPath} is not permitted under current FLOW_EXECUTION=disabled custody setup authorization.`,
         );
       }
-      return;
-    }
-
-    // 2. Separate fail-closed Provider Compatibility Mode / Controlled Registration check when FLOW_EXECUTION=disabled
-    if (
-      this.controlledRegistrationAuthorized &&
-      (!this.compatibilityConfig ||
-        this.compatibilityConfig.mode === "disabled")
-    ) {
-      if (!ALLOWED_OUTLAYER_HOSTS.includes(parsed.hostname.toLowerCase())) {
-        throw new FlowError(
-          "INVALID_CONFIGURATION",
-          `OutLayer host ${parsed.hostname} is not in the authorized OutLayer host allowlist.`,
-        );
-      }
-      const CONTROLLED_REGISTRATION_ENDPOINTS = new Set([
-        "/register",
-        "/wallet/v1/address",
-        "/wallet/v1/policy",
-      ]);
-      if (!CONTROLLED_REGISTRATION_ENDPOINTS.has(endpointPath)) {
-        throw new FlowError(
-          "INVALID_CONFIGURATION",
-          `OutLayer endpoint ${endpointPath} is not permitted during controlled wallet registration.`,
-        );
-      }
-      if (action === "register" && this.liveRegistrationCount >= 1) {
+      if (
+        action === "register" &&
+        this.controlledRegistrationAuthorized &&
+        !this.openRegistrationAuthorized &&
+        this.liveRegistrationCount >= 1
+      ) {
         throw new FlowError(
           "INVALID_CONFIGURATION",
           "Controlled wallet registration allows at most one registration per worker authorization.",

@@ -163,6 +163,22 @@ function assertCredentialScope(
   }
 }
 
+const SPONSOR_SECRET_ENV_KEYS = [
+  "FLOW_NEAR_SPONSOR_PRIVATE_KEY",
+  "FLOW_NEAR_SPONSOR_SIGNER_TOKEN",
+] as const;
+
+function assertSponsorCredentialsIsolated(
+  source: EnvironmentInput,
+  contextLabel: string,
+): void {
+  if (SPONSOR_SECRET_ENV_KEYS.some((key) => source[key] !== undefined)) {
+    invalidConfig(
+      `NEAR sponsor signing credentials are strictly isolated to the custody worker and prohibited in ${contextLabel}.`,
+    );
+  }
+}
+
 export function assertWebEnvironment(source: EnvironmentInput): void {
   if (source.FLOW_CUSTODY_DATABASE_URL !== undefined) {
     invalidConfig(
@@ -170,6 +186,7 @@ export function assertWebEnvironment(source: EnvironmentInput): void {
     );
   }
   assertCredentialScope(source, "runtime");
+  assertSponsorCredentialsIsolated(source, "the web process");
   if (source.FLOW_WALLET_ENCRYPTION_KEY !== undefined) {
     invalidConfig(
       "Supply only the FLOW web runtime credentials to this process. Custody encryption keys are isolated to the wallet worker.",
@@ -214,6 +231,7 @@ export function assertWorkerEnvironment(source: EnvironmentInput): void {
     );
   }
   assertCredentialScope(source, "worker");
+  assertSponsorCredentialsIsolated(source, "legacy worker runtime");
   if (
     source.FLOW_WALLET_ENCRYPTION_KEY !== undefined ||
     source.FLOW_OUTLAYER_API_KEY !== undefined
@@ -224,6 +242,7 @@ export function assertWorkerEnvironment(source: EnvironmentInput): void {
 
 export function assertPaymentEnvironment(source: EnvironmentInput): void {
   assertCredentialScope(source, "payment");
+  assertSponsorCredentialsIsolated(source, "the payment worker");
   if (source.FLOW_WALLET_ENCRYPTION_KEY !== undefined) {
     invalidConfig(
       "Custody encryption keys are strictly isolated from the payment worker.",
@@ -241,6 +260,7 @@ export function assertPaymentEnvironment(source: EnvironmentInput): void {
 
 export function assertIndexerEnvironment(source: EnvironmentInput): void {
   assertCredentialScope(source, "indexer");
+  assertSponsorCredentialsIsolated(source, "the indexer worker");
   if (
     source.FLOW_WALLET_ENCRYPTION_KEY !== undefined ||
     source.FLOW_OUTLAYER_API_KEY !== undefined
@@ -282,6 +302,7 @@ export function assertCustodyEnvironment(source: EnvironmentInput): void {
 }
 
 export function assertOperatorEnvironment(source: EnvironmentInput): void {
+  assertSponsorCredentialsIsolated(source, "operator runtime");
   if (source.FLOW_MIGRATION_DATABASE_URL !== undefined) {
     invalidConfig(
       "Migration credentials must remain strictly isolated and are prohibited in operator runtime.",

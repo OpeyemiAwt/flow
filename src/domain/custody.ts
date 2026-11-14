@@ -1519,6 +1519,14 @@ export interface DefaultDenyCustodyPolicyPayload {
     readonly intents_call: { readonly allowed: false };
     readonly sign_message: { readonly allowed: false };
   };
+  readonly approval?: {
+    readonly threshold: number;
+    readonly approvers: readonly {
+      readonly id: string;
+      readonly role: "admin";
+    }[];
+    readonly locked: true;
+  };
 }
 
 /**
@@ -1527,8 +1535,11 @@ export interface DefaultDenyCustodyPolicyPayload {
  * Enforces empty `transaction_types`, empty address whitelist, zero `"*"` spend caps,
  * and explicit `allowed: false` (plus `raw_tx: false` for EVM/Solana) on every capability.
  */
-export function buildDefaultDenyCustodyPolicy(): DefaultDenyCustodyPolicyPayload {
-  return {
+export function buildDefaultDenyCustodyPolicy(options?: {
+  readonly approvalAccountId?: string;
+  readonly lockPolicy?: boolean;
+}): DefaultDenyCustodyPolicyPayload {
+  const base: DefaultDenyCustodyPolicyPayload = {
     rules: {
       transaction_types: [],
       limits: {
@@ -1553,6 +1564,28 @@ export function buildDefaultDenyCustodyPolicy(): DefaultDenyCustodyPolicyPayload
       sign_message: { allowed: false },
     },
   };
+
+  if (options?.approvalAccountId) {
+    const normalized = options.approvalAccountId.trim().toLowerCase();
+    if (!isValidNearAddress(normalized)) {
+      throw new FlowError(
+        "INVALID_CONFIGURATION",
+        "Policy approval NEAR account ID is invalid.",
+      );
+    }
+    if (options.lockPolicy) {
+      return {
+        ...base,
+        approval: {
+          threshold: 1,
+          approvers: [{ id: normalized, role: "admin" }],
+          locked: true,
+        },
+      };
+    }
+  }
+
+  return base;
 }
 
 export interface OnChainWalletPolicyView {

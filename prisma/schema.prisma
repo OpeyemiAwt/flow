@@ -946,3 +946,47 @@ model OutgoingTransferJob {
   @@map("outgoing_transfer_jobs")
   @@schema("flow")
 }
+
+model CustodyPolicySponsorship {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  walletId              String    @unique @map("wallet_id") @db.Uuid
+  accountId             String    @map("account_id") @db.Uuid
+  jobId                 String?   @map("job_id") @db.Uuid
+  walletPubkey          String    @map("wallet_pubkey")
+  sponsorAccountId      String    @map("sponsor_account_id")
+  contractId            String    @default("outlayer.near") @map("contract_id")
+  methodName            String    @default("store_wallet_policy") @map("method_name")
+  policyVersion         BigInt    @map("policy_version")
+  policyHash            String?   @map("policy_hash")
+  estimatedStorageYocto Decimal   @map("estimated_storage_yocto") @db.Decimal(78, 0)
+  attachedDepositYocto  Decimal   @map("attached_deposit_yocto") @db.Decimal(78, 0)
+  maxAllowedFeeYocto    Decimal   @map("max_allowed_fee_yocto") @db.Decimal(78, 0)
+  actualGasBurntYocto   Decimal?  @map("actual_gas_burnt_yocto") @db.Decimal(78, 0)
+  actualFeeYocto        Decimal?  @map("actual_fee_yocto") @db.Decimal(78, 0)
+  txHash                String?   @unique @map("tx_hash")
+  status                String    @default("PREPARED")
+  errorCode             String?   @map("error_code")
+  fencingToken          BigInt    @default(0) @map("fencing_token")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  finalizedAt           DateTime? @map("finalized_at") @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([status, updatedAt(sort: Desc)])
+  @@map("custody_policy_sponsorships")
+  @@schema("flow")
+}
+
+model CustodySponsorCircuit {
+  id                    String    @id @default("DEFAULT")
+  circuitOpen           Boolean   @default(false) @map("circuit_open")
+  consecutiveFailures   Int       @default(0) @map("consecutive_failures")
+  openedAt              DateTime? @map("opened_at") @db.Timestamptz(3)
+  openedReason          String?   @map("opened_reason")
+  lastKnownBalanceYocto Decimal?  @map("last_known_balance_yocto") @db.Decimal(78, 0)
+  lastBalanceCheckedAt  DateTime? @map("last_balance_checked_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("custody_sponsor_circuit")
+  @@schema("flow")
+}

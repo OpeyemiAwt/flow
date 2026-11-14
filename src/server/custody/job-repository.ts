@@ -34,6 +34,10 @@ export const ALLOWED_JOB_FAILURE_CLASSIFICATIONS = [
   "INVALID_ADDRESS",
   "POLICY_VERIFICATION_FAILED",
   "INCOMPLETE_PROVISIONING",
+  "SPONSOR_CIRCUIT_OPEN",
+  "SPONSOR_LOW_BALANCE",
+  "SPONSOR_DAILY_CAP_EXCEEDED",
+  "POLICY_SPONSOR_CAP_EXCEEDED",
 ] as const;
 
 export type JobFailureClassification =
@@ -81,6 +85,14 @@ const ALLOWLISTED_FAILURE_SUMMARIES: Readonly<
     "Provider custody policy failed mandatory verification checks.",
   INCOMPLETE_PROVISIONING:
     "Wallet provisioning is missing required launch chain addresses or capabilities.",
+  SPONSOR_CIRCUIT_OPEN:
+    "Automated NEAR policy sponsor circuit breaker is open.",
+  SPONSOR_LOW_BALANCE:
+    "Sponsor NEAR account balance is below configured minimum operational reserve.",
+  SPONSOR_DAILY_CAP_EXCEEDED:
+    "Automated NEAR policy sponsor 24-hour spending cap reached.",
+  POLICY_SPONSOR_CAP_EXCEEDED:
+    "Projected NEAR policy storage cost exceeds per-wallet cap.",
 });
 
 export function isValidJobFailureClassification(
@@ -922,6 +934,7 @@ export async function activateWalletIfReady(
   fencingToken: bigint,
   walletId: string,
   policyEvidence: ProviderPolicyEvidenceInput,
+  options?: { readonly expectedController?: string },
 ): Promise<void> {
   await db.$transaction(async (tx) => {
     const jobs = await tx.$queryRaw<
@@ -994,6 +1007,7 @@ export async function activateWalletIfReady(
     const verifiedPolicy = verifyCustodyPolicyEvidence(
       policyEvidence,
       wallet.providerWalletId,
+      options,
     );
 
     // 2. Load and validate persisted multi-chain addresses and capabilities
@@ -1622,9 +1636,16 @@ export async function resumePolicyVerificationJob(
       );
     }
 
+    const resumableClassifications = new Set<string>([
+      "POLICY_VERIFICATION_FAILED",
+      "SPONSOR_CIRCUIT_OPEN",
+      "SPONSOR_LOW_BALANCE",
+      "SPONSOR_DAILY_CAP_EXCEEDED",
+      "POLICY_SPONSOR_CAP_EXCEEDED",
+    ]);
     if (
       job.status !== "FAILED" ||
-      job.failureClassification !== "POLICY_VERIFICATION_FAILED"
+      !resumableClassifications.has(job.failureClassification ?? "")
     ) {
       throw new FlowError(
         "INVALID_STATE_TRANSITION",

@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import {
+  createHash,
+  generateKeyPairSync,
+  randomUUID,
+} from "node:crypto";
+import { readPolicySponsorConfig } from "../src/foundation/wallet-environment.ts";
+import {
+  sponsorAndStoreWalletPolicy,
+  type NearSponsorRpc,
+} from "../src/server/custody/near-policy-sponsor.ts";
 import { after, test } from "node:test";
 import pg from "pg";
 import {
@@ -9861,5 +9870,360 @@ test("database integration: M36 settings RLS, Add Money worker lease lifecycle, 
     appClientB?.release();
     paymentClient?.release();
     custodyClient?.release();
+  }
+});
+
+test("database integration: M37 automated NEAR policy sponsorship RLS isolation, idempotency, crash/SETUP_FAILED recovery, caps, and circuit breaker", async () => {
+  assert.ok(custodyPool, "FLOW_CUSTODY_DATABASE_URL required");
+
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const spki = publicKey.export({ format: "der", type: "spki" }) as Buffer;
+  const pkcs8 = privateKey.export({ format: "der", type: "pkcs8" }) as Buffer;
+  const pub32 = spki.subarray(spki.length - 32);
+  const seed32 = pkcs8.subarray(pkcs8.length - 32);
+  const sponsorPrivKey = `ed25519:${encodeBase58(Buffer.concat([seed32, pub32]))}`;
+  const sponsorAccountId = "flow-policy-sponsor.near";
+
+  const sponsorConfig = readPolicySponsorConfig({
+    NODE_ENV: "production",
+    FLOW_POLICY_SPONSOR_ENABLED: "enabled",
+    FLOW_NEAR_SPONSOR_ACCOUNT_ID: sponsorAccountId,
+    FLOW_NEAR_SPONSOR_PRIVATE_KEY: sponsorPrivKey,
+    FLOW_NEAR_SPONSOR_MAX_PER_WALLET_YOCTO: "30000000000000000000000",
+    FLOW_NEAR_SPONSOR_DAILY_CAP_YOCTO: "100000000000000000000000",
+    FLOW_NEAR_SPONSOR_MIN_RESERVE_YOCTO: "100000000000000000000000",
+    FLOW_NEAR_SPONSOR_CIRCUIT_THRESHOLD: "2",
+  });
+  assert.equal(sponsorConfig.enabled, true);
+  if (!sponsorConfig.enabled) throw new Error("Expected enabled sponsorConfig");
+
+  const mockServer = await createOutLayerMockServer({
+    multiWalletMode: true,
+    policyState: "none",
+  });
+
+  const restrictedPools: Array<{ name: string; poolRef: pg.Pool | undefined }> = [
+    { name: "_app", poolRef: pool },
+    { name: "_worker", poolRef: legacyWorkerPool },
+    { name: "_payment_worker", poolRef: paymentPool },
+    { name: "_indexer_worker", poolRef: indexerPool },
+    { name: "_operator", poolRef: operatorPool },
+    { name: "_auth_ticket", poolRef: authTicketPool },
+  ];
+
+  // 1. Strict DB privilege isolation: only _custody_worker (and _fixture) may access sponsor tables
+  for (const rolePool of restrictedPools) {
+    if (!rolePool.poolRef) continue;
+    await assert.rejects(
+      rolePool.poolRef.query(
+        "SELECT id FROM flow.custody_policy_sponsorships LIMIT 1",
+      ),
+      { code: "42501" },
+      `${rolePool.name} must not read flow.custody_policy_sponsorships`,
+    );
+    await assert.rejects(
+      rolePool.poolRef.query(
+        "SELECT id FROM flow.custody_sponsor_circuit LIMIT 1",
+      ),
+      { code: "42501" },
+      `${rolePool.name} must not read flow.custody_sponsor_circuit`,
+    );
+  }
+
+  let broadcastCount = 0;
+  let sponsorBalanceYocto = 500_000_000_000_000_000_000_000n; // 0.50 NEAR
+  let estimateStorageYocto = 14_230_000_000_000_000_000_000n; // 0.01423 NEAR
+  let nonce = 10n;
+  const onChainPolicies = new Map<
+    string,
+    {
+      owner: string;
+      encrypted_data: string;
+      frozen: boolean;
+      version: number;
+      locked: boolean;
+      updated_at: number;
+    }
+  >();
+  const txResults = new Map<
+    string,
+    {
+      txHash: string;
+      succeeded: boolean;
+      gasBurntYocto: bigint;
+      refundReceivedYocto: bigint;
+      netFeeYocto: bigint;
+    }
+  >();
+
+  let hideOnChainTemporarily = false;
+  const fakeNearRpc: NearSponsorRpc = {
+    async viewAccountBalance() {
+      return sponsorBalanceYocto;
+    },
+    async viewAccessKeyNonce() {
+      return nonce;
+    },
+    async getLatestFinalBlockHash() {
+      return encodeBase58(Buffer.alloc(32, 9));
+    },
+    async estimatePolicyStorageCost() {
+      return estimateStorageYocto;
+    },
+    async getOnChainWalletPolicy(walletPubkey) {
+      if (hideOnChainTemporarily) return null;
+      return onChainPolicies.get(walletPubkey) ?? null;
+    },
+    async sendSignedTransactionFinal(signedTxBase64, attachedDepositYocto) {
+      broadcastCount++;
+      nonce += 1n;
+      const signedBuf = Buffer.from(signedTxBase64, "base64");
+      const txBytes = signedBuf.subarray(0, signedBuf.length - 65);
+      assert.ok(
+        txBytes.includes(Buffer.from("store_wallet_policy", "utf8")),
+        "Broadcasted NEAR tx must strictly invoke store_wallet_policy",
+      );
+      const txHash = encodeBase58(createHash("sha256").update(txBytes).digest());
+      const outcome = {
+        txHash,
+        succeeded: true,
+        gasBurntYocto: 800_000_000_000_000_000_000n,
+        refundReceivedYocto: 0n,
+        netFeeYocto: attachedDepositYocto + 800_000_000_000_000_000_000n,
+      };
+      txResults.set(txHash, outcome);
+
+      // Update mock on-chain & OutLayer coordinator policy visibility for latest wallet
+      const wallets = mockServer.getRegisteredWallets();
+      const latest = wallets[wallets.length - 1];
+      if (latest) {
+        onChainPolicies.set(`ed25519:${latest.nearAccountId.toLowerCase()}`, {
+          owner: sponsorAccountId,
+          encrypted_data: "ZW5jcnlwdGVk",
+          frozen: false,
+          version: 1,
+          locked: false,
+          updated_at: Math.floor(Date.now() / 1000),
+        });
+        mockServer.setWalletPolicyOverride(latest.apiKey, {
+          policy: "stored",
+          controller: sponsorAccountId,
+        });
+      }
+      return outcome;
+    },
+    async queryTransactionStatus(txHash) {
+      return txResults.get(txHash) ?? null;
+    },
+  };
+
+  const custodyDb = getPrismaClient("custody");
+  const testKeyHex =
+    "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+
+  try {
+    // Reset circuit state before test
+    await custodyDb.$executeRaw`
+      UPDATE flow.custody_sponsor_circuit
+      SET circuit_open = false, consecutive_failures = 0, opened_at = NULL, opened_reason = NULL
+      WHERE id = 'DEFAULT'
+    `;
+
+    // 2. End-to-end automated Stage 1 -> Stage 2 -> Sponsor Stage 3 -> ACTIVE
+    const accHappy = await createTestAccount(pool, "PERSONAL", "m37-happy");
+    const happyJob = await ensureProvisioningJobForAccount(
+      db,
+      accHappy.accountId,
+      randomUUID(),
+    );
+    const adapter = new OutLayerAdapter(mockServer.url);
+    const sponsoredWorker = new WalletProvisioningWorker({
+      db: custodyDb,
+      adapter,
+      walletConfig: { encryptionKey: testKeyHex, keyId: "v1" },
+      workerId: "worker-m37-happy",
+      policySponsor: { config: sponsorConfig, nearRpc: fakeNearRpc },
+    });
+
+    const happyRes = await sponsoredWorker.processAccountJob(accHappy.accountId);
+    assert.equal(happyRes.outcome, "activated");
+    assert.equal(mockServer.getRegisterCallCount(), 1);
+    assert.equal(mockServer.getEncryptPolicyCallCount(), 1);
+    assert.equal(mockServer.getSignPolicyCallCount(), 1);
+    assert.equal(mockServer.getInvalidateCacheCallCount(), 1);
+    assert.equal(broadcastCount, 1);
+
+    const happyWalletRow = await custodyPool.query<{
+      id: string;
+      status: string;
+      policy_state: string;
+      controller_account_id: string | null;
+      near_account_id: string;
+    }>(
+      `SELECT id, status::text, policy_state, controller_account_id, near_account_id
+       FROM flow.wallets WHERE account_id = $1::uuid`,
+      [accHappy.accountId],
+    );
+    assert.equal(happyWalletRow.rows[0]?.status, "ACTIVE");
+    assert.equal(happyWalletRow.rows[0]?.policy_state, "stored");
+    assert.equal(
+      happyWalletRow.rows[0]?.controller_account_id,
+      sponsorAccountId,
+    );
+
+    const sponsorRow = await custodyPool.query<{
+      status: string;
+      tx_hash: string | null;
+      contract_id: string;
+      method_name: string;
+      verified_at: Date | null;
+    }>(
+      `SELECT status, tx_hash, contract_id, method_name, verified_at
+       FROM flow.custody_policy_sponsorships WHERE wallet_id = $1::uuid`,
+      [happyWalletRow.rows[0]!.id],
+    );
+    assert.equal(sponsorRow.rows[0]?.status, "VERIFIED");
+    assert.ok(sponsorRow.rows[0]?.tx_hash);
+    assert.equal(sponsorRow.rows[0]?.contract_id, "outlayer.near");
+    assert.equal(sponsorRow.rows[0]?.method_name, "store_wallet_policy");
+    assert.ok(sponsorRow.rows[0]?.verified_at);
+
+    // 3. Per-wallet idempotency: retrying sponsor with existing tx_hash reconciles without broadcasting another TX
+    const regHappy = mockServer.getRegisteredWallets()[0]!;
+    hideOnChainTemporarily = true;
+    const idemOutcome = await sponsorAndStoreWalletPolicy({
+      db: custodyDb,
+      adapter,
+      nearRpc: fakeNearRpc,
+      config: sponsorConfig,
+      accountId: accHappy.accountId,
+      walletId: happyWalletRow.rows[0]!.id,
+      jobId: happyJob.id,
+      fencingToken: 1n,
+      providerWalletId: regHappy.walletId,
+      apiKey: regHappy.apiKey,
+      walletPubkey: `ed25519:${regHappy.nearAccountId.toLowerCase()}`,
+    });
+    hideOnChainTemporarily = false;
+    assert.equal(idemOutcome.status, "SUBMITTED_AND_FINALIZED");
+    assert.equal(idemOutcome.txHash, sponsorRow.rows[0]?.tx_hash);
+    assert.equal(broadcastCount, 1);
+
+    // 4. Existing SETUP_FAILED (POLICY_VERIFICATION_FAILED) wallet recovers without repeating /register
+    const accRecovery = await createTestAccount(pool, "PERSONAL", "m37-recovery");
+    const recJob = await ensureProvisioningJobForAccount(
+      db,
+      accRecovery.accountId,
+      randomUUID(),
+    );
+    const unsponsoredWorker = new WalletProvisioningWorker({
+      db: custodyDb,
+      adapter,
+      walletConfig: { encryptionKey: testKeyHex, keyId: "v1" },
+      workerId: "worker-m37-fail-stage3",
+    });
+    const failedRes = await unsponsoredWorker.processAccountJob(
+      accRecovery.accountId,
+    );
+    assert.equal(failedRes.outcome, "failed");
+    assert.equal(failedRes.failureClassification, "POLICY_VERIFICATION_FAILED");
+    assert.equal(mockServer.getRegisterCallCount(), 2);
+
+    const recWalletRow = await custodyPool.query<{ id: string }>(
+      `SELECT id FROM flow.wallets WHERE account_id = $1::uuid`,
+      [accRecovery.accountId],
+    );
+    const recoveredRes = await sponsoredWorker.resumeFailedPolicyVerification({
+      accountId: accRecovery.accountId,
+      jobId: recJob.id,
+      expectedWalletId: recWalletRow.rows[0]!.id,
+      requestId: randomUUID(),
+      actorAuthId: "operator:m37-recovery-check",
+    });
+    assert.equal(recoveredRes.outcome, "activated");
+    assert.equal(
+      mockServer.getRegisterCallCount(),
+      2,
+      "Recovery must never repeat /register",
+    );
+    assert.equal(broadcastCount, 2);
+
+    // 4b. Daily 24h spend cap enforcement (2 wallets already spent ~0.030 NEAR total; 0.025 NEAR cap blocks 3rd)
+    const tightDailyConfig = readPolicySponsorConfig({
+      NODE_ENV: "production",
+      FLOW_POLICY_SPONSOR_ENABLED: "enabled",
+      FLOW_NEAR_SPONSOR_ACCOUNT_ID: sponsorAccountId,
+      FLOW_NEAR_SPONSOR_PRIVATE_KEY: sponsorPrivKey,
+      FLOW_NEAR_SPONSOR_MAX_PER_WALLET_YOCTO: "30000000000000000000000",
+      FLOW_NEAR_SPONSOR_DAILY_CAP_YOCTO: "25000000000000000000000",
+      FLOW_NEAR_SPONSOR_MIN_RESERVE_YOCTO: "100000000000000000000000",
+    });
+    assert.equal(tightDailyConfig.enabled, true);
+    if (!tightDailyConfig.enabled) throw new Error("Expected tightDailyConfig");
+    const accDaily = await createTestAccount(pool, "PERSONAL", "m37-daily");
+    await ensureProvisioningJobForAccount(db, accDaily.accountId, randomUUID());
+    const tightDailyWorker = new WalletProvisioningWorker({
+      db: custodyDb,
+      adapter,
+      walletConfig: { encryptionKey: testKeyHex, keyId: "v1" },
+      workerId: "worker-m37-daily",
+      policySponsor: { config: tightDailyConfig, nearRpc: fakeNearRpc },
+    });
+    const dailyRes = await tightDailyWorker.processAccountJob(accDaily.accountId);
+    assert.equal(dailyRes.outcome, "failed");
+    assert.equal(dailyRes.failureClassification, "SPONSOR_DAILY_CAP_EXCEEDED");
+    assert.equal(broadcastCount, 2);
+
+    // 5. Spend caps & persistent circuit breaker enforcement
+    const accCap = await createTestAccount(pool, "PERSONAL", "m37-cap");
+    await ensureProvisioningJobForAccount(db, accCap.accountId, randomUUID());
+    estimateStorageYocto = 40_000_000_000_000_000_000_000n; // > 0.03 NEAR cap
+    const capRes = await sponsoredWorker.processAccountJob(accCap.accountId);
+    assert.equal(capRes.outcome, "failed");
+    assert.equal(capRes.failureClassification, "POLICY_SPONSOR_CAP_EXCEEDED");
+    assert.equal(broadcastCount, 2);
+
+    // Low sponsor balance reserve check trips persistent circuit breaker (threshold=2 -> 2nd failure opens circuit)
+    estimateStorageYocto = 14_230_000_000_000_000_000_000n;
+    sponsorBalanceYocto = 50_000_000_000_000_000_000_000n; // 0.05 NEAR < 0.10 NEAR reserve
+    const accLowBal = await createTestAccount(pool, "PERSONAL", "m37-lowbal");
+    await ensureProvisioningJobForAccount(db, accLowBal.accountId, randomUUID());
+    const lowBalRes = await sponsoredWorker.processAccountJob(
+      accLowBal.accountId,
+    );
+    assert.equal(lowBalRes.outcome, "failed");
+    assert.equal(lowBalRes.failureClassification, "SPONSOR_LOW_BALANCE");
+    assert.equal(broadcastCount, 2);
+
+    const circuitRow = await custodyPool.query<{
+      circuit_open: boolean;
+      consecutive_failures: number;
+    }>(
+      `SELECT circuit_open, consecutive_failures FROM flow.custody_sponsor_circuit WHERE id = 'DEFAULT'`,
+    );
+    assert.equal(circuitRow.rows[0]?.circuit_open, true);
+    assert.equal(circuitRow.rows[0]?.consecutive_failures, 2);
+
+    // Next job immediately halted by open circuit breaker
+    sponsorBalanceYocto = 500_000_000_000_000_000_000_000n;
+    const accCircuit = await createTestAccount(pool, "PERSONAL", "m37-circuit");
+    await ensureProvisioningJobForAccount(
+      db,
+      accCircuit.accountId,
+      randomUUID(),
+    );
+    const circuitRes = await sponsoredWorker.processAccountJob(
+      accCircuit.accountId,
+    );
+    assert.equal(circuitRes.outcome, "failed");
+    assert.equal(circuitRes.failureClassification, "SPONSOR_CIRCUIT_OPEN");
+    assert.equal(broadcastCount, 2);
+  } finally {
+    await custodyDb.$executeRaw`
+      UPDATE flow.custody_sponsor_circuit
+      SET circuit_open = false, consecutive_failures = 0, opened_at = NULL, opened_reason = NULL
+      WHERE id = 'DEFAULT'
+    `;
+    await mockServer.close();
   }
 });

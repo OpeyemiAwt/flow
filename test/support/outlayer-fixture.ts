@@ -1,4 +1,4 @@
-import { createECDH, randomBytes, randomUUID } from "node:crypto";
+import { createECDH, createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   createServer,
   type Server,
@@ -83,10 +83,17 @@ export interface OutLayerMockServer {
   url: string;
   close: () => Promise<void>;
   setOptions: (options: OutLayerMockOptions) => void;
+  setWalletPolicyOverride: (
+    apiKey: string,
+    override: { readonly policy: "none" | "stored"; readonly controller?: string },
+  ) => void;
   getCallCount: () => number;
   getRegisterCallCount: () => number;
   getAddressCallCount: () => number;
   getPolicyCallCount: () => number;
+  getEncryptPolicyCallCount: () => number;
+  getSignPolicyCallCount: () => number;
+  getInvalidateCacheCallCount: () => number;
   getRegisteredWallets: () => SimulatedWalletContainer[];
   resetCounts: () => void;
 }
@@ -123,9 +130,16 @@ export async function createOutLayerMockServer(
   let registerCallCount = 0;
   let addressCallCount = 0;
   let policyCallCount = 0;
+  let encryptPolicyCallCount = 0;
+  let signPolicyCallCount = 0;
+  let invalidateCacheCallCount = 0;
   let rateLimitRemaining = initialOptions.rateLimitCount ?? 0;
 
   const walletsByApiKey = new Map<string, SimulatedWalletContainer>();
+  const policyOverridesByApiKey = new Map<
+    string,
+    { readonly policy: "none" | "stored"; readonly controller?: string }
+  >();
 
   const server = createServer(
     async (req: IncomingMessage, res: ServerResponse) => {
@@ -341,14 +355,16 @@ export async function createOutLayerMockServer(
           : (registered?.walletId ?? "9c3c9e10-1c1f-4f5e-9c4a-1d7b9a8f3c20");
 
         const defaultPolicyState = options.multiWalletMode ? "stored" : "none";
+        const override = policyOverridesByApiKey.get(bearerKey);
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
             wallet_id: walletId,
-            controller: options.controller ?? "controller.near",
+            controller:
+              override?.controller ?? options.controller ?? "controller.near",
             frozen: options.frozen ?? false,
-            policy: options.policyState ?? defaultPolicyState,
+            policy: override?.policy ?? options.policyState ?? defaultPolicyState,
             rules: options.policyRules ?? DEFAULT_POLICY_RULES,
             capabilities:
               options.policyCapabilities ?? DEFAULT_POLICY_CAPABILITIES,
@@ -357,6 +373,86 @@ export async function createOutLayerMockServer(
             usage: {},
           }),
         );
+        return;
+      }
+
+      // Route: POST /wallet/v1/encrypt-policy
+      if (req.method === "POST" && pathname === "/wallet/v1/encrypt-policy") {
+        encryptPolicyCallCount++;
+        const auth = req.headers.authorization;
+        if (!auth || !auth.startsWith("Bearer wk_")) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Unauthorized" }));
+          return;
+        }
+        const bearerKey = auth.slice("Bearer ".length).trim();
+        const registered = walletsByApiKey.get(bearerKey);
+        const body = await new Promise<string>((resolve) => {
+          const chunks: Buffer[] = [];
+          req.on("data", (c: Buffer) => chunks.push(c));
+          req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        });
+        const nearHex = registered?.nearAccountId ?? DEFAULT_NEAR_ACCOUNT_ID;
+        const policyHash = createHash("sha256").update(body || "{}").digest("hex");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            encrypted_base64: Buffer.from(body || "{}", "utf8").toString("base64"),
+            wallet_pubkey: `ed25519:${nearHex.toLowerCase()}`,
+            policy_hash: policyHash,
+          }),
+        );
+        return;
+      }
+
+      // Route: POST /wallet/v1/sign-policy
+      if (req.method === "POST" && pathname === "/wallet/v1/sign-policy") {
+        signPolicyCallCount++;
+        const auth = req.headers.authorization;
+        if (!auth || !auth.startsWith("Bearer wk_")) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Unauthorized" }));
+          return;
+        }
+        const bearerKey = auth.slice("Bearer ".length).trim();
+        const registered = walletsByApiKey.get(bearerKey);
+        const body = await new Promise<string>((resolve) => {
+          const chunks: Buffer[] = [];
+          req.on("data", (c: Buffer) => chunks.push(c));
+          req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        });
+        const parsedBody = JSON.parse(body || "{}") as {
+          encrypted_data?: string;
+        };
+        const policyHash = createHash("sha256")
+          .update(parsedBody.encrypted_data ?? "")
+          .digest("hex");
+        const nearHex = registered?.nearAccountId ?? DEFAULT_NEAR_ACCOUNT_ID;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            signature_hex: "ab".repeat(64),
+            public_key_hex: nearHex.toLowerCase(),
+            version: 1,
+            locked: false,
+            valid_until: Math.floor(Date.now() / 1000) + 600,
+            policy_hash: policyHash,
+          }),
+        );
+        return;
+      }
+
+      // Route: POST /wallet/v1/invalidate-cache
+      if (req.method === "POST" && pathname === "/wallet/v1/invalidate-cache") {
+        invalidateCacheCallCount++;
+        const auth = req.headers.authorization;
+        if (!auth || !auth.startsWith("Bearer wk_")) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Unauthorized" }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
         return;
       }
 
@@ -382,17 +478,27 @@ export async function createOutLayerMockServer(
       options = { ...newOpts };
       rateLimitRemaining = newOpts.rateLimitCount ?? 0;
     },
+    setWalletPolicyOverride: (apiKey, override) => {
+      policyOverridesByApiKey.set(apiKey, override);
+    },
     getCallCount: () => callCount,
     getRegisterCallCount: () => registerCallCount,
     getAddressCallCount: () => addressCallCount,
     getPolicyCallCount: () => policyCallCount,
+    getEncryptPolicyCallCount: () => encryptPolicyCallCount,
+    getSignPolicyCallCount: () => signPolicyCallCount,
+    getInvalidateCacheCallCount: () => invalidateCacheCallCount,
     getRegisteredWallets: () => Array.from(walletsByApiKey.values()),
     resetCounts: () => {
       callCount = 0;
       registerCallCount = 0;
       addressCallCount = 0;
       policyCallCount = 0;
+      encryptPolicyCallCount = 0;
+      signPolicyCallCount = 0;
+      invalidateCacheCallCount = 0;
       walletsByApiKey.clear();
+      policyOverridesByApiKey.clear();
     },
   };
 }

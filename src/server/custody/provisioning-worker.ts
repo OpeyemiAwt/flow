@@ -14,7 +14,15 @@ import {
 import { FlowError } from "../../foundation/errors.ts";
 import { log } from "../../foundation/logger.ts";
 import type { FlowDb } from "../../foundation/prisma.ts";
-import type { WalletConfig } from "../../foundation/wallet-environment.ts";
+import type {
+  PolicySponsorConfig,
+  WalletConfig,
+} from "../../foundation/wallet-environment.ts";
+import {
+  HttpNearSponsorRpcClient,
+  sponsorAndStoreWalletPolicy,
+  type NearSponsorRpc,
+} from "./near-policy-sponsor.ts";
 import {
   activateWalletIfReady,
   attachWalletAddressesAndCapabilities,
@@ -76,6 +84,11 @@ export interface WalletProvisioningWorkerOptions {
   /** Fail closed before the first external registration unless explicitly enabled by an authorized isolated rehearsal. */
   readonly allowNewRegistrations?: boolean;
   readonly registrationAccountId?: string;
+  readonly policySponsor?: {
+    readonly config: PolicySponsorConfig;
+    readonly nearRpc?: NearSponsorRpc;
+    readonly allowTestContractOverride?: boolean;
+  };
 }
 
 export type ProvisioningJobOutcome =
@@ -124,7 +137,24 @@ function mapErrorToFailureClassification(
       case "UNSUPPORTED_CHAIN":
         return "UNSUPPORTED_CHAIN";
       case "POLICY_VERIFICATION_FAILED":
+      case "POLICY_SPONSOR_TARGET_DENIED":
         return "POLICY_VERIFICATION_FAILED";
+      case "SPONSOR_CIRCUIT_OPEN":
+        return "SPONSOR_CIRCUIT_OPEN";
+      case "SPONSOR_LOW_BALANCE":
+        return "SPONSOR_LOW_BALANCE";
+      case "SPONSOR_DAILY_CAP_EXCEEDED":
+        return "SPONSOR_DAILY_CAP_EXCEEDED";
+      case "POLICY_SPONSOR_CAP_EXCEEDED":
+        return "POLICY_SPONSOR_CAP_EXCEEDED";
+      case "UPSTREAM_UNAVAILABLE":
+        return "UPSTREAM_UNAVAILABLE";
+      case "CORRUPTED_RESPONSE":
+        return "CORRUPTED_RESPONSE";
+      case "CORRELATION_ERROR":
+        return "CORRELATION_ERROR";
+      case "POST_DISPATCH_AMBIGUOUS":
+        return "POST_DISPATCH_AMBIGUOUS";
       case "INCOMPLETE_WALLET_PROVISIONING":
       case "INVALID_CAPABILITY_GRANT":
         return "INCOMPLETE_PROVISIONING";
@@ -218,6 +248,11 @@ export class WalletProvisioningWorker {
   private readonly providerEnvironment?: "testnet" | "mainnet";
   private readonly allowNewRegistrations: boolean;
   private readonly registrationAccountId?: string;
+  private readonly policySponsor?: {
+    readonly config: PolicySponsorConfig;
+    readonly nearRpc?: NearSponsorRpc;
+    readonly allowTestContractOverride?: boolean;
+  };
 
   private running = false;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -249,6 +284,7 @@ export class WalletProvisioningWorker {
     this.providerEnvironment = options.providerEnvironment;
     this.allowNewRegistrations = options.allowNewRegistrations ?? true;
     this.registrationAccountId = options.registrationAccountId?.toLowerCase();
+    this.policySponsor = options.policySponsor;
   }
 
   computeBackoffDelayMs(attempt: number): number {
@@ -799,15 +835,51 @@ export class WalletProvisioningWorker {
       );
 
       // External provider call OUTSIDE any DB transaction
-      const policyEvidence = await this.adapter.getPolicy(
+      let policyEvidence = await this.adapter.getPolicy(
         apiKey,
         providerWalletId,
       );
 
-      const inspection = inspectCustodyPolicyEvidence(
+      let inspection = inspectCustodyPolicyEvidence(
         policyEvidence,
         providerWalletId,
       );
+
+      let sponsoredControllerAccountId: string | undefined;
+      if (!inspection.isStored && this.policySponsor?.config.enabled) {
+        if (!/^[0-9a-f]{64}$/i.test(nearAccountId)) {
+          throw new FlowError(
+            "CORRELATION_ERROR",
+            "Wallet NEAR account ID is not a 64-hex Ed25519 public key.",
+          );
+        }
+        const sponsorConfig = this.policySponsor.config;
+        const nearRpc =
+          this.policySponsor.nearRpc ??
+          new HttpNearSponsorRpcClient(sponsorConfig);
+        const sponsorOutcome = await sponsorAndStoreWalletPolicy({
+          db: this.db,
+          adapter: this.adapter,
+          nearRpc,
+          config: sponsorConfig,
+          accountId,
+          walletId,
+          jobId: leased.id,
+          fencingToken: leased.fencingToken,
+          providerWalletId,
+          apiKey,
+          walletPubkey: `ed25519:${nearAccountId.toLowerCase()}`,
+          allowTestContractOverride:
+            this.policySponsor.allowTestContractOverride,
+        });
+        sponsoredControllerAccountId = sponsorOutcome.controllerAccountId;
+
+        policyEvidence = await this.adapter.getPolicy(apiKey, providerWalletId);
+        inspection = inspectCustodyPolicyEvidence(
+          policyEvidence,
+          providerWalletId,
+        );
+      }
 
       if (inspection.isStored) {
         await activateWalletIfReady(
@@ -816,7 +888,22 @@ export class WalletProvisioningWorker {
           leased.fencingToken,
           walletId,
           policyEvidence,
+          sponsoredControllerAccountId
+            ? { expectedController: sponsoredControllerAccountId }
+            : undefined,
         );
+
+        if (this.policySponsor?.config.enabled) {
+          await this.db.$executeRaw`
+            UPDATE flow.custody_policy_sponsorships
+            SET
+              status = 'VERIFIED',
+              verified_at = COALESCE(verified_at, CURRENT_TIMESTAMP),
+              updated_at = CURRENT_TIMESTAMP
+            WHERE wallet_id = ${walletId}::uuid
+              AND status = 'FINALIZED'
+          `;
+        }
 
         this.activatedCount++;
         return {

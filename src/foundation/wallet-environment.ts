@@ -228,3 +228,281 @@ export function readWalletConfig(
 }
 
 export type WalletConfig = ReturnType<typeof readWalletConfig>;
+
+export const MAX_HARD_PER_WALLET_SPONSOR_YOCTO =
+  50_000_000_000_000_000_000_000n; // 0.05 NEAR absolute ceiling
+export const DEFAULT_PER_WALLET_SPONSOR_YOCTO =
+  30_000_000_000_000_000_000_000n; // 0.03 NEAR
+export const DEFAULT_SPONSOR_DAILY_CAP_YOCTO =
+  1_000_000_000_000_000_000_000_000n; // 1.00 NEAR / 24h
+export const DEFAULT_SPONSOR_MIN_BALANCE_YOCTO =
+  100_000_000_000_000_000_000_000n; // 0.10 NEAR operational reserve
+export const OUTLAYER_POLICY_CONTRACT_ID = "outlayer.near";
+
+const NEAR_ACCOUNT_ID_REGEX =
+  /^(([a-z0-9]+[-_])*[a-z0-9]+\.)*([a-z0-9]+[-_])*[a-z0-9]+$/;
+
+function isValidNearAccountIdentifier(value: string): boolean {
+  return (
+    value.length >= 2 &&
+    value.length <= 64 &&
+    (NEAR_ACCOUNT_ID_REGEX.test(value) || /^[0-9a-f]{64}$/.test(value))
+  );
+}
+
+const policySponsorEnvSchema = z.object({
+  FLOW_POLICY_SPONSOR_ENABLED: z
+    .enum(["disabled", "enabled"])
+    .default("disabled"),
+  FLOW_NEAR_NETWORK: z.enum(["mainnet"]).default("mainnet"),
+  FLOW_NEAR_SPONSOR_ACCOUNT_ID: z.string().trim().optional(),
+  FLOW_NEAR_SPONSOR_PRIVATE_KEY: z.string().trim().optional(),
+  FLOW_NEAR_SPONSOR_SIGNER_URL: z.string().trim().optional(),
+  FLOW_NEAR_SPONSOR_SIGNER_TOKEN: z.string().trim().optional(),
+  FLOW_NEAR_POLICY_CONTRACT_ID: z
+    .string()
+    .trim()
+    .default(OUTLAYER_POLICY_CONTRACT_ID),
+  FLOW_NEAR_RPC_URL: z.string().trim().default("https://rpc.mainnet.near.org"),
+  FLOW_NEAR_SPONSOR_MAX_FEE_PER_WALLET_YOCTO: z
+    .string()
+    .trim()
+    .regex(/^[0-9]+$/)
+    .optional(),
+  FLOW_NEAR_SPONSOR_DAILY_CAP_YOCTO: z
+    .string()
+    .trim()
+    .regex(/^[0-9]+$/)
+    .optional(),
+  FLOW_NEAR_SPONSOR_MIN_BALANCE_YOCTO: z
+    .string()
+    .trim()
+    .regex(/^[0-9]+$/)
+    .optional(),
+  FLOW_NEAR_SPONSOR_CIRCUIT_THRESHOLD: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(3),
+  FLOW_POLICY_APPROVAL_ACCOUNT_ID: z.string().trim().optional(),
+  FLOW_POLICY_APPROVAL_LOCKED: z
+    .enum(["disabled", "enabled"])
+    .default("disabled"),
+});
+
+export type PolicySponsorConfig =
+  | Readonly<{ enabled: false }>
+  | Readonly<{
+      enabled: true;
+      nearNetwork: "mainnet";
+      sponsorAccountId: string;
+      contractId: string;
+      rpcUrl: string;
+      fallbackRpcUrls: readonly string[];
+      signerMode: "local-ed25519" | "remote-signer";
+      privateKey?: string;
+      remoteSignerUrl?: string;
+      remoteSignerToken?: string;
+      maxFeePerWalletYocto: bigint;
+      dailySpendCapYocto: bigint;
+      minBalanceReserveYocto: bigint;
+      circuitFailureThreshold: number;
+      approvalAccountId?: string;
+      lockInitialPolicy: boolean;
+    }>;
+
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "127.0.0.1" || hostname === "localhost" || hostname === "[::1]"
+  );
+}
+
+/**
+ * Parses and validates the isolated NEAR policy-storage sponsor configuration.
+ * Fails closed whenever sponsorship is enabled without valid sponsor identity,
+ * signer credentials, strict outlayer.near contract binding, and spend caps.
+ */
+export function readPolicySponsorConfig(
+  source: WalletEnvironmentInput,
+  options?: { allowTestContractOverride?: boolean },
+): PolicySponsorConfig {
+  const parsed = policySponsorEnvSchema.safeParse(source);
+  if (!parsed.success) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "Invalid NEAR policy sponsor environment configuration.",
+    );
+  }
+
+  const env = parsed.data;
+  if (env.FLOW_POLICY_SPONSOR_ENABLED !== "enabled") {
+    return { enabled: false };
+  }
+
+  const sponsorAccountId = env.FLOW_NEAR_SPONSOR_ACCOUNT_ID?.toLowerCase() ?? "";
+  if (!isValidNearAccountIdentifier(sponsorAccountId)) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "FLOW_NEAR_SPONSOR_ACCOUNT_ID must be a valid NEAR mainnet account ID.",
+    );
+  }
+
+  const allowOverride =
+    options?.allowTestContractOverride === true ||
+    source.NODE_ENV === "test";
+  if (
+    env.FLOW_NEAR_POLICY_CONTRACT_ID !== OUTLAYER_POLICY_CONTRACT_ID &&
+    !allowOverride
+  ) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      `Sponsor contract must strictly be ${OUTLAYER_POLICY_CONTRACT_ID}.`,
+    );
+  }
+
+  let rpcUrl: URL;
+  try {
+    rpcUrl = new URL(env.FLOW_NEAR_RPC_URL);
+  } catch {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "FLOW_NEAR_RPC_URL must be a valid URL.",
+    );
+  }
+  if (rpcUrl.protocol !== "https:" && !isLoopbackHost(rpcUrl.hostname)) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "FLOW_NEAR_RPC_URL must use HTTPS outside local loopback tests.",
+    );
+  }
+
+  const hasLocalKey = Boolean(env.FLOW_NEAR_SPONSOR_PRIVATE_KEY);
+  const hasRemoteSigner = Boolean(env.FLOW_NEAR_SPONSOR_SIGNER_URL);
+  if (hasLocalKey === hasRemoteSigner) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "Configure exactly one sponsor signer: FLOW_NEAR_SPONSOR_PRIVATE_KEY or FLOW_NEAR_SPONSOR_SIGNER_URL.",
+    );
+  }
+
+  let signerMode: "local-ed25519" | "remote-signer";
+  let privateKey: string | undefined;
+  let remoteSignerUrl: string | undefined;
+  let remoteSignerToken: string | undefined;
+
+  if (hasLocalKey) {
+    const rawKey = env.FLOW_NEAR_SPONSOR_PRIVATE_KEY!;
+    if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{40,100}$/.test(rawKey)) {
+      throw new FlowError(
+        "INVALID_CONFIGURATION",
+        "FLOW_NEAR_SPONSOR_PRIVATE_KEY must be an ed25519:<base58> NEAR private key.",
+      );
+    }
+    signerMode = "local-ed25519";
+    privateKey = rawKey;
+  } else {
+    let signerUrl: URL;
+    try {
+      signerUrl = new URL(env.FLOW_NEAR_SPONSOR_SIGNER_URL!);
+    } catch {
+      throw new FlowError(
+        "INVALID_CONFIGURATION",
+        "FLOW_NEAR_SPONSOR_SIGNER_URL must be a valid URL.",
+      );
+    }
+    if (signerUrl.protocol !== "https:" && !isLoopbackHost(signerUrl.hostname)) {
+      throw new FlowError(
+        "INVALID_CONFIGURATION",
+        "FLOW_NEAR_SPONSOR_SIGNER_URL must use HTTPS.",
+      );
+    }
+    if (
+      !env.FLOW_NEAR_SPONSOR_SIGNER_TOKEN ||
+      env.FLOW_NEAR_SPONSOR_SIGNER_TOKEN.length < 32
+    ) {
+      throw new FlowError(
+        "INVALID_CONFIGURATION",
+        "FLOW_NEAR_SPONSOR_SIGNER_TOKEN (minimum 32 chars) is required with remote signer.",
+      );
+    }
+    signerMode = "remote-signer";
+    remoteSignerUrl = signerUrl.toString();
+    remoteSignerToken = env.FLOW_NEAR_SPONSOR_SIGNER_TOKEN;
+  }
+
+  const maxFeePerWalletYocto = env.FLOW_NEAR_SPONSOR_MAX_FEE_PER_WALLET_YOCTO
+    ? BigInt(env.FLOW_NEAR_SPONSOR_MAX_FEE_PER_WALLET_YOCTO)
+    : DEFAULT_PER_WALLET_SPONSOR_YOCTO;
+  if (
+    maxFeePerWalletYocto <= 0n ||
+    maxFeePerWalletYocto > MAX_HARD_PER_WALLET_SPONSOR_YOCTO
+  ) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "FLOW_NEAR_SPONSOR_MAX_FEE_PER_WALLET_YOCTO must be between 1 yoctoNEAR and 0.05 NEAR.",
+    );
+  }
+
+  const dailySpendCapYocto = env.FLOW_NEAR_SPONSOR_DAILY_CAP_YOCTO
+    ? BigInt(env.FLOW_NEAR_SPONSOR_DAILY_CAP_YOCTO)
+    : DEFAULT_SPONSOR_DAILY_CAP_YOCTO;
+  if (dailySpendCapYocto < maxFeePerWalletYocto) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "FLOW_NEAR_SPONSOR_DAILY_CAP_YOCTO must be at least MAX_FEE_PER_WALLET_YOCTO.",
+    );
+  }
+
+  const minBalanceReserveYocto = env.FLOW_NEAR_SPONSOR_MIN_BALANCE_YOCTO
+    ? BigInt(env.FLOW_NEAR_SPONSOR_MIN_BALANCE_YOCTO)
+    : DEFAULT_SPONSOR_MIN_BALANCE_YOCTO;
+  if (minBalanceReserveYocto < 50_000_000_000_000_000_000_000n) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "FLOW_NEAR_SPONSOR_MIN_BALANCE_YOCTO must be at least 0.05 NEAR.",
+    );
+  }
+
+  let approvalAccountId: string | undefined;
+  if (env.FLOW_POLICY_APPROVAL_ACCOUNT_ID) {
+    const candidate = env.FLOW_POLICY_APPROVAL_ACCOUNT_ID.toLowerCase();
+    if (
+      !isValidNearAccountIdentifier(candidate) ||
+      candidate === sponsorAccountId
+    ) {
+      throw new FlowError(
+        "INVALID_CONFIGURATION",
+        "FLOW_POLICY_APPROVAL_ACCOUNT_ID must be a valid NEAR account distinct from sponsor.",
+      );
+    }
+    approvalAccountId = candidate;
+  }
+  if (env.FLOW_POLICY_APPROVAL_LOCKED === "enabled" && !approvalAccountId) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "FLOW_POLICY_APPROVAL_LOCKED=enabled requires FLOW_POLICY_APPROVAL_ACCOUNT_ID.",
+    );
+  }
+
+  return {
+    enabled: true,
+    nearNetwork: env.FLOW_NEAR_NETWORK,
+    sponsorAccountId,
+    contractId: env.FLOW_NEAR_POLICY_CONTRACT_ID,
+    rpcUrl: rpcUrl.origin,
+    fallbackRpcUrls: isLoopbackHost(rpcUrl.hostname)
+      ? []
+      : ["https://free.rpc.fastnear.com"],
+    signerMode,
+    privateKey,
+    remoteSignerUrl,
+    remoteSignerToken,
+    maxFeePerWalletYocto,
+    dailySpendCapYocto,
+    minBalanceReserveYocto,
+    circuitFailureThreshold: env.FLOW_NEAR_SPONSOR_CIRCUIT_THRESHOLD,
+    approvalAccountId,
+    lockInitialPolicy: env.FLOW_POLICY_APPROVAL_LOCKED === "enabled",
+  };
+}

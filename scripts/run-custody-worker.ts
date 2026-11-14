@@ -8,10 +8,16 @@ import {
   disconnectPrismaClients,
   getPrismaClient,
 } from "../src/foundation/prisma.ts";
-import { readWalletConfig } from "../src/foundation/wallet-environment.ts";
+import {
+  readPolicySponsorConfig,
+  readWalletConfig,
+} from "../src/foundation/wallet-environment.ts";
 import { OutLayerAdapter } from "../src/server/custody/outlayer-adapter.ts";
 import { processOutgoingTransferCycle } from "../src/server/custody/outgoing-executor.ts";
 import { WalletProvisioningWorker } from "../src/server/custody/provisioning-worker.ts";
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function main(): Promise<void> {
   assertCustodyEnvironment(process.env);
@@ -21,9 +27,13 @@ async function main(): Promise<void> {
     `custody-${process.pid}-${randomUUID().slice(0, 8)}`;
   const mode = process.env.FLOW_CUSTODY_WORKER_MODE ?? "heartbeat-only";
   if (mode === "heartbeat-only") {
-    if (process.env.FLOW_CUSTODY_REGISTRATION_AUTHORIZED === "enabled") {
+    if (
+      process.env.FLOW_CUSTODY_REGISTRATION_AUTHORIZED === "enabled" ||
+      process.env.FLOW_CUSTODY_REGISTRATION_OPEN === "enabled" ||
+      process.env.FLOW_POLICY_SPONSOR_ENABLED === "enabled"
+    ) {
       throw new Error(
-        "Heartbeat-only custody mode cannot authorize wallet registration.",
+        "Heartbeat-only custody mode cannot authorize wallet registration or policy sponsorship.",
       );
     }
     const db = getPrismaClient("custody");
@@ -60,21 +70,39 @@ async function main(): Promise<void> {
     authSecret: process.env.FLOW_AUTH_SECRET,
     otpKey: process.env.FLOW_OTP_KEY,
   });
+  const policySponsorConfig = readPolicySponsorConfig(process.env);
+  if (
+    policySponsorConfig.enabled &&
+    walletConfig.compatibility.mode !== "disabled"
+  ) {
+    throw new Error(
+      "Automated NEAR policy sponsorship requires provider compatibility mode to be disabled.",
+    );
+  }
   const registrationAccountId =
     process.env.FLOW_CUSTODY_REGISTRATION_ACCOUNT_ID;
   const registrationAuthorized =
     process.env.FLOW_CUSTODY_REGISTRATION_AUTHORIZED === "enabled";
+  const registrationOpen =
+    process.env.FLOW_CUSTODY_REGISTRATION_OPEN === "enabled";
   const isValidRegistrationAccountId =
     Boolean(registrationAccountId) &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      registrationAccountId ?? "",
-    );
+    UUID_REGEX.test(registrationAccountId ?? "");
   if (registrationAccountId && !isValidRegistrationAccountId) {
     throw new Error("FLOW_CUSTODY_REGISTRATION_ACCOUNT_ID must be a UUID.");
   }
   if (
+    registrationOpen &&
+    walletConfig.compatibility.mode !== "disabled"
+  ) {
+    throw new Error(
+      "Open wallet registration requires provider compatibility mode to be disabled.",
+    );
+  }
+  if (
     mode === "provision" &&
     registrationAuthorized &&
+    !registrationOpen &&
     (config.environment !== "staging" ||
       walletConfig.compatibility.mode !== "disabled" ||
       !isValidRegistrationAccountId)
@@ -85,7 +113,7 @@ async function main(): Promise<void> {
   }
   if (
     mode === "execute" &&
-    registrationAuthorized &&
+    (registrationAuthorized || registrationOpen) &&
     walletConfig.compatibility.mode !== "disabled"
   ) {
     throw new Error(
@@ -95,14 +123,20 @@ async function main(): Promise<void> {
   const providerEnvironment = walletConfig.compatibility.authorizationId
     ? walletConfig.compatibility.providerEnvironment
     : "mainnet";
+  const controlledRegistrationAuthorized =
+    mode === "provision" &&
+    registrationAuthorized &&
+    !registrationOpen &&
+    isValidRegistrationAccountId &&
+    config.environment === "staging" &&
+    walletConfig.compatibility.mode === "disabled";
+  const openRegistrationAuthorized =
+    registrationOpen && walletConfig.compatibility.mode === "disabled";
   const adapter = new OutLayerAdapter(walletConfig.apiUrl, 5_000, {
     compatibilityConfig: walletConfig.compatibility,
-    controlledRegistrationAuthorized:
-      mode === "provision" &&
-      registrationAuthorized &&
-      isValidRegistrationAccountId &&
-      config.environment === "staging" &&
-      walletConfig.compatibility.mode === "disabled",
+    controlledRegistrationAuthorized,
+    openRegistrationAuthorized,
+    policyPreparationAuthorized: policySponsorConfig.enabled,
   });
   const pollIntervalMs = Number(
     process.env.FLOW_CUSTODY_POLL_INTERVAL_MS ?? "5000",
@@ -125,9 +159,58 @@ async function main(): Promise<void> {
     workerId,
     providerEnvironment,
     compatibilityAuthorizationId: walletConfig.compatibility.authorizationId,
-    registrationAccountId,
-    allowNewRegistrations: registrationAuthorized,
+    registrationAccountId: registrationOpen ? undefined : registrationAccountId,
+    allowNewRegistrations: registrationOpen || registrationAuthorized,
+    policySponsor: {
+      config: policySponsorConfig,
+    },
   });
+
+  // Optional one-shot recovery for an existing SETUP_FAILED wallet when explicitly configured
+  const recoveryAccountId = process.env.FLOW_CUSTODY_RECOVERY_ACCOUNT_ID?.trim();
+  const recoveryWalletId = process.env.FLOW_CUSTODY_RECOVERY_WALLET_ID?.trim();
+  const recoveryJobId = process.env.FLOW_CUSTODY_RECOVERY_JOB_ID?.trim();
+  if (recoveryAccountId || recoveryWalletId || recoveryJobId) {
+    if (
+      !policySponsorConfig.enabled ||
+      !recoveryAccountId ||
+      !recoveryWalletId ||
+      !recoveryJobId ||
+      !UUID_REGEX.test(recoveryAccountId) ||
+      !UUID_REGEX.test(recoveryWalletId) ||
+      !UUID_REGEX.test(recoveryJobId)
+    ) {
+      throw new Error(
+        "Wallet recovery requires FLOW_POLICY_SPONSOR_ENABLED=enabled and valid UUIDs for RECOVERY_ACCOUNT_ID, RECOVERY_WALLET_ID, and RECOVERY_JOB_ID.",
+      );
+    }
+    const existingState = await db.$queryRaw<Array<{ status: string }>>`
+      SELECT status::text AS status
+      FROM flow.wallets
+      WHERE id = ${recoveryWalletId}::uuid
+        AND account_id = ${recoveryAccountId}::uuid
+      LIMIT 1
+    `;
+    if (existingState[0]?.status === "SETUP_FAILED") {
+      const recoveryResult = await worker.resumeFailedPolicyVerification({
+        accountId: recoveryAccountId,
+        jobId: recoveryJobId,
+        expectedWalletId: recoveryWalletId,
+        requestId:
+          process.env.FLOW_CUSTODY_RECOVERY_REQUEST_ID?.trim() || randomUUID(),
+        actorAuthId:
+          process.env.FLOW_CUSTODY_RECOVERY_ACTOR_ID?.trim() ||
+          "operator:custody-recovery",
+      });
+      log("info", "custody_worker_startup_recovery_completed", {
+        workerId,
+        accountId: recoveryAccountId,
+        walletId: recoveryWalletId,
+        outcome: recoveryResult.outcome,
+        failureClassification: recoveryResult.failureClassification ?? null,
+      });
+    }
+  }
 
   let outgoingTimer: ReturnType<typeof setInterval> | null = null;
   let outgoingInFlight = false;
@@ -165,8 +248,14 @@ async function main(): Promise<void> {
     workerId,
     mode,
     databaseRole: config.database.role,
-    registrationEnabled: registrationAuthorized,
+    registrationEnabled: registrationOpen || registrationAuthorized,
+    registrationOpen,
+    policySponsorEnabled: policySponsorConfig.enabled,
+    policySponsorSignerMode: policySponsorConfig.enabled
+      ? policySponsorConfig.signerMode
+      : null,
     environment: providerEnvironment,
+    executionMode: config.execution,
     registrationAccountAuthorized: registrationAuthorized,
   });
   worker.start(pollIntervalMs);
