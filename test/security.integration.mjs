@@ -3177,14 +3177,18 @@ test("phase 6 end-to-end acceptance scenarios A–G: queued wallet onboarding, p
     );
     await page.getByLabel("Email code").fill(otp);
     await page.getByRole("button", { name: /Verify and continue/i }).click();
-    await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
-
-    // Verify provisioned status and zero fabricated mockup numbers on Dashboard
-    assert.ok(
+    // Walletless identities resume the asynchronous onboarding status screen;
+    // the dashboard is intentionally inaccessible until a custody worker has
+    // verified the wallet and all four network addresses.
+    await page
+      .getByRole("heading", { name: "Setup is waiting to start", exact: true })
+      .waitFor();
+    assert.equal(new URL(page.url()).pathname, "/onboarding");
+    assert.equal(
       await page
-        .getByText("Wallet provisioned (execution disabled)")
-        .first()
-        .isVisible(),
+        .getByText("Wallet setup is in progress", { exact: true })
+        .count(),
+      0,
     );
     const bodyText = await page.locator("body").innerText();
     for (const forbidden of [
@@ -4472,8 +4476,14 @@ async function quoteFixtureWallet(accountId) {
   const ethAddress = "0x" + randomBytes(20).toString("hex");
   const solanaAddress = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
   await workerDb.query(
-    "INSERT INTO flow.wallets (id,account_id,provider,environment,provider_wallet_id,near_account_id,encrypted_credential,key_id,key_digest,status,policy_state) VALUES ($1,$2,'OUTLAYER','mainnet',$3,$4,'fixture-envelope','v1','fixture-digest','ACTIVE','stored')",
-    [walletId, accountId, "fixture-" + walletId, nearAddress],
+    "INSERT INTO flow.wallets (id,account_id,provider,environment,provider_wallet_id,near_account_id,controller_account_id,encrypted_credential,key_id,key_digest,status,policy_state) VALUES ($1,$2,'OUTLAYER','mainnet',$3,$4,$5,'fixture-envelope','v1','fixture-digest','ACTIVE','stored')",
+    [
+      walletId,
+      accountId,
+      "fixture-" + walletId,
+      nearAddress,
+      "fixture-controller-" + walletId,
+    ],
   );
   await workerDb.query(
     "INSERT INTO flow.wallet_addresses (wallet_id,network,chain_id,address,public_key) VALUES ($1,'base','8453',$2,'fixture-pubkey'),($1,'near','near-mainnet',$3,'fixture-pubkey'),($1,'ethereum','1',$4,'fixture-pubkey'),($1,'solana','solana-mainnet',$5,'fixture-pubkey')",

@@ -7157,8 +7157,8 @@ test("m3 phase 3.2: authentication ticket and refresh lease privilege audit — 
     failClient.release();
   }
 
-  // Release with success = false (RPC failure simulation) via workerPool
-  const failRelease = await workerPool.query<{
+  // Lease-release capability is restricted to the legacy refresh worker role.
+  const failRelease = await legacyWorkerPool!.query<{
     release_portfolio_refresh_lease: boolean;
   }>(
     `SELECT flow.release_portfolio_refresh_lease($1::uuid, $2::bigint, $3::uuid, false)`,
@@ -7167,7 +7167,7 @@ test("m3 phase 3.2: authentication ticket and refresh lease privilege audit — 
   assert.equal(failRelease.rows[0]!.release_portfolio_refresh_lease, true);
 
   // Verify that last_refreshed_at remained the old timestamp '2020-01-01', NOT CURRENT_TIMESTAMP
-  const staleCheck = await workerPool.query<{ last_refreshed_at: Date }>(
+  const staleCheck = await legacyWorkerPool!.query<{ last_refreshed_at: Date }>(
     `SELECT last_refreshed_at FROM flow.portfolio_refresh_leases WHERE account_id = $1::uuid`,
     [victim.accountId],
   );
@@ -7647,7 +7647,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
 
   // Attack 14: Worker release without lease_token (NULL)
   await assert.rejects(
-    workerPool.query(
+    legacyWorkerPool!.query(
       `SELECT flow.release_portfolio_refresh_lease($1::uuid, $2::bigint, NULL, true)`,
       [victim.accountId, p33FencingToken],
     ),
@@ -7661,7 +7661,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
 
   // Attack 15: Worker release with wrong/guessed lease_token
   await assert.rejects(
-    workerPool.query(
+    legacyWorkerPool!.query(
       `SELECT flow.release_portfolio_refresh_lease($1::uuid, $2::bigint, $3::uuid, true)`,
       [victim.accountId, p33FencingToken, randomUUID()],
     ),
@@ -7679,7 +7679,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
 
   // Attack 16: Worker release with wrong fencing_token
   await assert.rejects(
-    workerPool.query(
+    legacyWorkerPool!.query(
       `SELECT flow.release_portfolio_refresh_lease($1::uuid, 999999::bigint, $2::uuid, true)`,
       [victim.accountId, p33LeaseToken],
     ),
@@ -7696,7 +7696,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
   );
 
   // Legitimate fail-closed release: Worker releases with success=false (RPC failure)
-  const failReleaseRes = await workerPool.query<{
+  const failReleaseRes = await legacyWorkerPool!.query<{
     release_portfolio_refresh_lease: boolean;
   }>(
     `SELECT flow.release_portfolio_refresh_lease($1::uuid, $2::bigint, $3::uuid, false)`,
@@ -7705,7 +7705,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
   assert.equal(failReleaseRes.rows[0]!.release_portfolio_refresh_lease, true);
 
   // Verify that last_refreshed_at was NOT set (preserves previous observation)
-  const failCheck = await workerPool.query<{
+  const failCheck = await legacyWorkerPool!.query<{
     last_refreshed_at: Date | null;
     lease_holder: string | null;
   }>(
@@ -7749,7 +7749,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
     acquireClient2.release();
   }
 
-  const successReleaseRes = await workerPool.query<{
+  const successReleaseRes = await legacyWorkerPool!.query<{
     release_portfolio_refresh_lease: boolean;
   }>(
     `SELECT flow.release_portfolio_refresh_lease($1::uuid, $2::bigint, $3::uuid, true)`,
@@ -7760,7 +7760,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
     true,
   );
 
-  const successCheck = await workerPool.query<{
+  const successCheck = await legacyWorkerPool!.query<{
     last_refreshed_at: Date | null;
     lease_holder: string | null;
   }>(
@@ -7877,7 +7877,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
 
   // Stale worker A tries to release its expired lease -> must fail with 42501
   await assert.rejects(
-    workerPool.query(
+    legacyWorkerPool!.query(
       `SELECT flow.release_portfolio_refresh_lease($1::uuid, $2::bigint, $3::uuid, true)`,
       [victim.accountId, holderAFencing, holderALeaseToken],
     ),
@@ -7894,7 +7894,7 @@ test("m3 phase 3.3: final ticket possession and refresh-lease integrity correcti
   );
 
   // Active worker B releases lease successfully
-  const releaseB = await workerPool.query<{
+  const releaseB = await legacyWorkerPool!.query<{
     release_portfolio_refresh_lease: boolean;
   }>(
     `SELECT flow.release_portfolio_refresh_lease($1::uuid, $2::bigint, $3::uuid, true)`,
