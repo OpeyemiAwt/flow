@@ -10052,8 +10052,8 @@ test("database integration: M37 automated NEAR policy sponsorship RLS isolation,
     const happyRes = await sponsoredWorker.processAccountJob(accHappy.accountId);
     if (happyRes.outcome !== "activated") {
       const diagJob = await custodyDb.$queryRaw<
-        Array<{ status: string; current_step: string | null; failure_classification: string | null; last_error: string | null }>
-      >`SELECT status::text, current_step, failure_classification, last_error FROM flow.wallet_provisioning_jobs WHERE id = ${happyJob.id}::uuid`;
+        Array<{ status: string; failure_classification: string | null; last_error: string | null }>
+      >`SELECT status::text, failure_classification, last_error FROM flow.wallet_provisioning_jobs WHERE id = ${happyJob.id}::uuid`;
       const diagSponsor = await custodyDb.$queryRaw<
         Array<{ status: string; error_code: string | null }>
       >`SELECT status, error_code FROM flow.custody_policy_sponsorships WHERE account_id = ${accHappy.accountId}::uuid`;
