@@ -2678,7 +2678,7 @@ async function importOwnerWalletSealed() {
         controller_account_id, handoff_url, created_at, updated_at
       ) VALUES (
         $1::uuid, $2::uuid, $3, $4, $5, $6,
-        $7, $8, $9, $10::flow."WalletStatus", $11,
+        $7, $8, $9, $10::flow.wallet_status, $11,
         $12, $13, $14::timestamptz, $15::timestamptz
       ) ON CONFLICT (account_id) DO NOTHING`,
       [
