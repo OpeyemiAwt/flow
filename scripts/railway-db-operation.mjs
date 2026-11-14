@@ -2151,10 +2151,10 @@ async function inspectProductionReadiness() {
             has_table_privilege(current_user, 'flow.auth_intents', 'INSERT') AS can_insert_auth_intents,
             has_table_privilege(current_user, 'flow.users', 'INSERT') AS can_insert_users,
             has_table_privilege(current_user, 'flow.accounts', 'INSERT') AS can_insert_accounts,
-            has_table_privilege(current_user, 'flow.account_members', 'INSERT') AS can_insert_account_members,
+            has_table_privilege(current_user, 'flow.account_memberships', 'INSERT') AS can_insert_account_memberships,
             has_table_privilege(current_user, 'flow.wallet_provisioning_jobs', 'INSERT') AS can_insert_provisioning_jobs,
             has_table_privilege(current_user, 'flow.wallets', 'SELECT') AS can_select_wallets_table,
-            has_table_privilege(current_user, 'flow.security_audits', 'INSERT') AS can_insert_audits
+            has_table_privilege(current_user, 'flow.security_audit_events', 'INSERT') AS can_insert_audit_events
         `);
         let ticketProbe = null;
         let emailTicketProbe = null;
