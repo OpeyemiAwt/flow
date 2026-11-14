@@ -1356,24 +1356,20 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     const page = await owner.newPage();
     await page.goto(`${app.origin}/sign-in`);
     await page.getByRole("button", { name: "Continue with Google" }).click();
-    await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
-    assert.equal(new URL(page.url()).pathname, "/onboarding");
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL("**/onboarding");
+    await page.getByRole("heading", { name: "Setting up your wallet" }).waitFor();
     await page
-      .getByRole("heading", { name: "Your Personal account" })
+      .getByRole("progressbar", { name: "Wallet setup progress" })
       .waitFor();
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page
-      .getByRole("heading", { name: "Your wallet, carefully set up" })
-      .waitFor();
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("heading", { name: "Confirm wallet setup" }).waitFor();
-    await page.getByRole("checkbox").check();
-    await page.getByRole("button", { name: "Confirm and continue" }).click();
-    await page
-      .getByRole("heading", { name: "Setup is waiting to start" })
-      .first()
-      .waitFor();
+    await page.waitForFunction(async () => {
+      const res = await fetch("/api/me");
+      if (!res.ok) return false;
+      const body = await res.json();
+      return (
+        Array.isArray(body.accounts) &&
+        body.accounts.some((candidate) => candidate.kind === "PERSONAL")
+      );
+    });
     const createdBusiness = await page.evaluate(async (name) => {
       const response = await fetch("/api/accounts", {
         method: "POST",
@@ -1413,17 +1409,22 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     );
     await visitor.getByLabel("Email code").fill(code);
     await visitor.getByRole("button", { name: /Verify and continue/i }).click();
-    await visitor.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
-    assert.equal(new URL(visitor.url()).pathname, "/onboarding");
-    await visitor.getByRole("button", { name: "Continue" }).click();
-    await visitor.getByRole("button", { name: "Continue" }).click();
-    await visitor.getByRole("button", { name: "Continue" }).click();
-    await visitor.getByRole("checkbox").check();
-    await visitor.getByRole("button", { name: "Confirm and continue" }).click();
+    await visitor.waitForURL("**/onboarding");
     await visitor
-      .getByRole("heading", { name: "Setup is waiting to start" })
-      .first()
+      .getByRole("heading", { name: "Setting up your wallet" })
       .waitFor();
+    await visitor
+      .getByRole("progressbar", { name: "Wallet setup progress" })
+      .waitFor();
+    await visitor.waitForFunction(async () => {
+      const res = await fetch("/api/me");
+      if (!res.ok) return false;
+      const body = await res.json();
+      return (
+        Array.isArray(body.accounts) &&
+        body.accounts.some((candidate) => candidate.kind === "PERSONAL")
+      );
+    });
     const inaccessible = await visitor.goto(privateUrl);
     assert.equal(inaccessible.status(), 404);
     assert.equal(
@@ -1756,28 +1757,21 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
 
     await page.getByLabel("Email code").fill(otpCode);
     await page.getByRole("button", { name: /Verify and continue/i }).click();
-    await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
-    await captureRecoveryScreen(page, "onboarding-01-welcome");
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL("**/onboarding");
+    await page.getByRole("heading", { name: "Setting up your wallet" }).waitFor();
     await page
-      .getByRole("heading", { name: "Your Personal account" })
+      .getByRole("progressbar", { name: "Wallet setup progress" })
       .waitFor();
-    await captureRecoveryScreen(page, "onboarding-02-personal-details");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page
-      .getByRole("heading", { name: "Your wallet, carefully set up" })
-      .waitFor();
-    await captureRecoveryScreen(page, "onboarding-03-security");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("heading", { name: "Confirm wallet setup" }).waitFor();
-    await captureRecoveryScreen(page, "onboarding-04-confirmation");
-    await page.getByRole("checkbox").check();
-    await page.getByRole("button", { name: "Confirm and continue" }).click();
-    await page
-      .getByRole("heading", { name: "Setup is waiting to start" })
-      .first()
-      .waitFor();
-    await captureRecoveryScreen(page, "onboarding-05-provisioning-status");
+    await captureRecoveryScreen(page, "onboarding-01-auto-progress");
+    await page.waitForFunction(async () => {
+      const res = await fetch("/api/me");
+      if (!res.ok) return false;
+      const body = await res.json();
+      return (
+        Array.isArray(body.accounts) &&
+        body.accounts.some((candidate) => candidate.kind === "PERSONAL")
+      );
+    });
 
     const personal = await page.evaluate(async () => {
       const response = await fetch("/api/me");
@@ -3180,8 +3174,11 @@ test("phase 6 end-to-end acceptance scenarios A–G: queued wallet onboarding, p
     // the dashboard is intentionally inaccessible until a custody worker has
     // verified the wallet and all four network addresses.
     await page
-      .getByRole("heading", { name: "Setup is waiting to start", exact: true })
+      .getByRole("heading", { name: "Setting up your wallet", exact: true })
       .first()
+      .waitFor();
+    await page
+      .getByRole("progressbar", { name: "Wallet setup progress" })
       .waitFor();
     assert.equal(new URL(page.url()).pathname, "/onboarding");
     assert.equal(
@@ -5131,10 +5128,10 @@ test("Chromium onboarding sign-out and switch-account clear the session and reco
     const page = await browser.newPage();
     await page.goto(`${app.origin}/sign-in`);
     await page.getByRole("button", { name: "Continue with Google" }).click();
-    await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL("**/onboarding");
+    await page.getByRole("heading", { name: "Setting up your wallet" }).waitFor();
     await page
-      .getByRole("heading", { name: "Your Personal account" })
+      .getByRole("progressbar", { name: "Wallet setup progress" })
       .waitFor();
 
     await page
@@ -5172,8 +5169,9 @@ test("Chromium onboarding sign-out and switch-account clear the session and reco
     nextEmail = "onboarding-second@gmail.com";
     nextSubject = "onboarding-second-sub";
     await page.getByRole("button", { name: "Continue with Google" }).click();
-    await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
-    await page.getByText(`Signed in: ${nextEmail}`, { exact: true }).waitFor();
+    await page.waitForURL("**/onboarding");
+    await page.getByRole("heading", { name: "Setting up your wallet" }).waitFor();
+    await page.getByText(nextEmail, { exact: true }).waitFor();
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await page.waitForURL("**/sign-in?notice=signed-out");
     await page

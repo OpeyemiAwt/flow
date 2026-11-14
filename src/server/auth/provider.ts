@@ -97,6 +97,7 @@ type VerifiedGoogle = {
   subject: string;
   identity: { id: string; userId: string } | null;
   registeredUserId?: string;
+  profileUpdates?: { image?: string; name?: string };
 };
 
 const discardedCredentials = {
@@ -244,6 +245,12 @@ export function provider(
                         if (google && verifiedGoogle?.identity && userId) {
                           await lockAuthUser(tx, userId);
                           if (google) await requireCurrentGoogleBinding(userId);
+                          if (verifiedGoogle.profileUpdates) {
+                            await tx.authUser.update({
+                              where: { id: userId },
+                              data: verifiedGoogle.profileUpdates,
+                            });
+                          }
                         }
                         await tx.$executeRaw`
                           SELECT set_config('flow.active_auth_ticket_id', ${ticketIdToUse}, true)
@@ -456,10 +463,7 @@ export function provider(
               updates.name = name;
             }
             if (Object.keys(updates).length > 0) {
-              await db.authUser.update({
-                where: { id: identity.userId },
-                data: updates,
-              });
+              verifiedGoogle.profileUpdates = updates;
             }
           }
           return {
@@ -514,6 +518,16 @@ export function provider(
               }
               await lockAuthUser(db, session.userId);
               if (google) await requireCurrentGoogleBinding(session.userId);
+              if (
+                google &&
+                verifiedGoogle?.identity &&
+                verifiedGoogle.profileUpdates
+              ) {
+                await db.authUser.update({
+                  where: { id: session.userId },
+                  data: verifiedGoogle.profileUpdates,
+                });
+              }
               if (context.emailLogin) {
                 const user = await db.authUser.findUnique({
                   where: { id: session.userId },
