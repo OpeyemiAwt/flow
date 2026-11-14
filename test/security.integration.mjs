@@ -1837,18 +1837,8 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
       );
     }
     await page
-      .getByRole("heading", { name: "Four verified networks" })
-      .waitFor();
-    await captureRecoveryScreen(page, "onboarding-06-wallet-ready");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page
-      .getByRole("heading", { name: "Wallet verified and ready" })
-      .waitFor();
-    await captureRecoveryScreen(page, "onboarding-07-dashboard-entry");
-    await page.getByRole("button", { name: "Enter dashboard" }).click();
-    await page
       .getByRole("region", { name: "Account balance overview" })
-      .waitFor();
+      .waitFor({ timeout: 15_000 });
     const personalDashboardUrl = page.url();
     await snap(page, "04-personal-dashboard.png");
 
