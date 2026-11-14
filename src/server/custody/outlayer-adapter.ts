@@ -5,6 +5,8 @@ import {
   mintTrustedAdapterPolicyEvidence,
   validateAddressForNetwork,
   verifyPublicKeyMatchesAddress,
+  type DefaultDenyCustodyPolicyPayload,
+  type OnChainWalletPolicyView,
   type TrustedProviderPolicyEvidence,
 } from "../../domain/custody.ts";
 import type { NetworkId } from "../../domain/providers.ts";
@@ -32,6 +34,9 @@ export type OutLayerEndpoint =
   | "/register"
   | "/wallet/v1/address"
   | "/wallet/v1/policy"
+  | "/wallet/v1/encrypt-policy"
+  | "/wallet/v1/sign-policy"
+  | "/wallet/v1/invalidate-cache"
   | "/wallet/v1/transfer"
   | "/wallet/v1/call"
   | "/wallet/v1/evm/sign-transaction"
@@ -195,6 +200,36 @@ const policyResponseSchema = z.object({
   usage: z.record(z.string(), z.unknown()).optional(),
 });
 
+const encryptPolicyResponseSchema = z.object({
+  encrypted_base64: z.string().min(1),
+  wallet_pubkey: z.string().regex(/^(ed25519|secp256k1):[0-9a-fA-F]+$/),
+  policy_hash: z.string().regex(/^[0-9a-fA-F]{64}$/),
+});
+
+const signPolicyResponseSchema = z.union([
+  z.object({
+    signature_hex: z.string().min(64),
+    public_key_hex: z.string().min(64),
+    version: z.number().int().nonnegative(),
+    locked: z.boolean(),
+    valid_until: z.number().int().positive(),
+    policy_hash: z.string().regex(/^[0-9a-fA-F]{64}$/),
+    request_hash: z.string().optional(),
+  }),
+  z.object({
+    status: z.literal("pending_approval"),
+    approval_id: z.string().min(1),
+    request_id: z.string().min(1),
+    required_approvals: z.number().int().positive(),
+    expires_at: z.string().optional(),
+  }),
+]);
+
+export type OutLayerEncryptPolicyResult = z.infer<
+  typeof encryptPolicyResponseSchema
+>;
+export type OutLayerSignPolicyResult = z.infer<typeof signPolicyResponseSchema>;
+
 export type OutLayerRegisterResult = z.infer<typeof registerResponseSchema>;
 export type OutLayerAddressResult = z.infer<typeof addressResponseSchema>;
 export type OutLayerPolicyResult = TrustedProviderPolicyEvidence;
@@ -285,6 +320,7 @@ export class OutLayerAdapter {
   private readonly timeoutMs: number;
   private readonly compatibilityConfig?: ProviderCompatibilityConfig;
   private readonly controlledRegistrationAuthorized: boolean;
+  private readonly policyPreparationAuthorized: boolean;
   private liveRegistrationCount = 0;
 
   constructor(
@@ -293,6 +329,7 @@ export class OutLayerAdapter {
     options?: {
       readonly compatibilityConfig?: ProviderCompatibilityConfig;
       readonly controlledRegistrationAuthorized?: boolean;
+      readonly policyPreparationAuthorized?: boolean;
     },
   ) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
@@ -300,6 +337,8 @@ export class OutLayerAdapter {
     this.compatibilityConfig = options?.compatibilityConfig;
     this.controlledRegistrationAuthorized =
       options?.controlledRegistrationAuthorized === true;
+    this.policyPreparationAuthorized =
+      options?.policyPreparationAuthorized === true;
   }
 
   private assertEndpointPermitted(
@@ -338,6 +377,9 @@ export class OutLayerAdapter {
         "/register",
         "/wallet/v1/address",
         "/wallet/v1/policy",
+        "/wallet/v1/encrypt-policy",
+        "/wallet/v1/sign-policy",
+        "/wallet/v1/invalidate-cache",
         "/wallet/v1/transfer",
         "/wallet/v1/call",
         "/wallet/v1/evm/sign-transaction",
@@ -350,6 +392,34 @@ export class OutLayerAdapter {
         throw new FlowError(
           "INVALID_CONFIGURATION",
           `OutLayer endpoint ${endpointPath} is not in the authorized OutLayer endpoint allowlist.`,
+        );
+      }
+      return;
+    }
+
+    // Explicit policy setup / verification for an already-registered wallet when FLOW_EXECUTION=disabled:
+    // NEVER permits /register, /wallet/v1/transfer, /wallet/v1/call, or tx signing.
+    if (
+      this.policyPreparationAuthorized &&
+      (!this.compatibilityConfig ||
+        this.compatibilityConfig.mode === "disabled")
+    ) {
+      if (!ALLOWED_OUTLAYER_HOSTS.includes(parsed.hostname.toLowerCase())) {
+        throw new FlowError(
+          "INVALID_CONFIGURATION",
+          `OutLayer host ${parsed.hostname} is not in the authorized OutLayer host allowlist.`,
+        );
+      }
+      const POLICY_PREPARATION_ENDPOINTS = new Set([
+        "/wallet/v1/policy",
+        "/wallet/v1/encrypt-policy",
+        "/wallet/v1/sign-policy",
+        "/wallet/v1/invalidate-cache",
+      ]);
+      if (!POLICY_PREPARATION_ENDPOINTS.has(endpointPath)) {
+        throw new FlowError(
+          "INVALID_CONFIGURATION",
+          `OutLayer endpoint ${endpointPath} is not permitted during controlled policy activation.`,
         );
       }
       return;
@@ -727,6 +797,130 @@ export class OutLayerAdapter {
     return mintTrustedAdapterPolicyEvidence(parsed.data);
   }
 
+  /**
+   * Encrypts a default-deny custody policy inside the OutLayer TEE (`POST /wallet/v1/encrypt-policy`).
+   * Does not write on-chain or move funds; gated by `assertEndpointPermitted`.
+   */
+  async encryptPolicy(
+    apiKey: string,
+    input: {
+      readonly walletId: string;
+      readonly policy: DefaultDenyCustodyPolicyPayload | Record<string, unknown>;
+    },
+  ): Promise<OutLayerEncryptPolicyResult> {
+    const response = await this.fetchWithTimeout("/wallet/v1/encrypt-policy", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        wallet_id: input.walletId,
+        ...input.policy,
+      }),
+    });
+
+    if (!response.ok) {
+      const sanitized = classifyProviderError(response.status, {
+        endpoint: "/wallet/v1/encrypt-policy",
+      });
+      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+    }
+
+    const json = await response.json().catch(() => {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "Invalid JSON received from OutLayer encrypt-policy endpoint.",
+      );
+    });
+    const parsed = encryptPolicyResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "OutLayer encrypt-policy response schema mismatch.",
+      );
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Requests a wallet-key signature over `store_wallet_policy:v2:...` bound to the
+   * exact NEAR `callerAccountId` (`POST /wallet/v1/sign-policy`).
+   */
+  async signPolicy(
+    apiKey: string,
+    input: {
+      readonly encryptedData: string;
+      readonly callerAccountId: string;
+    },
+  ): Promise<OutLayerSignPolicyResult> {
+    if (!isValidNearAddress(input.callerAccountId)) {
+      throw new FlowError(
+        "CUSTODY_INVALID_ADDRESS",
+        "Policy signing requires a valid NEAR callerAccountId.",
+      );
+    }
+
+    const response = await this.fetchWithTimeout("/wallet/v1/sign-policy", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        encrypted_data: input.encryptedData,
+        caller: input.callerAccountId.trim().toLowerCase(),
+      }),
+    });
+
+    if (!response.ok) {
+      const sanitized = classifyProviderError(response.status, {
+        endpoint: "/wallet/v1/sign-policy",
+      });
+      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+    }
+
+    const json = await response.json().catch(() => {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "Invalid JSON received from OutLayer sign-policy endpoint.",
+      );
+    });
+    const parsed = signPolicyResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "OutLayer sign-policy response schema mismatch.",
+      );
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Drops OutLayer's cached `no-policy` entry so the coordinator re-reads `outlayer.near`
+   * immediately after `store_wallet_policy` lands on-chain (`POST /wallet/v1/invalidate-cache`).
+   */
+  async invalidatePolicyCache(apiKey: string, walletId: string): Promise<void> {
+    const response = await this.fetchWithTimeout(
+      "/wallet/v1/invalidate-cache",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ wallet_id: walletId }),
+      },
+    );
+
+    if (!response.ok) {
+      const sanitized = classifyProviderError(response.status, {
+        endpoint: "/wallet/v1/invalidate-cache",
+      });
+      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+    }
+  }
+
   private assertLiveExecutionEnabled(): void {
     if (isFinancialExecutionDisabled()) {
       throw new FlowError(
@@ -1048,4 +1242,140 @@ export class OutLayerAdapter {
       "Custody policy mutation is strictly prohibited while FLOW_EXECUTION=disabled.",
     );
   }
+}
+
+const onChainWalletPolicyViewSchema = z.object({
+  owner: z.string().min(2),
+  encrypted_data: z.string().min(1),
+  frozen: z.boolean(),
+  updated_at: z.union([z.number(), z.string()]),
+  storage_refund_to: z.string().nullable().optional(),
+  storage_deposit: z.string().optional(),
+  version: z.number().int(),
+  locked: z.boolean(),
+});
+
+async function queryNearContractView(params: {
+  readonly rpcUrl: string;
+  readonly contractId: string;
+  readonly methodName: string;
+  readonly args: Record<string, unknown>;
+  readonly timeoutMs?: number;
+}): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), params.timeoutMs ?? 8_000);
+  try {
+    const response = await fetch(params.rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "flow-near-view",
+        method: "query",
+        params: {
+          request_type: "call_function",
+          finality: "final",
+          account_id: params.contractId,
+          method_name: params.methodName,
+          args_base64: Buffer.from(JSON.stringify(params.args), "utf8").toString(
+            "base64",
+          ),
+        },
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_UNAVAILABLE",
+        `NEAR RPC view call failed with HTTP ${response.status}.`,
+      );
+    }
+    const payload = (await response.json()) as {
+      error?: unknown;
+      result?: { error?: string; result?: number[] };
+    };
+    if (payload.error || payload.result?.error) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        `NEAR RPC view ${params.methodName} failed on ${params.contractId}.`,
+      );
+    }
+    const bytes = payload.result?.result;
+    if (!Array.isArray(bytes)) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        `NEAR RPC view ${params.methodName} returned malformed result bytes.`,
+      );
+    }
+    return JSON.parse(Buffer.from(bytes).toString("utf8"));
+  } catch (err) {
+    if (err instanceof FlowError) throw err;
+    throw new FlowError(
+      "CUSTODY_PROVIDER_NETWORK_ERROR",
+      `NEAR RPC view ${params.methodName} failed due to a network error.`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Read-only NEAR RPC check for `outlayer.near::get_wallet_policy` to verify or
+ * reconcile an on-chain policy write without modifying chain or custody state.
+ */
+export async function readOnChainWalletPolicy(params: {
+  readonly walletPubkey: string;
+  readonly rpcUrl?: string;
+  readonly contractId?: string;
+  readonly timeoutMs?: number;
+}): Promise<OnChainWalletPolicyView | null> {
+  const raw = await queryNearContractView({
+    rpcUrl: params.rpcUrl ?? "https://rpc.mainnet.near.org",
+    contractId: params.contractId ?? "outlayer.near",
+    methodName: "get_wallet_policy",
+    args: { wallet_pubkey: params.walletPubkey },
+    timeoutMs: params.timeoutMs,
+  });
+  if (raw === null) {
+    return null;
+  }
+  const parsed = onChainWalletPolicyViewSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new FlowError(
+      "CUSTODY_PROVIDER_ERROR",
+      "outlayer.near get_wallet_policy returned an unexpected shape.",
+    );
+  }
+  return parsed.data;
+}
+
+/**
+ * Read-only NEAR RPC query for `outlayer.near::estimate_wallet_policy_cost` (yoctoNEAR).
+ */
+export async function estimateOnChainPolicyStorageCost(params: {
+  readonly walletPubkey: string;
+  readonly encryptedData: string;
+  readonly storageRefundTo?: string | null;
+  readonly rpcUrl?: string;
+  readonly contractId?: string;
+  readonly timeoutMs?: number;
+}): Promise<string> {
+  const raw = await queryNearContractView({
+    rpcUrl: params.rpcUrl ?? "https://rpc.mainnet.near.org",
+    contractId: params.contractId ?? "outlayer.near",
+    methodName: "estimate_wallet_policy_cost",
+    args: {
+      wallet_pubkey: params.walletPubkey,
+      encrypted_data: params.encryptedData,
+      storage_refund_to: params.storageRefundTo ?? null,
+    },
+    timeoutMs: params.timeoutMs,
+  });
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) {
+    throw new FlowError(
+      "CUSTODY_PROVIDER_ERROR",
+      "outlayer.near estimate_wallet_policy_cost returned an invalid yoctoNEAR amount.",
+    );
+  }
+  return raw;
 }

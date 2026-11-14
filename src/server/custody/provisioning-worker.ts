@@ -28,6 +28,7 @@ import {
   recordJobTerminalFailure,
   recordRegisteredWalletWithoutPolicy,
   reconcileCrashedJobs,
+  resumePolicyVerificationJob,
   startPolicyVerification,
   type AllowlistedProviderEndpoint,
   type JobFailureClassification,
@@ -366,6 +367,22 @@ export class WalletProvisioningWorker {
       results.push(...batchResults);
     }
     return results;
+  }
+
+  /**
+   * Resumes Stage 3 policy verification for a specific existing wallet that failed
+   * with `POLICY_VERIFICATION_FAILED` (`wallet.status = 'SETUP_FAILED'`).
+   * Never calls `/register` and preserves original container credentials and addresses.
+   */
+  async resumeFailedPolicyVerification(input: {
+    readonly accountId: string;
+    readonly jobId: string;
+    readonly expectedWalletId: string;
+    readonly requestId: string;
+    readonly actorAuthId: string;
+  }): Promise<ProcessAccountJobResult> {
+    await resumePolicyVerificationJob(this.db, input);
+    return await this.processAccountJob(input.accountId);
   }
 
   /**

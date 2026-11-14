@@ -7,6 +7,7 @@ import {
 } from "../domain/atomic-amounts.ts";
 import { isFinancialExecutionDisabled } from "../domain/custody.ts";
 import { supportsQuoteAddress } from "../domain/quote-addresses.ts";
+import { canonicalizeNetworkId } from "../domain/supported-assets-catalog.ts";
 import { runtime } from "../foundation/prisma.ts";
 import { access, accountId, principal } from "./accounts.ts";
 import { ApiFailure, input, reply } from "./http.ts";
@@ -165,9 +166,14 @@ export async function commitAddMoneyIntent(
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true),
       set_config('flow.current_account_id', ${id}, true)`;
     const rows = await tx.$queryRaw<
-      Array<{ wallet_id: string; network: string; address: string }>
+      Array<{
+        wallet_id: string;
+        network: string;
+        chain_id: string;
+        address: string;
+      }>
     >`
-      SELECT w.id AS wallet_id, wa.network, wa.address
+      SELECT w.id AS wallet_id, wa.network, wa.chain_id, wa.address
       FROM flow.wallets w
       JOIN flow.wallet_addresses wa ON wa.wallet_id = w.id
       WHERE w.account_id = ${id}::uuid
@@ -177,13 +183,21 @@ export async function commitAddMoneyIntent(
     return rows;
   });
 
-  const nearWalletRow = walletContext.find((r) => r.network === "near-mainnet");
+  const nearWalletRow = walletContext.find(
+    (r) =>
+      (canonicalizeNetworkId(r.chain_id) ?? canonicalizeNetworkId(r.network)) ===
+      "near-mainnet",
+  );
   if (!nearWalletRow) {
     throw new ApiFailure(409, "ACTIVE_MAINNET_WALLET_REQUIRED");
   }
 
   const ownSourceAddress =
-    walletContext.find((r) => r.network === source.networkKey)?.address ?? null;
+    walletContext.find(
+      (r) =>
+        (canonicalizeNetworkId(r.chain_id) ??
+          canonicalizeNetworkId(r.network)) === source.networkKey,
+    )?.address ?? null;
   const candidateRefundAddress =
     body.refundAddress?.trim() || ownSourceAddress || "";
   if (!candidateRefundAddress) {

@@ -1502,6 +1502,252 @@ export async function getAccountWalletPublicProjection(
   };
 }
 
+export interface ResumePolicyVerificationInput {
+  readonly accountId: string;
+  readonly jobId: string;
+  readonly expectedWalletId: string;
+  readonly requestId: string;
+  readonly actorAuthId: string;
+}
+
+export interface ResumePolicyVerificationResult {
+  readonly accountId: string;
+  readonly jobId: string;
+  readonly walletId: string;
+  readonly providerWalletId: string;
+  readonly nearAccountId: string;
+  readonly fencingToken: bigint;
+}
+
+/**
+ * Atomically transitions an existing wallet that failed ONLY at Stage 3
+ * (`wallet.status = 'SETUP_FAILED'`, `job.status = 'FAILED'`,
+ * `job.failure_classification = 'POLICY_VERIFICATION_FAILED'`) back into
+ * `'PROVISIONING'` / `'POLICY_VERIFYING'` so policy verification can be
+ * re-checked WITHOUT ever repeating `/register` or altering derived addresses
+ * and encrypted credentials.
+ */
+export async function resumePolicyVerificationJob(
+  db: FlowDb,
+  input: ResumePolicyVerificationInput,
+): Promise<ResumePolicyVerificationResult> {
+  if (
+    !UUID_REGEX.test(input.accountId.trim()) ||
+    !UUID_REGEX.test(input.jobId.trim()) ||
+    !UUID_REGEX.test(input.expectedWalletId.trim()) ||
+    !UUID_REGEX.test(input.requestId.trim())
+  ) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "Policy verification resume requires valid UUIDs for accountId, jobId, expectedWalletId, and requestId.",
+    );
+  }
+  if (!OPERATOR_AUTH_ID_REGEX.test(input.actorAuthId.trim())) {
+    throw new FlowError(
+      "INVALID_OPERATOR_IDENTITY",
+      "Policy verification resume requires a valid actorAuthId.",
+    );
+  }
+
+  return await db.$transaction(async (tx) => {
+    const jobs = await tx.$queryRaw<
+      Array<{
+        id: string;
+        accountId: string;
+        status: string;
+        failureClassification: string | null;
+        fencingToken: bigint;
+        attempts: number;
+        maxAttempts: number;
+      }>
+    >`
+      SELECT
+        id,
+        account_id AS "accountId",
+        status,
+        failure_classification AS "failureClassification",
+        fencing_token AS "fencingToken",
+        attempts,
+        max_attempts AS "maxAttempts"
+      FROM flow.wallet_provisioning_jobs
+      WHERE id = ${input.jobId.trim()}::uuid
+      FOR UPDATE
+    `;
+
+    const wallets = await tx.$queryRaw<
+      Array<{
+        id: string;
+        accountId: string;
+        provider: string;
+        providerWalletId: string;
+        nearAccountId: string;
+        encryptedCredential: string;
+        status: string;
+        policyState: string;
+      }>
+    >`
+      SELECT
+        id,
+        account_id AS "accountId",
+        provider,
+        provider_wallet_id AS "providerWalletId",
+        near_account_id AS "nearAccountId",
+        encrypted_credential AS "encryptedCredential",
+        status::text AS status,
+        policy_state AS "policyState"
+      FROM flow.wallets
+      WHERE id = ${input.expectedWalletId.trim()}::uuid
+      FOR UPDATE
+    `;
+
+    const job = jobs[0];
+    const wallet = wallets[0];
+
+    if (
+      !job ||
+      !wallet ||
+      job.accountId !== input.accountId.trim() ||
+      wallet.accountId !== input.accountId.trim()
+    ) {
+      throw new FlowError(
+        "WALLET_ACCOUNT_MISMATCH",
+        "Provisioning job, wallet, and account ID do not match for policy verification resume.",
+      );
+    }
+
+    if (wallet.status !== "SETUP_FAILED") {
+      throw new FlowError(
+        "INVALID_STATE_TRANSITION",
+        `Wallet ${wallet.id} in status ${wallet.status} cannot resume from SETUP_FAILED.`,
+      );
+    }
+
+    if (
+      job.status !== "FAILED" ||
+      job.failureClassification !== "POLICY_VERIFICATION_FAILED"
+    ) {
+      throw new FlowError(
+        "INVALID_STATE_TRANSITION",
+        `Job ${job.id} (${job.status}/${job.failureClassification ?? "none"}) is only eligible for policy resume when FAILED with POLICY_VERIFICATION_FAILED.`,
+      );
+    }
+
+    if (
+      wallet.provider !== "OUTLAYER" ||
+      !UUID_REGEX.test(wallet.providerWalletId) ||
+      wallet.encryptedCredential.trim().length === 0
+    ) {
+      throw new FlowError(
+        "INCOMPLETE_WALLET_PROVISIONING",
+        `Wallet ${wallet.id} is missing Stage 1 provider credentials and cannot resume at Stage 3.`,
+      );
+    }
+
+    if (job.attempts >= 10) {
+      throw new FlowError(
+        "INVALID_STATE_TRANSITION",
+        `Job ${job.id} has reached the schema maximum attempts ceiling (10).`,
+      );
+    }
+
+    const dbAddresses = await tx.$queryRaw<
+      Array<{
+        network: string;
+        chainId: string;
+        address: string;
+        publicKey: string;
+      }>
+    >`
+      SELECT network, chain_id AS "chainId", address, public_key AS "publicKey"
+      FROM flow.wallet_addresses
+      WHERE wallet_id = ${wallet.id}::uuid
+    `;
+
+    const dbCapabilities = await tx.$queryRaw<
+      Array<{
+        network: string;
+        canDeriveAddress: boolean;
+        canReceive: boolean;
+        canSignTransfer: boolean;
+        broadcastMode: string;
+      }>
+    >`
+      SELECT
+        network, can_derive_address AS "canDeriveAddress", can_receive AS "canReceive",
+        can_sign_transfer AS "canSignTransfer", broadcast_mode AS "broadcastMode"
+      FROM flow.wallet_capabilities
+      WHERE wallet_id = ${wallet.id}::uuid
+    `;
+
+    validateRequiredWalletProvisioning({
+      nearAccountId: wallet.nearAccountId,
+      addresses: dbAddresses,
+      capabilities: dbCapabilities,
+      policyVerified: false,
+    });
+
+    const nextFencingToken = job.fencingToken + 1n;
+    const nextMaxAttempts = Math.min(10, Math.max(job.maxAttempts, job.attempts + 1));
+
+    await tx.$executeRaw`
+      UPDATE flow.wallets
+      SET
+        status = 'PROVISIONING'::flow.wallet_status,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${wallet.id}::uuid
+        AND account_id = ${wallet.accountId}::uuid
+        AND status = 'SETUP_FAILED'::flow.wallet_status
+    `;
+
+    await tx.$executeRaw`
+      UPDATE flow.wallet_capabilities
+      SET
+        can_receive = false,
+        can_sign_transfer = false,
+        verified_at = CURRENT_TIMESTAMP
+      WHERE wallet_id = ${wallet.id}::uuid
+    `;
+
+    await tx.$executeRaw`
+      UPDATE flow.wallet_provisioning_jobs
+      SET
+        status = 'POLICY_VERIFYING',
+        fencing_token = ${nextFencingToken},
+        max_attempts = ${nextMaxAttempts},
+        lease_holder = NULL,
+        lease_expires_at = NULL,
+        last_error = NULL,
+        failure_classification = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${job.id}::uuid
+        AND account_id = ${job.accountId}::uuid
+        AND status = 'FAILED'
+    `;
+
+    await tx.$executeRaw`
+      INSERT INTO flow.security_audit_events (
+        kind, actor_auth_id, account_id, target_id, request_id, created_at
+      ) VALUES (
+        'wallet_policy_verification_resumed',
+        ${input.actorAuthId.trim()},
+        ${wallet.accountId}::uuid,
+        ${wallet.id},
+        ${input.requestId.trim()}::uuid,
+        CURRENT_TIMESTAMP
+      )
+    `;
+
+    return {
+      accountId: wallet.accountId,
+      jobId: job.id,
+      walletId: wallet.id,
+      providerWalletId: wallet.providerWalletId,
+      nearAccountId: wallet.nearAccountId,
+      fencingToken: nextFencingToken,
+    };
+  });
+}
+
 export const ALLOWED_MANUAL_REVIEW_REASON_CODES = [
   "AMBIGUOUS_REGISTRATION_OUTCOME",
   "CORRUPTED_PROVIDER_RESPONSE",

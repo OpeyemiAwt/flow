@@ -135,7 +135,16 @@ function accountActivityRows(accountId: string) {
       FROM flow.outgoing_transfer_jobs ot
       LEFT JOIN flow.wallet_addresses wa_src
         ON wa_src.wallet_id = ot.wallet_id
-       AND wa_src.network = ot.source_network
+       AND (
+         wa_src.network = ot.source_network
+         OR wa_src.chain_id = CASE ot.source_network
+           WHEN 'base-mainnet' THEN '8453'
+           WHEN 'ethereum-mainnet' THEN '1'
+           WHEN 'solana-mainnet' THEN 'solana-mainnet'
+           WHEN 'near-mainnet' THEN 'near-mainnet'
+           ELSE ot.source_network
+         END
+       )
       WHERE ot.account_id = ${accountId}::uuid
         AND NOT EXISTS (
           SELECT 1 FROM flow.wallet_activities indexed

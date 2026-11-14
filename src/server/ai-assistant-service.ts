@@ -2,7 +2,10 @@ import {
   formatAtomicToDisplay,
   parseDisplayToAtomic,
 } from "../domain/atomic-amounts.ts";
-import { MAINNET_SUPPORTED_DEPLOYMENTS } from "../domain/supported-assets-catalog.ts";
+import {
+  canonicalizeNetworkId,
+  MAINNET_SUPPORTED_DEPLOYMENTS,
+} from "../domain/supported-assets-catalog.ts";
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import { quoteOneClickPreview } from "./providers/one-click-preview.ts";
@@ -156,9 +159,9 @@ export async function processAssistantQuery(params: {
     if (srcDep.id !== dstDep.id && amountMatch) {
       try {
         const walletAddresses = await db.$queryRaw<
-          Array<{ network: string; address: string }>
+          Array<{ network: string; chain_id: string; address: string }>
         >`
-          SELECT wa.network, wa.address
+          SELECT wa.network, wa.chain_id, wa.address
           FROM flow.wallet_addresses wa
           JOIN flow.wallets w ON w.id = wa.wallet_id
           WHERE w.account_id = ${params.accountId}::uuid
@@ -166,10 +169,14 @@ export async function processAssistantQuery(params: {
             AND w.environment = 'mainnet'
         `;
         const refundTo = walletAddresses.find(
-          (w) => w.network === srcDep.networkKey,
+          (w) =>
+            (canonicalizeNetworkId(w.chain_id) ??
+              canonicalizeNetworkId(w.network)) === srcDep.networkKey,
         )?.address;
         const recipient = walletAddresses.find(
-          (w) => w.network === dstDep.networkKey,
+          (w) =>
+            (canonicalizeNetworkId(w.chain_id) ??
+              canonicalizeNetworkId(w.network)) === dstDep.networkKey,
         )?.address;
 
         if (refundTo && recipient) {

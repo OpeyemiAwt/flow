@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { test } from "node:test";
 import {
+  buildDefaultDenyCustodyPolicy,
   decodeBase58,
   deriveEvmAddressFromSecp256k1PublicKey,
   encodeBase58,
@@ -12,6 +13,7 @@ import {
   isValidSolanaAddress,
   mintTrustedAdapterPolicyEvidence,
   OUTLAYER_CAPABILITIES,
+  reconcilePolicyStoreOutcome,
   toEip55ChecksumAddress,
   validateAddressForNetwork,
   validateRequiredWalletProvisioning,
@@ -741,4 +743,112 @@ test("verifyCustodyPolicyEvidence validates documented OutLayer OpenAPI 0.1.0-al
       `Active capability '${activeCap}: true' must be rejected when financial execution is disabled`,
     );
   }
+});
+
+test("buildDefaultDenyCustodyPolicy produces a default-deny payload accepted by verifyCustodyPolicyEvidence", () => {
+  const walletId = "3bc4673d-1dba-4e33-96e6-f4c418327b8d";
+  const controller = "flow-controller.near";
+  const policy = buildDefaultDenyCustodyPolicy();
+
+  assert.deepEqual(policy.rules.transaction_types, []);
+  assert.equal(policy.rules.limits.per_transaction["*"], "0");
+  assert.equal(policy.rules.limits.daily["*"], "0");
+  assert.deepEqual(policy.rules.addresses, { mode: "whitelist", list: [] });
+  assert.equal(policy.capabilities.evm_sign.allowed, false);
+  assert.equal(policy.capabilities.evm_sign.raw_tx, false);
+  assert.equal(policy.capabilities.solana_sign.allowed, false);
+  assert.equal(policy.capabilities.solana_sign.raw_tx, false);
+  assert.equal(policy.capabilities.intents_call.allowed, false);
+
+  const evidence = mintTrustedAdapterPolicyEvidence({
+    wallet_id: walletId,
+    controller,
+    frozen: false,
+    policy: "stored",
+    rules: policy.rules,
+    capabilities: policy.capabilities,
+  });
+
+  const verified = verifyCustodyPolicyEvidence(evidence, walletId, {
+    expectedController: controller,
+  });
+  assert.equal(verified.policyState, "stored");
+  assert.equal(verified.controllerAccountId, controller);
+  assert.equal(verified.frozen, false);
+});
+
+test("reconcilePolicyStoreOutcome resolves ambiguous on-chain writes without duplicate transactions", () => {
+  const walletId = "3bc4673d-1dba-4e33-96e6-f4c418327b8d";
+  const controller = "flow-controller.near";
+  const policy = buildDefaultDenyCustodyPolicy();
+
+  const missing = reconcilePolicyStoreOutcome({
+    expectedController: controller,
+    expectedWalletId: walletId,
+    onChainPolicy: null,
+  });
+  assert.equal(missing.status, "NOT_STORED_ON_CHAIN");
+  assert.equal(missing.canRetryOnChainStore, true);
+
+  const mismatch = reconcilePolicyStoreOutcome({
+    expectedController: controller,
+    expectedWalletId: walletId,
+    onChainPolicy: {
+      owner: "attacker.near",
+      encrypted_data: "cipher1",
+      frozen: false,
+      updated_at: "100",
+      version: 1,
+      locked: false,
+    },
+  });
+  assert.equal(mismatch.status, "CONTROLLER_MISMATCH");
+  assert.equal(mismatch.canRetryOnChainStore, false);
+
+  const staleCache = reconcilePolicyStoreOutcome({
+    expectedController: controller,
+    expectedWalletId: walletId,
+    expectedEncryptedData: "cipher1",
+    onChainPolicy: {
+      owner: controller,
+      encrypted_data: "cipher1",
+      frozen: false,
+      updated_at: "100",
+      version: 1,
+      locked: false,
+    },
+    providerEvidence: mintTrustedAdapterPolicyEvidence({
+      wallet_id: walletId,
+      frozen: false,
+      policy: "none",
+    }),
+  });
+  assert.equal(staleCache.status, "STORED_ON_CHAIN_CACHE_STALE");
+  assert.equal(staleCache.needsCacheInvalidation, true);
+  assert.equal(staleCache.canRetryOnChainStore, false);
+
+  const verified = reconcilePolicyStoreOutcome({
+    expectedController: controller,
+    expectedWalletId: walletId,
+    expectedEncryptedData: "cipher1",
+    onChainPolicy: {
+      owner: controller,
+      encrypted_data: "cipher1",
+      frozen: false,
+      updated_at: "100",
+      version: 1,
+      locked: false,
+    },
+    providerEvidence: mintTrustedAdapterPolicyEvidence({
+      wallet_id: walletId,
+      controller,
+      frozen: false,
+      policy: "stored",
+      rules: policy.rules,
+      capabilities: policy.capabilities,
+    }),
+  });
+  assert.equal(verified.status, "STORED_AND_VERIFIED");
+  assert.equal(verified.needsCacheInvalidation, false);
+  assert.equal(verified.canRetryOnChainStore, false);
 });

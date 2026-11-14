@@ -669,3 +669,36 @@ test("OutLayerAdapter allows single controlled registration on https://api.outla
     { code: "INVALID_CONFIGURATION" },
   );
 });
+
+test("OutLayerAdapter policyPreparationAuthorized permits only policy setup endpoints and still blocks /register and transfers when FLOW_EXECUTION=disabled", () => {
+  const prev = process.env.FLOW_EXECUTION;
+  process.env.FLOW_EXECUTION = "disabled";
+  try {
+    const adapter = new OutLayerAdapter("https://api.outlayer.ai", 5_000, {
+      policyPreparationAuthorized: true,
+    });
+    const testable = adapter as unknown as {
+      assertEndpointPermitted(action: "register" | "query", path: string): void;
+    };
+    assert.doesNotThrow(() => {
+      testable.assertEndpointPermitted("query", "/wallet/v1/policy");
+      testable.assertEndpointPermitted("query", "/wallet/v1/encrypt-policy");
+      testable.assertEndpointPermitted("query", "/wallet/v1/sign-policy");
+      testable.assertEndpointPermitted("query", "/wallet/v1/invalidate-cache");
+    });
+    assert.throws(() => testable.assertEndpointPermitted("register", "/register"), {
+      code: "INVALID_CONFIGURATION",
+    });
+    assert.throws(
+      () => testable.assertEndpointPermitted("query", "/wallet/v1/transfer"),
+      { code: "INVALID_CONFIGURATION" },
+    );
+    assert.throws(
+      () => testable.assertEndpointPermitted("query", "/wallet/v1/call"),
+      { code: "INVALID_CONFIGURATION" },
+    );
+  } finally {
+    if (prev === undefined) delete process.env.FLOW_EXECUTION;
+    else process.env.FLOW_EXECUTION = prev;
+  }
+});

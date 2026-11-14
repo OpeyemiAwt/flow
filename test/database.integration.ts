@@ -2857,14 +2857,82 @@ test("M2 Phase 3 worker: provider failures, unverified policy rejection, and gra
       "POLICY_VERIFICATION_FAILED",
     );
 
-    const { rows: failedWalletRows } = await pool.query<{ status: string }>(
-      "SELECT status::text AS status FROM flow.wallets WHERE account_id = $1::uuid",
+    const { rows: failedWalletRows } = await pool.query<{
+      id: string;
+      status: string;
+      providerWalletId: string;
+      nearAccountId: string;
+    }>(
+      `SELECT id, status::text AS status, provider_wallet_id AS "providerWalletId", near_account_id AS "nearAccountId"
+       FROM flow.wallets WHERE account_id = $1::uuid`,
       [accBadPolicy.accountId],
     );
     assert.equal(failedWalletRows[0]!.status, "SETUP_FAILED");
 
-    // 2. Restore valid policyState='stored' and test background start/stop polling lifecycle
+    const { rows: failedJobRows } = await pool.query<{ id: string }>(
+      "SELECT id FROM flow.wallet_provisioning_jobs WHERE account_id = $1::uuid",
+      [accBadPolicy.accountId],
+    );
+    const regCountBeforeResume = mockServer.getRegisterCallCount();
+
+    // Resuming while policy is STILL 'none' must re-fail at Stage 3 without calling /register
+    const stillBadRes = await worker.resumeFailedPolicyVerification({
+      accountId: accBadPolicy.accountId,
+      jobId: failedJobRows[0]!.id,
+      expectedWalletId: failedWalletRows[0]!.id,
+      requestId: randomUUID(),
+      actorAuthId: "system-policy-recovery",
+    });
+    assert.equal(stillBadRes.outcome, "failed");
+    assert.equal(
+      stillBadRes.failureClassification,
+      "POLICY_VERIFICATION_FAILED",
+    );
+    assert.equal(
+      mockServer.getRegisterCallCount(),
+      regCountBeforeResume,
+      "Policy verification resume MUST NOT repeat /register",
+    );
+
+    // 2. Restore valid policyState='stored': resuming existing SETUP_FAILED wallet activates it with same container & addresses
     mockServer.setOptions({ multiWalletMode: true, policyState: "stored" });
+    const recoveredRes = await worker.resumeFailedPolicyVerification({
+      accountId: accBadPolicy.accountId,
+      jobId: failedJobRows[0]!.id,
+      expectedWalletId: failedWalletRows[0]!.id,
+      requestId: randomUUID(),
+      actorAuthId: "system-policy-recovery",
+    });
+    assert.equal(recoveredRes.outcome, "activated");
+    assert.equal(
+      mockServer.getRegisterCallCount(),
+      regCountBeforeResume,
+      "Policy recovery activation MUST reuse original OutLayer wallet without calling /register",
+    );
+    const { rows: recoveredWalletRows } = await pool.query<{
+      id: string;
+      status: string;
+      policyState: string;
+      providerWalletId: string;
+      nearAccountId: string;
+    }>(
+      `SELECT id, status::text AS status, policy_state AS "policyState", provider_wallet_id AS "providerWalletId", near_account_id AS "nearAccountId"
+       FROM flow.wallets WHERE account_id = $1::uuid`,
+      [accBadPolicy.accountId],
+    );
+    assert.equal(recoveredWalletRows[0]!.id, failedWalletRows[0]!.id);
+    assert.equal(
+      recoveredWalletRows[0]!.providerWalletId,
+      failedWalletRows[0]!.providerWalletId,
+    );
+    assert.equal(
+      recoveredWalletRows[0]!.nearAccountId,
+      failedWalletRows[0]!.nearAccountId,
+    );
+    assert.equal(recoveredWalletRows[0]!.status, "ACTIVE");
+    assert.equal(recoveredWalletRows[0]!.policyState, "stored");
+
+    // And subsequent background pollers work normally on other accounts
     const accBg = await createTestAccount(pool, "BUSINESS", "worker-bg-poll");
     await ensureProvisioningJobForAccount(db, accBg.accountId, randomUUID());
     // Earlier cases intentionally leave unrelated eligible provisioning fixtures.

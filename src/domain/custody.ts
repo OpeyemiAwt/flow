@@ -1494,3 +1494,193 @@ export function evaluateWalletFundReadiness(params: {
     canSignTransfers: anySignEnabled,
   };
 }
+
+export interface DefaultDenyCustodyPolicyPayload {
+  readonly rules: {
+    readonly transaction_types: readonly [];
+    readonly limits: {
+      readonly per_transaction: { readonly "*": "0" };
+      readonly daily: { readonly "*": "0" };
+    };
+    readonly addresses: {
+      readonly mode: "whitelist";
+      readonly list: readonly [];
+    };
+  };
+  readonly capabilities: {
+    readonly raw_sign: { readonly allowed: false };
+    readonly evm_sign: { readonly allowed: false; readonly raw_tx: false };
+    readonly solana_sign: { readonly allowed: false; readonly raw_tx: false };
+    readonly swap: { readonly allowed: false };
+    readonly cross_chain_withdraw: { readonly allowed: false };
+    readonly limit_order: { readonly allowed: false };
+    readonly payment_check: { readonly allowed: false };
+    readonly confidential: { readonly allowed: false };
+    readonly intents_call: { readonly allowed: false };
+    readonly sign_message: { readonly allowed: false };
+  };
+}
+
+/**
+ * Builds the strict default-deny OutLayer custody policy payload required during
+ * initial wallet activation while `FLOW_EXECUTION=disabled`.
+ * Enforces empty `transaction_types`, empty address whitelist, zero `"*"` spend caps,
+ * and explicit `allowed: false` (plus `raw_tx: false` for EVM/Solana) on every capability.
+ */
+export function buildDefaultDenyCustodyPolicy(): DefaultDenyCustodyPolicyPayload {
+  return {
+    rules: {
+      transaction_types: [],
+      limits: {
+        per_transaction: { "*": "0" },
+        daily: { "*": "0" },
+      },
+      addresses: {
+        mode: "whitelist",
+        list: [],
+      },
+    },
+    capabilities: {
+      raw_sign: { allowed: false },
+      evm_sign: { allowed: false, raw_tx: false },
+      solana_sign: { allowed: false, raw_tx: false },
+      swap: { allowed: false },
+      cross_chain_withdraw: { allowed: false },
+      limit_order: { allowed: false },
+      payment_check: { allowed: false },
+      confidential: { allowed: false },
+      intents_call: { allowed: false },
+      sign_message: { allowed: false },
+    },
+  };
+}
+
+export interface OnChainWalletPolicyView {
+  readonly owner: string;
+  readonly encrypted_data: string;
+  readonly frozen: boolean;
+  readonly updated_at: string | number;
+  readonly storage_refund_to?: string | null;
+  readonly storage_deposit?: string;
+  readonly version: number;
+  readonly locked: boolean;
+}
+
+export interface PolicyWriteReconciliationResult {
+  readonly status:
+    | "STORED_AND_VERIFIED"
+    | "STORED_ON_CHAIN_CACHE_STALE"
+    | "NOT_STORED_ON_CHAIN"
+    | "CONTROLLER_MISMATCH"
+    | "WALLET_FROZEN";
+  readonly onChainExists: boolean;
+  readonly onChainVersion: number | null;
+  readonly onChainController: string | null;
+  readonly needsCacheInvalidation: boolean;
+  readonly canRetryOnChainStore: boolean;
+}
+
+/**
+ * Reconciles an ambiguous `outlayer.near::store_wallet_policy` outcome against
+ * both the authoritative on-chain `get_wallet_policy` view and OutLayer's
+ * `/wallet/v1/policy` endpoint so retries neither double-spend nor misclassify state.
+ */
+export function reconcilePolicyStoreOutcome(params: {
+  readonly expectedController: string;
+  readonly expectedWalletId: string;
+  readonly expectedEncryptedData?: string;
+  readonly onChainPolicy: OnChainWalletPolicyView | null;
+  readonly providerEvidence?: ProviderPolicyEvidenceInput | null;
+}): PolicyWriteReconciliationResult {
+  const expectedController = params.expectedController.trim().toLowerCase();
+  if (!isValidNearAddress(expectedController)) {
+    throw new FlowError(
+      "INVALID_CONFIGURATION",
+      "Expected NEAR controller account ID is invalid.",
+    );
+  }
+
+  if (!params.onChainPolicy) {
+    return {
+      status: "NOT_STORED_ON_CHAIN",
+      onChainExists: false,
+      onChainVersion: null,
+      onChainController: null,
+      needsCacheInvalidation: false,
+      canRetryOnChainStore: true,
+    };
+  }
+
+  const onChainOwner = params.onChainPolicy.owner.trim().toLowerCase();
+  if (onChainOwner !== expectedController) {
+    return {
+      status: "CONTROLLER_MISMATCH",
+      onChainExists: true,
+      onChainVersion: params.onChainPolicy.version,
+      onChainController: onChainOwner,
+      needsCacheInvalidation: false,
+      canRetryOnChainStore: false,
+    };
+  }
+
+  if (params.onChainPolicy.frozen) {
+    return {
+      status: "WALLET_FROZEN",
+      onChainExists: true,
+      onChainVersion: params.onChainPolicy.version,
+      onChainController: onChainOwner,
+      needsCacheInvalidation: false,
+      canRetryOnChainStore: false,
+    };
+  }
+
+  if (
+    params.expectedEncryptedData &&
+    params.onChainPolicy.encrypted_data !== params.expectedEncryptedData
+  ) {
+    return {
+      status: "STORED_ON_CHAIN_CACHE_STALE",
+      onChainExists: true,
+      onChainVersion: params.onChainPolicy.version,
+      onChainController: onChainOwner,
+      needsCacheInvalidation: true,
+      canRetryOnChainStore: false,
+    };
+  }
+
+  if (params.providerEvidence) {
+    try {
+      verifyCustodyPolicyEvidence(
+        params.providerEvidence,
+        params.expectedWalletId,
+        { expectedController },
+      );
+      return {
+        status: "STORED_AND_VERIFIED",
+        onChainExists: true,
+        onChainVersion: params.onChainPolicy.version,
+        onChainController: onChainOwner,
+        needsCacheInvalidation: false,
+        canRetryOnChainStore: false,
+      };
+    } catch {
+      return {
+        status: "STORED_ON_CHAIN_CACHE_STALE",
+        onChainExists: true,
+        onChainVersion: params.onChainPolicy.version,
+        onChainController: onChainOwner,
+        needsCacheInvalidation: true,
+        canRetryOnChainStore: false,
+      };
+    }
+  }
+
+  return {
+    status: "STORED_ON_CHAIN_CACHE_STALE",
+    onChainExists: true,
+    onChainVersion: params.onChainPolicy.version,
+    onChainController: onChainOwner,
+    needsCacheInvalidation: true,
+    canRetryOnChainStore: false,
+  };
+}
