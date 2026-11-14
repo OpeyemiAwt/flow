@@ -554,12 +554,12 @@ export async function readPaymentAttempt(
       pa.deposit_deadline,
       pa.route_type,
       pa.is_provider_verified,
-      pr.destination_network,
-      pr.destination_asset_symbol,
-      pr.destination_decimals,
-      pr.status::text AS request_status,
-      pr.expires_at AS request_expires_at,
-      pr.payer_memo_required,
+      pa.destination_network,
+      pa.destination_asset_symbol,
+      pa.destination_decimals,
+      pa.request_status,
+      pa.request_expires_at,
+      pa.payer_memo_required,
       pa.source_network,
       pa.source_asset_id,
       pa.source_asset_symbol,
@@ -570,7 +570,7 @@ export async function readPaymentAttempt(
       pa.destination_tx_hash,
       pa.settled_at,
       pa.payer_refund_address
-    FROM flow.get_checkout_payment_attempt(${publicId}, ${requestedAttemptId})
+    FROM flow.get_checkout_payment_attempt(${publicId}, ${requestedAttemptId}) AS pa
   `;
 
   const att = attemptRows[0];
