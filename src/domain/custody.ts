@@ -1,6 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { FlowError } from "../foundation/errors.ts";
+import { isFinancialExecutionDisabled } from "./execution-flag.ts";
 import type { NetworkId } from "./providers.ts";
+
+export { isFinancialExecutionDisabled };
 
 /**
  * Required launch networks that must have verified addresses and capabilities
@@ -1322,20 +1325,6 @@ export interface CustodyPolicySummary {
   readonly frozen: boolean;
   /** Whether the wallet is permitted to participate in financial operations */
   readonly allowsFinancialExecution: boolean;
-}
-
-/**
- * Checks whether global financial execution is disabled.
- * Unconditionally returns `true` when `FLOW_EXECUTION=disabled` (or anything other
- * than `"enabled"` in `process.env.FLOW_EXECUTION`) or when `globalExecutionDisabled` is true.
- */
-export function isFinancialExecutionDisabled(
-  globalExecutionDisabled?: boolean,
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  if (globalExecutionDisabled === true) return true;
-  const envMode = env.FLOW_EXECUTION ?? "disabled";
-  return envMode !== "enabled";
 }
 
 /**

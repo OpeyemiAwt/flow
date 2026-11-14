@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { formatAtomicToDisplay } from "./atomic-amounts.ts";
-import { isFinancialExecutionDisabled } from "./custody.ts";
+import { isFinancialExecutionDisabled } from "./execution-flag.ts";
 import type { PaymentDepositInstructions } from "./quote-discovery.ts";
 import {
   CURATED_SUPPORTED_DEPLOYMENTS,

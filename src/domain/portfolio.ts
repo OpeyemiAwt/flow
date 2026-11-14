@@ -2,7 +2,7 @@ import {
   type AccountPortfolioProjection,
   type WalletAddressProjection,
 } from "./assets.ts";
-import { isFinancialExecutionDisabled } from "./custody.ts";
+import { isFinancialExecutionDisabled } from "./execution-flag.ts";
 import {
   canonicalizeNetworkId,
   type CatalogTokenDeployment,
