@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS flow.custody_policy_sponsorships (
   fencing_token bigint NOT NULL DEFAULT 0,
   created_at timestamptz(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamptz(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  finalized_at timestamptz(3)
+  finalized_at timestamptz(3),
+  verified_at timestamptz(3)
 );
 
 CREATE INDEX IF NOT EXISTS custody_policy_sponsorships_created_idx

@@ -970,6 +970,7 @@ model CustodyPolicySponsorship {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   finalizedAt           DateTime? @map("finalized_at") @db.Timestamptz(3)
+  verifiedAt            DateTime? @map("verified_at") @db.Timestamptz(3)
 
   @@index([createdAt(sort: Desc)])
   @@index([status, updatedAt(sort: Desc)])
