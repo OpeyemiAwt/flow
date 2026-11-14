@@ -505,14 +505,17 @@ test("custody runtime accepts only its dedicated database role and encryption ke
     },
   );
   assert.doesNotThrow(() =>
-    assertCustodyEnvironment({ ...source, FLOW_EXECUTION: "enabled" }),
+    assertCustodyEnvironment({
+      ...source,
+      FLOW_CUSTODY_WORKER_MODE: "execute",
+      FLOW_EXECUTION: "enabled",
+    }),
   );
   assert.throws(
     () =>
       assertCustodyEnvironment({
         ...source,
         FLOW_EXECUTION: "enabled",
-        FLOW_PROVIDER_COMPATIBILITY_MODE: "authorized",
       }),
     { code: "INVALID_CONFIGURATION", message: /FLOW_EXECUTION=disabled/ },
   );
