@@ -152,10 +152,11 @@ function isValidPolicyWalletKey(rawPubkey: string): boolean {
 function formatWalletPublicKeyCandidates(
   walletPubkey: string,
   providerWalletId?: string,
+  storedSponsorshipPubkey?: string | null,
 ): string[] {
   const candidates = new Set<string>();
-  if (providerWalletId && POLICY_UUID_REGEX.test(providerWalletId.trim())) {
-    candidates.add(providerWalletId.trim());
+  if (storedSponsorshipPubkey && storedSponsorshipPubkey.trim().length > 0) {
+    candidates.add(storedSponsorshipPubkey.trim());
   }
   candidates.add(walletPubkey);
   const decoded = decodeWalletPublicKeyBytes(walletPubkey);
@@ -163,7 +164,25 @@ function formatWalletPublicKeyCandidates(
     candidates.add(`${decoded.scheme}:${decoded.bytes.toString("hex")}`);
     candidates.add(`${decoded.scheme}:${encodeBase58(decoded.bytes)}`);
   }
+  if (providerWalletId && POLICY_UUID_REGEX.test(providerWalletId.trim())) {
+    candidates.add(providerWalletId.trim());
+  }
   return Array.from(candidates);
+}
+
+function formatOnChainWalletPublicKeyHex(rawPublicKey: string): string {
+  const decoded = decodeWalletPublicKeyBytes(rawPublicKey);
+  if (decoded) {
+    return `${decoded.scheme}:${decoded.bytes.toString("hex")}`;
+  }
+  const stripped = rawPublicKey.trim().replace(/^0x/i, "");
+  if (/^[0-9a-f]{66}$|^[0-9a-f]{128}$|^[0-9a-f]{130}$/i.test(stripped)) {
+    return `secp256k1:${stripped.toLowerCase()}`;
+  }
+  throw new FlowError(
+    "CORRUPTED_RESPONSE",
+    "OutLayer sign-policy public_key_hex is not a valid Ed25519 or Secp256k1 key.",
+  );
 }
 
 export interface ParsedNearEd25519KeyPair {
@@ -850,11 +869,28 @@ export async function sponsorAndStoreWalletPolicy(
     walletPubkey,
   } = input;
 
-  // 1. Check if policy is already stored on-chain (recovers crash-after-tx cleanly)
+  // 1 & 2. Check existing sponsorship record and on-chain policy state (recovers crash-after-tx cleanly)
+  const existingRows = await db.$queryRaw<
+    Array<{
+      id: string;
+      status: string;
+      tx_hash: string | null;
+      wallet_pubkey: string;
+      attached_deposit_yocto: string;
+    }>
+  >`
+    SELECT id, status, tx_hash, wallet_pubkey, attached_deposit_yocto::text
+    FROM flow.custody_policy_sponsorships
+    WHERE wallet_id = ${walletId}::uuid
+    LIMIT 1
+  `;
+  const existingSponsorship = existingRows[0];
+
   let existingOnChain: OnChainWalletPolicyView | null = null;
   for (const candidatePubkey of formatWalletPublicKeyCandidates(
     walletPubkey,
     providerWalletId,
+    existingSponsorship?.wallet_pubkey,
   )) {
     existingOnChain = await nearRpc.getOnChainWalletPolicy(candidatePubkey);
     if (existingOnChain) break;
@@ -871,21 +907,6 @@ export async function sponsorAndStoreWalletPolicy(
     };
   }
 
-  // 2. Per-wallet idempotency lookup
-  const existingRows = await db.$queryRaw<
-    Array<{
-      id: string;
-      status: string;
-      tx_hash: string | null;
-      attached_deposit_yocto: string;
-    }>
-  >`
-    SELECT id, status, tx_hash, attached_deposit_yocto::text
-    FROM flow.custody_policy_sponsorships
-    WHERE wallet_id = ${walletId}::uuid
-    LIMIT 1
-  `;
-  const existingSponsorship = existingRows[0];
   if (existingSponsorship?.tx_hash) {
     const reconciled = await nearRpc.queryTransactionStatus(
       existingSponsorship.tx_hash,
@@ -968,13 +989,16 @@ export async function sponsorAndStoreWalletPolicy(
     );
   }
 
-  const estimatedStorageYocto = await nearRpc.estimatePolicyStorageCost({
-    walletPubkey: encrypted.wallet_pubkey,
+  const initialEstimateKey = POLICY_UUID_REGEX.test(encrypted.wallet_pubkey.trim())
+    ? walletPubkey
+    : encrypted.wallet_pubkey;
+  let estimatedStorageYocto = await nearRpc.estimatePolicyStorageCost({
+    walletPubkey: initialEstimateKey,
     encryptedData: encrypted.encrypted_base64,
     storageRefundTo: config.sponsorAccountId,
   });
 
-  const maxProjectedFeeYocto =
+  let maxProjectedFeeYocto =
     estimatedStorageYocto + CONSERVATIVE_GAS_FEE_BUFFER_YOCTO;
   if (maxProjectedFeeYocto > config.maxFeePerWalletYocto) {
     await bumpCircuitFailure(
@@ -1038,6 +1062,43 @@ export async function sponsorAndStoreWalletPolicy(
       "Initial policy unexpectedly returned pending_approval.",
     );
   }
+  const onChainWalletPubkey = formatOnChainWalletPublicKeyHex(
+    signRes.public_key_hex,
+  );
+  if (onChainWalletPubkey !== initialEstimateKey) {
+    estimatedStorageYocto = await nearRpc.estimatePolicyStorageCost({
+      walletPubkey: onChainWalletPubkey,
+      encryptedData: encrypted.encrypted_base64,
+      storageRefundTo: config.sponsorAccountId,
+    });
+    maxProjectedFeeYocto =
+      estimatedStorageYocto + CONSERVATIVE_GAS_FEE_BUFFER_YOCTO;
+    if (maxProjectedFeeYocto > config.maxFeePerWalletYocto) {
+      await bumpCircuitFailure(
+        db,
+        config.circuitFailureThreshold,
+        "PER_WALLET_FEE_CAP_EXCEEDED",
+      );
+      throw new FlowError(
+        "POLICY_SPONSOR_CAP_EXCEEDED",
+        `Projected policy fee (${maxProjectedFeeYocto}) exceeds per-wallet limit (${config.maxFeePerWalletYocto}).`,
+      );
+    }
+    if (
+      sponsorBalanceYocto - maxProjectedFeeYocto <
+      config.minBalanceReserveYocto
+    ) {
+      await bumpCircuitFailure(
+        db,
+        config.circuitFailureThreshold,
+        "SPONSOR_BALANCE_BELOW_RESERVE",
+      );
+      throw new FlowError(
+        "SPONSOR_LOW_BALANCE",
+        "Sponsor NEAR account balance is below configured minimum operational reserve.",
+      );
+    }
+  }
 
   // 8. Resolve sponsor signer keypair, nonce, and block hash
   let publicKeyBytes: Buffer;
@@ -1096,7 +1157,7 @@ export async function sponsorAndStoreWalletPolicy(
     maxDepositYocto: config.maxFeePerWalletYocto,
     allowTestContractOverride: input.allowTestContractOverride,
     args: {
-      wallet_pubkey: encrypted.wallet_pubkey,
+      wallet_pubkey: onChainWalletPubkey,
       encrypted_data: encrypted.encrypted_base64,
       wallet_signature: signRes.signature_hex,
       version: signRes.version,
@@ -1118,7 +1179,7 @@ export async function sponsorAndStoreWalletPolicy(
       estimated_storage_yocto, attached_deposit_yocto, max_allowed_fee_yocto,
       tx_hash, status, fencing_token
     ) VALUES (
-      ${walletId}::uuid, ${accountId}::uuid, ${jobId}::uuid, ${encrypted.wallet_pubkey},
+      ${walletId}::uuid, ${accountId}::uuid, ${jobId}::uuid, ${onChainWalletPubkey},
       ${config.sponsorAccountId}, ${config.contractId}, ${STORE_WALLET_POLICY_METHOD},
       ${BigInt(signRes.version)}, ${encrypted.policy_hash},
       ${estimatedStorageYocto.toString()}::numeric, ${estimatedStorageYocto.toString()}::numeric,
@@ -1126,6 +1187,7 @@ export async function sponsorAndStoreWalletPolicy(
       ${txHash}, 'BROADCASTING', ${fencingToken}
     )
     ON CONFLICT (wallet_id) DO UPDATE SET
+      wallet_pubkey = EXCLUDED.wallet_pubkey,
       tx_hash = EXCLUDED.tx_hash,
       policy_version = EXCLUDED.policy_version,
       policy_hash = EXCLUDED.policy_hash,
@@ -1213,7 +1275,7 @@ export async function sponsorAndStoreWalletPolicy(
   }
 
   // 11. Verify on-chain stored policy before cache invalidation
-  const storedView = await nearRpc.getOnChainWalletPolicy(encrypted.wallet_pubkey);
+  const storedView = await nearRpc.getOnChainWalletPolicy(onChainWalletPubkey);
   if (
     !storedView ||
     storedView.owner.toLowerCase() !== config.sponsorAccountId.toLowerCase() ||
