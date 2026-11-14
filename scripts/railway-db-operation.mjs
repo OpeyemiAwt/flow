@@ -2414,12 +2414,27 @@ async function resumeStagingFailedWallets() {
         )
       RETURNING wpj.id AS job_id, wpj.account_id
     `);
+    const sponsorshipRows = await admin.query(`
+      UPDATE flow.custody_policy_sponsorships s
+      SET
+        status = 'FAILED',
+        error_code = 'STALE_AMBIGUOUS_RESUMED',
+        updated_at = CURRENT_TIMESTAMP
+      FROM flow.wallets w
+      WHERE s.wallet_id = w.id
+        AND s.status IN ('AMBIGUOUS', 'BROADCASTING')
+        AND s.updated_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+        AND w.policy_state = 'none'
+        AND w.status IN ('PROVISIONING', 'SETUP_FAILED')
+      RETURNING s.wallet_id
+    `);
     await admin.query("COMMIT");
     console.log(
       JSON.stringify({
         event: "staging_failed_wallets_resumed",
         walletsUpdated: walletRows.rows,
         jobsResumed: jobRows.rows,
+        sponsorshipsCleared: sponsorshipRows.rows,
       }),
     );
   } catch (error) {
