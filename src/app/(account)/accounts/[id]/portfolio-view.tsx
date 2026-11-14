@@ -361,6 +361,7 @@ export function PortfolioView({
   initialView = "dashboard",
   userEmail,
   profileId,
+  executionDisabled = false,
 }: {
   accountId: string;
   initialPortfolio: SerializedAccountPortfolio;
@@ -369,6 +370,7 @@ export function PortfolioView({
   initialView?: WorkspaceTab;
   userEmail?: string;
   profileId?: string;
+  executionDisabled?: boolean;
 }) {
   const [portfolio, setPortfolio] =
     useState<SerializedAccountPortfolio>(initialPortfolio);
@@ -1789,6 +1791,7 @@ export function PortfolioView({
                     <button
                       type="button"
                       disabled={
+                        executionDisabled ||
                         outgoingExecuting ||
                         !sendSource ||
                         !sendAddressValidation.valid ||
@@ -1804,7 +1807,11 @@ export function PortfolioView({
                       }}
                       className="w-full py-4 rounded-full text-sm font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                     >
-                      {outgoingExecuting ? "Authorizing Send…" : "Send Now"}
+                      {executionDisabled
+                        ? "Outgoing Execution Disabled (Preview Only)"
+                        : outgoingExecuting
+                          ? "Authorizing Send…"
+                          : "Send Now"}
                     </button>
                   </div>
 
@@ -1934,6 +1941,7 @@ export function PortfolioView({
                     <button
                       type="button"
                       disabled={
+                        executionDisabled ||
                         outgoingExecuting ||
                         !convertSource ||
                         convertSource.deployment.id ===
@@ -1950,9 +1958,11 @@ export function PortfolioView({
                       }}
                       className="w-full py-4 rounded-full text-sm font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                     >
-                      {outgoingExecuting
-                        ? "Authorizing Conversion…"
-                        : "Convert Now"}
+                      {executionDisabled
+                        ? "Swap Execution Disabled (Preview Only)"
+                        : outgoingExecuting
+                          ? "Authorizing Conversion…"
+                          : "Convert Now"}
                     </button>
                   </div>
 
@@ -2389,6 +2399,7 @@ export function PortfolioView({
                   <button
                     type="button"
                     disabled={
+                      executionDisabled ||
                       !addMoneyBody ||
                       addMoneyCommitting ||
                       addMoneyRouteUnavailable
@@ -2440,9 +2451,11 @@ export function PortfolioView({
                     }}
                     className="w-full py-3.5 rounded-full text-xs font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                   >
-                    {addMoneyCommitting
-                      ? "Generating Deposit Address…"
-                      : "Continue to Deposit"}
+                    {executionDisabled
+                      ? "Continue to Deposit (Execution Disabled)"
+                      : addMoneyCommitting
+                        ? "Generating Deposit Address…"
+                        : "Continue to Deposit"}
                   </button>
 
                   {addMoneyError && (

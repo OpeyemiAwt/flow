@@ -147,6 +147,23 @@ const indexerPool = process.env.FLOW_INDEXER_DATABASE_URL
     )
   : undefined;
 
+const custodyPool = process.env.FLOW_CUSTODY_DATABASE_URL
+  ? createDatabasePool(
+      readConfig(
+        {
+          FLOW_ENV: process.env.FLOW_ENV!,
+          FLOW_EXECUTION: process.env.FLOW_EXECUTION!,
+          FLOW_TEST_DATABASE_REMOTE: process.env.FLOW_TEST_DATABASE_REMOTE,
+          FLOW_TEST_DATABASE_NAME: process.env.FLOW_TEST_DATABASE_NAME,
+          FLOW_CUSTODY_DATABASE_URL: process.env.FLOW_CUSTODY_DATABASE_URL,
+          FLOW_PROVIDER_COMPATIBILITY_MODE: "disabled",
+          FLOW_WALLET_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+        },
+        "custody",
+      ).database,
+    )
+  : undefined;
+
 const { database: operatorDbConfig } = readConfig(process.env, "operator");
 const operatorPool = createDatabasePool(operatorDbConfig);
 const operatorDb = getPrismaClient("operator");
@@ -184,6 +201,7 @@ after(async () => {
   await legacyWorkerPool?.end();
   await paymentPool?.end();
   await indexerPool?.end();
+  await custodyPool?.end();
   await operatorPool.end();
   await authTicketPool?.end();
   try {
@@ -9387,5 +9405,377 @@ test("database integration: M5 Phase 4 financial ledger double-entry, RLS isolat
     adminClient.release();
     workerClient.release();
     appClient.release();
+  }
+});
+
+test("database integration: M36 settings RLS, Add Money worker lease lifecycle, and Outgoing Send/Convert fencing & privilege isolation", async () => {
+  assert.ok(paymentPool, "FLOW_PAYMENT_DATABASE_URL required");
+  assert.ok(custodyPool, "FLOW_CUSTODY_DATABASE_URL required");
+
+  const adminClient = await pool.connect();
+  const fixtureClient = await workerPool.connect();
+  const appClientA = await pool.connect();
+  const appClientB = await pool.connect();
+  const paymentClient = await paymentPool.connect();
+  const custodyClient = await custodyPool.connect();
+
+  try {
+    const ownerA = await createTestAccount(adminClient, "PERSONAL", "m36-a");
+    const ownerB = await createTestAccount(adminClient, "PERSONAL", "m36-b");
+    const sessionA = await createTestSession(adminClient, ownerA.authUserId);
+    const sessionB = await createTestSession(adminClient, ownerB.authUserId);
+
+    const walletA = randomUUID();
+    await fixtureClient.query(
+      `INSERT INTO flow.wallets (
+        id, account_id, provider, environment, provider_wallet_id,
+        near_account_id, encrypted_credential, key_id, key_digest, status
+      ) VALUES (
+        $1::uuid, $2::uuid, 'OUTLAYER', 'mainnet',
+        $3, 'm36owner.near', 'enc_m36_secret', 'v1', 'digest_m36_1',
+        'ACTIVE'::flow.wallet_status
+      )`,
+      [walletA, ownerA.accountId, `pw_${randomUUID().slice(0, 8)}`],
+    );
+    await fixtureClient.query(
+      `INSERT INTO flow.wallet_addresses (
+        id, wallet_id, network, chain_id, address, public_key
+      ) VALUES (
+        gen_random_uuid(), $1::uuid, 'base-mainnet', '8453', '0x1111111111111111111111111111111111111111', 'pk_base_m36'
+      ), (
+        gen_random_uuid(), $1::uuid, 'near-mainnet', 'near-mainnet', 'm36owner.near', 'ed25519:m36'
+      )`,
+      [walletA],
+    );
+
+    await appClientA.query(
+      `SELECT set_config('flow.current_session_token', $1, false),
+              set_config('flow.current_account_id', $2, false)`,
+      [sessionA, ownerA.accountId],
+    );
+    await appClientB.query(
+      `SELECT set_config('flow.current_session_token', $1, false),
+              set_config('flow.current_account_id', $2, false)`,
+      [sessionB, ownerB.accountId],
+    );
+
+    // 1. Profile & Notification Preferences RLS + tenant isolation
+    await appClientA.query(
+      `INSERT INTO flow.user_profile_preferences (user_id, display_name)
+       VALUES ($1::uuid, 'Amara M36')`,
+      [ownerA.userId],
+    );
+    await appClientA.query(
+      `INSERT INTO flow.account_notification_preferences (
+        account_id, user_id, incoming_payments, payment_link_activity, security_alerts
+      ) VALUES ($1::uuid, $2::uuid, false, true, true)`,
+      [ownerA.accountId, ownerA.userId],
+    );
+
+    const bProfileRows = await appClientB.query(
+      `SELECT user_id FROM flow.user_profile_preferences WHERE user_id = $1::uuid`,
+      [ownerA.userId],
+    );
+    assert.equal(bProfileRows.rows.length, 0);
+
+    const bNotifRows = await appClientB.query(
+      `SELECT account_id FROM flow.account_notification_preferences WHERE account_id = $1::uuid`,
+      [ownerA.accountId],
+    );
+    assert.equal(bNotifRows.rows.length, 0);
+
+    await assert.rejects(
+      appClientB.query(
+        `INSERT INTO flow.user_profile_preferences (user_id, display_name) VALUES ($1::uuid, 'Forged')`,
+        [ownerA.userId],
+      ),
+      { code: "42501" },
+    );
+
+    // 2. Add Money Durable Enqueue, Idempotency, Lease Ownership, Crash Recovery, Negative Privilege
+    const addIdem = randomUUID();
+    const addPublicId = `am_${randomUUID().replace(/-/g, "").slice(0, 20)}`;
+    const insertAdd = await appClientA.query<{ id: string }>(
+      `INSERT INTO flow.add_money_intents (
+        public_id, account_id, wallet_id, created_by_user_id, idempotency_key,
+        source_network, source_asset_id, source_asset_symbol, source_decimals,
+        destination_address, refund_address,
+        quoted_source_atomic_amount, quoted_destination_atomic_amount,
+        deposit_address, status
+      ) VALUES (
+        $1, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
+        'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
+        'm36owner.near', '0x1111111111111111111111111111111111111111',
+        10000000, 3500000000000000000000000,
+        '0xdepositm36addmoney1', 'DEPOSIT_COMMITTED'
+      ) RETURNING id`,
+      [addPublicId, ownerA.accountId, walletA, ownerA.userId, addIdem],
+    );
+    const addIntentId = insertAdd.rows[0]!.id;
+
+    // Duplicate idempotency key blocked
+    await assert.rejects(
+      appClientA.query(
+        `INSERT INTO flow.add_money_intents (
+          public_id, account_id, wallet_id, created_by_user_id, idempotency_key,
+          source_network, source_asset_id, source_asset_symbol, source_decimals,
+          destination_address, refund_address,
+          quoted_source_atomic_amount, quoted_destination_atomic_amount,
+          deposit_address, status
+        ) VALUES (
+          $1, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
+          'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
+          'm36owner.near', '0x1111111111111111111111111111111111111111',
+          10000000, 3500000000000000000000000,
+          '0xdepositm36addmoney1', 'DEPOSIT_COMMITTED'
+        )`,
+        [
+          `am_${randomUUID().replace(/-/g, "").slice(0, 20)}`,
+          ownerA.accountId,
+          walletA,
+          ownerA.userId,
+          addIdem,
+        ],
+      ),
+      { code: "23505" },
+    );
+
+    // Tenant B cannot see or mutate ownerA's add_money_intent; app cannot call worker fn
+    const bAddRows = await appClientB.query(
+      `SELECT id FROM flow.add_money_intents WHERE id = $1::uuid`,
+      [addIntentId],
+    );
+    assert.equal(bAddRows.rows.length, 0);
+    await assert.rejects(
+      appClientA.query(
+        `UPDATE flow.add_money_intents SET status = 'SETTLED' WHERE id = $1::uuid`,
+        [addIntentId],
+      ),
+      { code: "42501" },
+    );
+    await assert.rejects(
+      appClientA.query(
+        `SELECT * FROM flow.claim_active_add_money_intents('bad', 60, 5)`,
+      ),
+      { code: "42501" },
+    );
+
+    // Payment worker claims lease cleanly; second worker cannot double-claim while leased
+    const claimedAdd1 = await paymentClient.query<{ id: string }>(
+      `SELECT id FROM flow.claim_active_add_money_intents('pw-worker-1', 60, 10)`,
+    );
+    assert.ok(claimedAdd1.rows.some((r) => r.id === addIntentId));
+
+    const claimedAdd2 = await paymentClient.query<{ id: string }>(
+      `SELECT id FROM flow.claim_active_add_money_intents('pw-worker-2', 60, 10)`,
+    );
+    assert.equal(
+      claimedAdd2.rows.some((r) => r.id === addIntentId),
+      false,
+    );
+
+    // Non-owner worker rejected with stale lease (40001)
+    await assert.rejects(
+      paymentClient.query(
+        `SELECT flow.transition_add_money_intent($1::uuid, 'pw-worker-2', 'SETTLING', NULL, NULL, NULL)`,
+        [addIntentId],
+      ),
+      { code: "40001" },
+    );
+
+    // Simulate lease expiry / restart recovery: expire lease, then pw-worker-2 reclaims & settles
+    await fixtureClient.query(
+      `UPDATE flow.add_money_intents SET monitoring_lease_expires_at = now() - interval '10 seconds' WHERE id = $1::uuid`,
+      [addIntentId],
+    );
+    const recoveredAdd = await paymentClient.query<{ id: string }>(
+      `SELECT id FROM flow.claim_active_add_money_intents('pw-worker-2', 60, 10)`,
+    );
+    assert.ok(recoveredAdd.rows.some((r) => r.id === addIntentId));
+
+    await paymentClient.query(
+      `SELECT flow.transition_add_money_intent($1::uuid, 'pw-worker-2', 'SETTLED', '0xsrc_am_1', 'near_tx_am_1', NULL)`,
+      [addIntentId],
+    );
+    const settledAdd = await appClientA.query<{
+      status: string;
+      source_tx_hash: string;
+      destination_tx_hash: string;
+    }>(
+      `SELECT status, source_tx_hash, destination_tx_hash FROM flow.add_money_intents WHERE id = $1::uuid`,
+      [addIntentId],
+    );
+    assert.equal(settledAdd.rows[0]?.status, "SETTLED");
+    assert.equal(settledAdd.rows[0]?.source_tx_hash, "0xsrc_am_1");
+    assert.equal(settledAdd.rows[0]?.destination_tx_hash, "near_tx_am_1");
+
+    // 3. Outgoing Send/Convert Custody Job Lifecycle, Fencing, Provider Settling & Negative Privileges
+    const outIdem = randomUUID();
+    const outPublicId = `tx_${randomUUID().replace(/-/g, "").slice(0, 20)}`;
+    const insertOut = await appClientA.query<{ id: string }>(
+      `INSERT INTO flow.outgoing_transfer_jobs (
+        public_id, account_id, wallet_id, created_by_user_id, idempotency_key,
+        job_kind, source_network, source_asset_id, source_asset_symbol, source_decimals,
+        source_atomic_amount, recipient_address, destination_network, destination_asset_id,
+        destination_asset_symbol, destination_decimals, provider_deposit_address, status
+      ) VALUES (
+        $1, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
+        'CONVERT', 'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
+        5000000, 'm36owner.near', 'near-mainnet', 'near-mainnet:NEAR',
+        'NEAR', 24, '0xproviderdepositm36', 'PENDING_CUSTODY'
+      ) RETURNING id`,
+      [outPublicId, ownerA.accountId, walletA, ownerA.userId, outIdem],
+    );
+    const outJobId = insertOut.rows[0]!.id;
+
+    // Duplicate idempotency blocked; cross-tenant RLS enforced
+    await assert.rejects(
+      appClientA.query(
+        `INSERT INTO flow.outgoing_transfer_jobs (
+          public_id, account_id, wallet_id, created_by_user_id, idempotency_key,
+          job_kind, source_network, source_asset_id, source_asset_symbol, source_decimals,
+          source_atomic_amount, recipient_address, destination_network, destination_asset_id,
+          destination_asset_symbol, destination_decimals, provider_deposit_address, status
+        ) VALUES (
+          $1, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
+          'CONVERT', 'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
+          5000000, 'm36owner.near', 'near-mainnet', 'near-mainnet:NEAR',
+          'NEAR', 24, '0xproviderdepositm36', 'PENDING_CUSTODY'
+        )`,
+        [
+          `tx_${randomUUID().replace(/-/g, "").slice(0, 20)}`,
+          ownerA.accountId,
+          walletA,
+          ownerA.userId,
+          outIdem,
+        ],
+      ),
+      { code: "23505" },
+    );
+
+    await assert.rejects(
+      appClientB.query(
+        `INSERT INTO flow.outgoing_transfer_jobs (
+          public_id, account_id, wallet_id, created_by_user_id, idempotency_key,
+          job_kind, source_network, source_asset_id, source_asset_symbol, source_decimals,
+          source_atomic_amount, recipient_address, destination_network, destination_asset_id,
+          destination_asset_symbol, destination_decimals, provider_deposit_address, status
+        ) VALUES (
+          $1, $2::uuid, $3::uuid, $4::uuid, gen_random_uuid(),
+          'SEND', 'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
+          1000000, '0x2222222222222222222222222222222222222222', 'base-mainnet', 'base-mainnet:USDC',
+          'USDC', 6, NULL, 'PENDING_CUSTODY'
+        )`,
+        [
+          `tx_${randomUUID().replace(/-/g, "").slice(0, 20)}`,
+          ownerA.accountId,
+          walletA,
+          ownerB.userId,
+        ],
+      ),
+      { code: "42501" },
+    );
+
+    // Negative privileges: app & payment_worker cannot execute custody functions; custody cannot mutate wallet status directly
+    await assert.rejects(
+      appClientA.query(
+        `SELECT * FROM flow.claim_outgoing_transfer_for_custody('bad', 60)`,
+      ),
+      { code: "42501" },
+    );
+    await assert.rejects(
+      paymentClient.query(
+        `SELECT * FROM flow.claim_outgoing_transfer_for_custody('bad', 60)`,
+      ),
+      { code: "42501" },
+    );
+    await assert.rejects(
+      custodyClient.query(
+        `UPDATE flow.wallets SET status = 'FROZEN' WHERE id = $1::uuid`,
+        [walletA],
+      ),
+      { code: "42501" },
+    );
+
+    // Custody worker claims job under fencing token; worker 2 blocked while leased
+    const claimOut1 = await custodyClient.query<{
+      id: string;
+      fencing_token: string;
+      credential_envelope: string;
+    }>(
+      `SELECT id, fencing_token::text, credential_envelope FROM flow.claim_outgoing_transfer_for_custody('cust-1', 60)`,
+    );
+    assert.equal(claimOut1.rows.length, 1);
+    assert.equal(claimOut1.rows[0]!.id, outJobId);
+    assert.equal(claimOut1.rows[0]!.fencing_token, "1");
+    assert.equal(claimOut1.rows[0]!.credential_envelope, "enc_m36_secret");
+
+    const claimOut2 = await custodyClient.query<{ id: string }>(
+      `SELECT id FROM flow.claim_outgoing_transfer_for_custody('cust-2', 60)`,
+    );
+    assert.equal(claimOut2.rows.length, 0);
+
+    // Stale fencing token rejected (40001)
+    await assert.rejects(
+      custodyClient.query(
+        `SELECT flow.mark_outgoing_transfer_signing_started($1::uuid, 999::bigint)`,
+        [outJobId],
+      ),
+      { code: "40001" },
+    );
+
+    await custodyClient.query(
+      `SELECT flow.mark_outgoing_transfer_signing_started($1::uuid, 1::bigint)`,
+      [outJobId],
+    );
+    await custodyClient.query(
+      `SELECT flow.mark_outgoing_transfer_broadcast($1::uuid, 1::bigint, '0xout_src_1', 'req_out_1', 21000)`,
+      [outJobId],
+    );
+
+    // Cross-chain job with provider_deposit_address enters PROVIDER_SETTLING cleanly
+    const postBroadcast = await appClientA.query<{ status: string }>(
+      `SELECT status FROM flow.outgoing_transfer_jobs WHERE id = $1::uuid`,
+      [outJobId],
+    );
+    assert.equal(postBroadcast.rows[0]?.status, "PROVIDER_SETTLING");
+
+    const confirmClaim = await custodyClient.query<{
+      id: string;
+      status: string;
+    }>(
+      `SELECT id, status FROM flow.claim_outgoing_transfers_for_confirmation('cust-1', 60, 10)`,
+    );
+    assert.ok(
+      confirmClaim.rows.some(
+        (r) => r.id === outJobId && r.status === "PROVIDER_SETTLING",
+      ),
+    );
+
+    await custodyClient.query(
+      `SELECT flow.complete_outgoing_transfer_settlement($1::uuid, 'cust-1', 'SETTLED', 'near_dest_out_1', NULL, NULL)`,
+      [outJobId],
+    );
+
+    const finalOut = await appClientA.query<{
+      status: string;
+      source_tx_hash: string;
+      destination_tx_hash: string;
+      settled_at: Date | null;
+    }>(
+      `SELECT status, source_tx_hash, destination_tx_hash, settled_at FROM flow.outgoing_transfer_jobs WHERE id = $1::uuid`,
+      [outJobId],
+    );
+    assert.equal(finalOut.rows[0]?.status, "SETTLED");
+    assert.equal(finalOut.rows[0]?.source_tx_hash, "0xout_src_1");
+    assert.equal(finalOut.rows[0]?.destination_tx_hash, "near_dest_out_1");
+    assert.ok(finalOut.rows[0]?.settled_at);
+  } finally {
+    adminClient.release();
+    fixtureClient.release();
+    appClientA.release();
+    appClientB.release();
+    paymentClient.release();
+    custodyClient.release();
   }
 });

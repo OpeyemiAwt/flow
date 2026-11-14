@@ -5028,7 +5028,7 @@ test("FLOW portfolio distinguishes a posted deposit from P&L and signs out the b
     await page.getByLabel("Display Name").fill("Fixture Display Name");
     await page.getByRole("button", { name: "Save Changes" }).click();
     await page
-      .getByText("Display name saved in this browser.", { exact: true })
+      .getByText("Display name saved to your account.", { exact: true })
       .waitFor();
     await page.locator('input[type="file"]').setInputFiles({
       name: "fixture.png",
@@ -5039,7 +5039,7 @@ test("FLOW portfolio distinguishes a posted deposit from P&L and signs out the b
       ),
     });
     await page
-      .getByText("Avatar saved in this browser.", { exact: true })
+      .getByText("Avatar saved to your account.", { exact: true })
       .waitFor();
     await page.goto(app.origin + "/security?tab=notifications");
     const preference = page.getByRole("switch", { name: "Incoming payments" });

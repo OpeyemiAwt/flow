@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { isFinancialExecutionDisabled } from "../../../domain/custody.ts";
 import { readPublicPaymentRequest } from "../../../server/payment-requests.ts";
 import { CheckoutView } from "./checkout-view.tsx";
 
@@ -34,5 +35,10 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
     notFound();
   }
 
-  return <CheckoutView request={data} />;
+  return (
+    <CheckoutView
+      request={data}
+      executionDisabled={isFinancialExecutionDisabled()}
+    />
+  );
 }

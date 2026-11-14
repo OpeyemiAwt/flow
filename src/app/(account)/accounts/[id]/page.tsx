@@ -9,6 +9,7 @@ import { pageData, pagePrincipal } from "../../../../server/pages.ts";
 import { serializePortfolio } from "../../../../server/portfolio.ts";
 import { PortfolioView, type WorkspaceTab } from "./portfolio-view.tsx";
 import { redirect } from "next/navigation";
+import { isFinancialExecutionDisabled } from "../../../../domain/custody.ts";
 
 const VALID_VIEWS: ReadonlySet<WorkspaceTab> = new Set([
   "dashboard",
@@ -66,6 +67,7 @@ export default async function AccountPage({
         initialView={initialView}
         userEmail={actor.email}
         profileId={actor.userId}
+        executionDisabled={isFinancialExecutionDisabled()}
       />
     </main>
   );

@@ -35,13 +35,17 @@ import {
 
 interface CheckoutViewProps {
   request: PublicPaymentRequest;
+  executionDisabled?: boolean;
 }
 
 type PayerMode = "WALLET" | "EXCHANGE";
 
 type SourceAssetSelection = CatalogTokenDeployment | DiscoveredToken;
 
-export function CheckoutView({ request }: CheckoutViewProps) {
+export function CheckoutView({
+  request,
+  executionDisabled = false,
+}: CheckoutViewProps) {
   const stableChoices = useMemo(
     () =>
       MAINNET_SUPPORTED_DEPLOYMENTS.filter(
@@ -1669,6 +1673,10 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                   <button
                     type="button"
                     disabled={
+                      Boolean(
+                        executionDisabled ||
+                        (quote && quote.isExecutionDisabled),
+                      ) ||
                       committing ||
                       isReadOnly ||
                       (quoteSecondsRemaining <= 0 &&
@@ -1736,9 +1744,11 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                   >
                     {committing
                       ? "Generating Deposit Instructions…"
-                      : isDirect && payerMode === "WALLET"
-                        ? "Show Direct Deposit Address"
-                        : "Pay Now"}
+                      : executionDisabled || quote?.isExecutionDisabled
+                        ? "Pay Now (Payment Execution Disabled)"
+                        : isDirect && payerMode === "WALLET"
+                          ? "Show Direct Deposit Address"
+                          : "Pay Now"}
                   </button>
                 </div>
               ) : (
