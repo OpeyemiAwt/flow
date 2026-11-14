@@ -8,6 +8,9 @@ RUN apt-get update \
   && test "$(node --version)" = "v24.22.2" \
   && test "$(npm --version)" = "11.19.1"
 
+COPY certs/railway-production-postgres-root.crt /usr/local/share/ca-certificates/flow-production-postgres-root.crt
+RUN update-ca-certificates
+
 WORKDIR /app
 
 FROM base AS dependencies
@@ -24,6 +27,7 @@ FROM base AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
+    NODE_USE_SYSTEM_CA=1 \
     HOSTNAME=0.0.0.0
 
 COPY --from=build --chown=node:node /app/.next/standalone ./

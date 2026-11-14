@@ -7,6 +7,9 @@ RUN apt-get update \
   && test "$(node --version)" = "v24.22.2" \
   && test "$(npm --version)" = "11.19.1"
 
+COPY certs/railway-production-postgres-root.crt /usr/local/share/ca-certificates/flow-production-postgres-root.crt
+RUN update-ca-certificates
+
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
@@ -22,5 +25,5 @@ COPY scripts ./scripts
 COPY test ./test
 RUN node_modules/.bin/prisma generate --config prisma.generate.config.ts
 RUN env -i PATH="$PATH" HOME=/root NODE_ENV=production FLOW_ENV=test FLOW_EXECUTION=disabled NEXT_TELEMETRY_DISABLED=1 npm run build
-ENV NODE_ENV=production FLOW_ENV=staging FLOW_EXECUTION=disabled
+ENV NODE_ENV=production FLOW_ENV=staging FLOW_EXECUTION=disabled NODE_USE_SYSTEM_CA=1
 CMD ["node", "scripts/railway-db-operation.mjs"]
