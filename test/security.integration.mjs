@@ -1394,7 +1394,6 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     const privateUrl = `${app.origin}/accounts/${id}`;
     const teamUrl = `${privateUrl}/team`;
     await page.goto(privateUrl);
-    await page.getByText(businessName).first().waitFor();
     await page
       .getByRole("link", { name: /Manage team/i })
       .first()
@@ -1450,7 +1449,8 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     );
     await visitor.goto(`${app.origin}/invites/accept#token=${token}`);
     await visitor.getByRole("button", { name: "Accept invitation" }).click();
-    await visitor.getByText(businessName).first().waitFor();
+    await visitor.waitForURL(privateUrl);
+    await visitor.getByLabel("Account balance overview").first().waitFor();
     assert.equal(new URL(visitor.url()).hash, "");
     assert.equal(
       await visitor.getByRole("link", { name: /Manage team/i }).count(),
@@ -1896,7 +1896,7 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
     assert.ok(
       await page
         .getByRole("button", {
-          name: /Outgoing Execution Disabled/i,
+          name: /Sending Paused \(Preview\)/i,
         })
         .isDisabled(),
     );
@@ -1949,6 +1949,10 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
       .waitFor();
     await snap(page, "12-security-and-settings.png");
 
+    await page
+      .getByRole("button", { name: "Preferences", exact: true })
+      .first()
+      .click();
     await page
       .getByRole("button", { name: "Switch to dark theme" })
       .first()
@@ -2116,7 +2120,7 @@ test("m5 phase 1: payment requests & public guest checkout — authorization, cr
     );
     assert.equal(
       await page
-        .getByRole("button", { name: "Pay Now (Payment Execution Disabled)" })
+        .getByRole("button", { name: "Pay Now (Preview Only)" })
         .count(),
       0,
     );
@@ -2295,13 +2299,13 @@ test("security: M5 Phase 2 real route discovery, read-only quotes, refund valida
     await page.getByText(/You send .*SOL on Solana/).waitFor();
     assert.equal(
       await page
-        .getByRole("button", { name: "Pay Now (Payment Execution Disabled)" })
+        .getByRole("button", { name: "Pay Now (Preview Only)" })
         .isDisabled(),
       true,
     );
     await page.getByRole("button", { name: /Exchange Withdrawal/i }).click();
     const exchangeRefund = page.getByLabel(
-      /Self-custody refund address required/i,
+      /Personal wallet refund address required/i,
     );
     await exchangeRefund.fill("0x1234567890123456789012345678901234567890");
     await page
@@ -2785,7 +2789,7 @@ test("security: M5 Phase 4 deposit commitment, instruction issuance, polling, an
     await page.getByLabel("Payer refund address").fill(fixtureSolanaRefund);
     await page.getByText(/You send .*SOL on Solana/).waitFor();
     const proceed = page.getByRole("button", {
-      name: "Pay Now (Payment Execution Disabled)",
+      name: "Pay Now (Preview Only)",
     });
     assert.equal(await proceed.isDisabled(), true);
 
@@ -4648,7 +4652,7 @@ test("FLOW preview checkout and Add Money use bound dry quotes and hide expired 
     page.setDefaultTimeout(12_000);
     await page.goto(app.origin + "/pay/" + invoice.publicId);
     const proceed = page.getByRole("button", {
-      name: "Pay Now (Payment Execution Disabled)",
+      name: "Pay Now (Preview Only)",
     });
     await proceed.waitFor();
     assert.equal(await proceed.isDisabled(), true);
@@ -4672,7 +4676,7 @@ test("FLOW preview checkout and Add Money use bound dry quotes and hide expired 
           .first()
           .click();
         await page.getByLabel("Payer refund address").fill(refundAddress);
-        await page.getByText(/Provider preview ·/).waitFor();
+        await page.getByText(/Live quote ·/).waitFor();
         await captureRecoveryScreen(
           page,
           "flow-checkout-" + symbol.toLowerCase(),
@@ -4685,7 +4689,7 @@ test("FLOW preview checkout and Add Money use bound dry quotes and hide expired 
     await captureRecoveryScreen(page, "flow-any-token-picker");
     await suiOption.click();
     await page.getByLabel("Payer refund address").fill("0x" + "a".repeat(64));
-    await page.getByText(/Provider preview ·/).waitFor();
+    await page.getByText(/Live quote ·/).waitFor();
     assert.equal(
       await page.getByText(wallet.baseAddress, { exact: true }).count(),
       0,
@@ -4725,7 +4729,7 @@ test("FLOW preview checkout and Add Money use bound dry quotes and hide expired 
         .getByText("Route unavailable", { exact: true })
         .first()
         .waitFor();
-      assert.equal(await page.getByText(/Provider preview ·/).count(), 0);
+      assert.equal(await page.getByText(/Live quote ·/).count(), 0);
       assert.equal(
         await page
           .getByRole("button", { name: /Copy (Address|Amount)/ })
@@ -4892,7 +4896,7 @@ test("FLOW Send and Convert invalidate old quotes and keep execution disabled", 
     assert.equal(await page.getByText("0.005 SOL", { exact: true }).count(), 0);
     assert.equal(
       await page
-        .getByRole("button", { name: /Outgoing Execution Disabled/ })
+        .getByRole("button", { name: /Sending Paused \(Preview\)/ })
         .isDisabled(),
       true,
     );
@@ -4917,7 +4921,7 @@ test("FLOW Send and Convert invalidate old quotes and keep execution disabled", 
       .waitFor();
     assert.equal(
       await page
-        .getByRole("button", { name: /Swap Execution Disabled/ })
+        .getByRole("button", { name: /Swap Paused \(Preview\)/ })
         .isDisabled(),
       true,
     );
@@ -5020,6 +5024,7 @@ test("FLOW portfolio distinguishes a posted deposit from P&L and signs out the b
     await captureRecoveryScreen(page, "flow-home");
 
     await page.goto(app.origin + "/security?tab=profile");
+    await page.getByRole("button", { name: "Edit display name" }).click();
     await page.getByLabel("Display Name").fill("Fixture Display Name");
     await page.getByRole("button", { name: "Save Changes" }).click();
     await page

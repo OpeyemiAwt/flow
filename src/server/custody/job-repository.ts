@@ -1644,6 +1644,10 @@ export async function resumePolicyVerificationJob(
       "SPONSOR_LOW_BALANCE",
       "SPONSOR_DAILY_CAP_EXCEEDED",
       "POLICY_SPONSOR_CAP_EXCEEDED",
+      "UPSTREAM_UNAVAILABLE",
+      "GATEWAY_TIMEOUT",
+      "NETWORK_ERROR",
+      "RATE_LIMITED",
     ]);
     if (
       job.status !== "FAILED" ||

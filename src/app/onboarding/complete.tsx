@@ -39,12 +39,12 @@ const statusCopy: Record<WalletStatus, { title: string; detail: string }> = {
   setup_pending: {
     title: "Setup is waiting to start",
     detail:
-      "Your request is saved. Wallet registration has not been confirmed yet.",
+      "Your request is saved. We are getting your wallet setup started.",
   },
   provisioning: {
-    title: "Wallet setup is in progress",
+    title: "Setting up your wallet",
     detail:
-      "FLOW is waiting for the custody provider to derive and verify your network addresses.",
+      "We are creating and verifying your addresses across supported networks.",
   },
   setup_failed: {
     title: "Wallet setup needs attention",
@@ -154,7 +154,7 @@ export function CompleteOnboarding({
       ? {
           title: "Wallet verification is incomplete",
           detail:
-            "FLOW has not confirmed all required custody and policy checks. Dashboard access remains unavailable until verification completes.",
+            "Your wallet is still finishing its security checks. Dashboard access will unlock as soon as verification completes.",
         }
       : statusCopy[account.walletStatus]
     : null;
@@ -263,7 +263,7 @@ export function CompleteOnboarding({
           <div className="flex items-start justify-between gap-4 border-b border-[#F0EDE6] dark:border-white/[0.08] pb-6">
             <div>
               <p className="text-sm font-semibold dark:text-white">
-                {userName.trim() || "Your FLOW profile"}
+                {userName.trim() || userEmail}
               </p>
               <p className="mt-1 text-sm text-[#777] dark:text-neutral-400">
                 {userEmail}
@@ -300,7 +300,7 @@ export function CompleteOnboarding({
                 <div className="flex justify-between gap-4">
                   <dt className="text-[#777] dark:text-neutral-400">Name</dt>
                   <dd className="font-medium dark:text-white">
-                    {userName.trim() || "Not provided"}
+                    {userName.trim() || userEmail}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
@@ -340,17 +340,15 @@ export function CompleteOnboarding({
           {step === "security" && (
             <div className="pt-6">
               <h2 className="font-serif text-2xl dark:text-white">
-                Provider-managed wallet setup
+                Automatic wallet setup
               </h2>
               <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                FLOW requests wallet registration through its custody provider.
-                The app will show addresses only after the provider returns them
-                and FLOW verifies their association.
+                FLOW sets up your multi-network wallet automatically and displays
+                your deposit addresses once verification finishes.
               </p>
               <p className="mt-4 rounded-2xl bg-[#FFF8E8] dark:bg-amber-950/30 p-4 text-sm leading-6 text-[#76521A] dark:text-amber-200 border border-transparent dark:border-amber-800/40">
-                Wallet recovery depends on the provider configuration. Do not
-                assume a recovery method is available until FLOW confirms it for
-                your account.
+                Your account recovery options will appear in Settings once your
+                wallet setup is complete.
               </p>
               <button
                 type="button"
@@ -375,9 +373,9 @@ export function CompleteOnboarding({
                 Start wallet setup?
               </h2>
               <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                This saves a Personal account and an idempotent provisioning
-                request. It does not guarantee a wallet is active; setup remains
-                pending until the custody worker completes verification.
+                This creates your Personal account and starts setting up your
+                wallet. Your dashboard unlocks automatically as soon as your
+                addresses are ready.
               </p>
               <label className="mt-6 flex items-start gap-3 rounded-2xl border border-[#E8E4DC] dark:border-white/[0.1] bg-transparent dark:bg-[#1A1A1A] p-4 text-sm leading-6 cursor-pointer">
                 <input
@@ -424,7 +422,7 @@ export function CompleteOnboarding({
                       type="button"
                       onClick={() =>
                         setMessage(
-                          "The existing provisioning job requires support review. No replacement wallet was requested.",
+                          "Your wallet setup is paused and needs attention. Please try again shortly or contact support.",
                         )
                       }
                       className="flow-liquid-btn mt-5 h-12 w-full rounded-full font-semibold cursor-pointer"
@@ -463,9 +461,8 @@ export function CompleteOnboarding({
                     Continue your wallet setup
                   </h2>
                   <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                    Your Personal account and wallet state will be reused.
-                    Review the custody information, then confirm to start or
-                    resume setup.
+                    Your Personal account is ready. Review the next steps, then
+                    confirm to start or resume your wallet setup.
                   </p>
                   <button
                     type="button"
@@ -486,8 +483,7 @@ export function CompleteOnboarding({
                   Four verified networks
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                  These public addresses were returned by OutLayer and checked
-                  by FLOW.
+                  These verified deposit addresses are ready for your account.
                 </p>
                 <ul className="mt-5 space-y-3">
                   {account.addresses.map((address) => (
@@ -522,8 +518,8 @@ export function CompleteOnboarding({
                 Wallet verified and ready
               </h2>
               <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                Your account and network addresses are verified. Financial
-                execution remains disabled behind its separate safety gates.
+                Your account and network addresses are verified and ready to
+                use.
               </p>
               <button
                 type="button"

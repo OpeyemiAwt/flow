@@ -881,13 +881,19 @@ export class WalletProvisioningWorker {
           policyEvidence = await this.adapter.getPolicy(
             apiKey,
             providerWalletId,
-            { verifiedOnChainController: sponsoredControllerAccountId },
+            {
+              verifiedOnChainController: sponsoredControllerAccountId,
+              selfWalletAccountId: nearAccountId,
+            },
           );
           inspection = inspectCustodyPolicyEvidence(
             policyEvidence,
             providerWalletId,
           );
-          if (inspection.isStored || pollAttempt === 4) {
+          const controllerMatches =
+            !sponsoredControllerAccountId ||
+            inspection.controllerAccountId === sponsoredControllerAccountId;
+          if ((inspection.isStored && controllerMatches) || pollAttempt === 4) {
             break;
           }
           await new Promise((resolve) => setTimeout(resolve, 1_500));

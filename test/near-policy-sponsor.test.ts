@@ -23,6 +23,7 @@ import {
   buildStoreWalletPolicyTransactionBytes,
   encodeBase58,
   encodeSignedNearTransactionBase64,
+  HttpNearSponsorRpcClient,
   parseNearEd25519PrivateKey,
   STORE_WALLET_POLICY_GAS_TGAS,
   STORE_WALLET_POLICY_METHOD,
@@ -418,4 +419,57 @@ test("buildStoreWalletPolicyTransactionBytes accepts OutLayer wallet UUID wallet
 
   assert.equal(typeof built.txHash, "string");
   assert.ok(built.argsJson.includes(walletUuid));
+});
+
+test("HttpNearSponsorRpcClient extracts sanitized InvalidTxError detail on INVALID_TRANSACTION", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "1",
+        error: {
+          name: "HANDLER_ERROR",
+          cause: { name: "INVALID_TRANSACTION" },
+          data: {
+            TxExecutionError: {
+              InvalidTxError: {
+                InvalidNonce: { tx_nonce: 1, ak_nonce: 2 },
+              },
+            },
+          },
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+  try {
+    const client = new HttpNearSponsorRpcClient(
+      {
+        enabled: true,
+        nearNetwork: "mainnet",
+        sponsorAccountId: "sponsor.near",
+        contractId: OUTLAYER_POLICY_CONTRACT_ID,
+        rpcUrl: "https://rpc.example.invalid",
+        fallbackRpcUrls: [],
+        signerMode: "local-ed25519",
+        privateKey: generateEphemeralNearKey().rawPrivateKey,
+        maxFeePerWalletYocto: MAX_HARD_PER_WALLET_SPONSOR_YOCTO,
+        dailySpendCapYocto: MAX_HARD_PER_WALLET_SPONSOR_YOCTO * 10n,
+        minBalanceReserveYocto: 1n,
+        circuitFailureThreshold: 3,
+        lockInitialPolicy: false,
+      },
+      2_000,
+    );
+
+    await assert.rejects(
+      () => client.sendSignedTransactionFinal("AAAA", 1n, "sponsor.near"),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message === "NEAR RPC error: INVALID_TRANSACTION (InvalidNonce)",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

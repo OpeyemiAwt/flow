@@ -554,12 +554,34 @@ export class HttpNearSponsorRpcClient implements NearSponsorRpc {
         }
         const json = (await res.json()) as {
           result?: T;
-          error?: { message?: string; name?: string; cause?: { name?: string } };
+          error?: {
+            message?: string;
+            name?: string;
+            cause?: { name?: string };
+            data?: unknown;
+          };
         };
         if (json.error) {
           const code =
             json.error.cause?.name ?? json.error.name ?? "NEAR_RPC_ERROR";
-          throw new FlowError("UPSTREAM_UNAVAILABLE", `NEAR RPC error: ${code}`);
+          const rawTxErr = (
+            json.error.data as
+              | { TxExecutionError?: { InvalidTxError?: unknown } }
+              | undefined
+          )?.TxExecutionError?.InvalidTxError;
+          let detail: string | null = null;
+          if (typeof rawTxErr === "string" && /^[A-Za-z0-9_]+$/.test(rawTxErr)) {
+            detail = rawTxErr;
+          } else if (rawTxErr && typeof rawTxErr === "object" && !Array.isArray(rawTxErr)) {
+            const key = Object.keys(rawTxErr)[0];
+            if (key && /^[A-Za-z0-9_]+$/.test(key)) detail = key;
+          }
+          throw new FlowError(
+            "UPSTREAM_UNAVAILABLE",
+            detail
+              ? `NEAR RPC error: ${code} (${detail})`
+              : `NEAR RPC error: ${code}`,
+          );
         }
         if (json.result === undefined) {
           throw new FlowError("CORRUPTED_RESPONSE", "NEAR RPC missing result.");
@@ -1142,87 +1164,125 @@ export async function sponsorAndStoreWalletPolicy(
       );
   }
 
-  const [currentNonce, blockHashBase58] = await Promise.all([
-    nearRpc.viewAccessKeyNonce(config.sponsorAccountId, publicKeyString),
-    nearRpc.getLatestFinalBlockHash(),
-  ]);
+  let outcome: NearSponsorTxOutcome | null = null;
+  for (let broadcastAttempt = 0; broadcastAttempt < 2; broadcastAttempt++) {
+    const [currentNonce, blockHashBase58] = await Promise.all([
+      nearRpc.viewAccessKeyNonce(config.sponsorAccountId, publicKeyString),
+      nearRpc.getLatestFinalBlockHash(),
+    ]);
 
-  const { txBytes, txHash } = buildStoreWalletPolicyTransactionBytes({
-    signerId: config.sponsorAccountId,
-    publicKeyBytes,
-    nonce: currentNonce + 1n,
-    receiverId: config.contractId,
-    blockHashBase58,
-    depositYocto: estimatedStorageYocto,
-    maxDepositYocto: config.maxFeePerWalletYocto,
-    allowTestContractOverride: input.allowTestContractOverride,
-    args: {
-      wallet_pubkey: onChainWalletPubkey,
-      encrypted_data: encrypted.encrypted_base64,
-      wallet_signature: signRes.signature_hex,
-      version: signRes.version,
-      locked: signRes.locked,
-      valid_until: signRes.valid_until,
-      storage_refund_to: config.sponsorAccountId,
-    },
-  });
+    const { txBytes, txHash } = buildStoreWalletPolicyTransactionBytes({
+      signerId: config.sponsorAccountId,
+      publicKeyBytes,
+      nonce: currentNonce + 1n,
+      receiverId: config.contractId,
+      blockHashBase58,
+      depositYocto: estimatedStorageYocto,
+      maxDepositYocto: config.maxFeePerWalletYocto,
+      allowTestContractOverride: input.allowTestContractOverride,
+      args: {
+        wallet_pubkey: onChainWalletPubkey,
+        encrypted_data: encrypted.encrypted_base64,
+        wallet_signature: signRes.signature_hex,
+        version: signRes.version,
+        locked: signRes.locked,
+        valid_until: signRes.valid_until,
+        storage_refund_to: config.sponsorAccountId,
+      },
+    });
 
-  const digest = createHash("sha256").update(txBytes).digest();
-  const signature64 = await signFn(digest, txBytes, txHash);
-  const signedTxBase64 = encodeSignedNearTransactionBase64(txBytes, signature64);
+    const digest = createHash("sha256").update(txBytes).digest();
+    const signature64 = await signFn(digest, txBytes, txHash);
+    const signedTxBase64 = encodeSignedNearTransactionBase64(txBytes, signature64);
 
-  // 9. Persist deterministic tx_hash & fee reservation BEFORE broadcast (crash-safe)
-  await db.$executeRaw`
-    INSERT INTO flow.custody_policy_sponsorships (
-      wallet_id, account_id, job_id, wallet_pubkey, sponsor_account_id,
-      contract_id, method_name, policy_version, policy_hash,
-      estimated_storage_yocto, attached_deposit_yocto, max_allowed_fee_yocto,
-      tx_hash, status, fencing_token
-    ) VALUES (
-      ${walletId}::uuid, ${accountId}::uuid, ${jobId}::uuid, ${onChainWalletPubkey},
-      ${config.sponsorAccountId}, ${config.contractId}, ${STORE_WALLET_POLICY_METHOD},
-      ${BigInt(signRes.version)}, ${encrypted.policy_hash},
-      ${estimatedStorageYocto.toString()}::numeric, ${estimatedStorageYocto.toString()}::numeric,
-      ${maxProjectedFeeYocto.toString()}::numeric,
-      ${txHash}, 'BROADCASTING', ${fencingToken}
-    )
-    ON CONFLICT (wallet_id) DO UPDATE SET
-      wallet_pubkey = EXCLUDED.wallet_pubkey,
-      tx_hash = EXCLUDED.tx_hash,
-      policy_version = EXCLUDED.policy_version,
-      policy_hash = EXCLUDED.policy_hash,
-      estimated_storage_yocto = EXCLUDED.estimated_storage_yocto,
-      attached_deposit_yocto = EXCLUDED.attached_deposit_yocto,
-      max_allowed_fee_yocto = EXCLUDED.max_allowed_fee_yocto,
-      status = 'BROADCASTING',
-      error_code = NULL,
-      fencing_token = EXCLUDED.fencing_token,
-      updated_at = CURRENT_TIMESTAMP
-  `;
+    // 9. Persist deterministic tx_hash & fee reservation BEFORE broadcast (crash-safe)
+    await db.$executeRaw`
+      INSERT INTO flow.custody_policy_sponsorships (
+        wallet_id, account_id, job_id, wallet_pubkey, sponsor_account_id,
+        contract_id, method_name, policy_version, policy_hash,
+        estimated_storage_yocto, attached_deposit_yocto, max_allowed_fee_yocto,
+        tx_hash, status, fencing_token
+      ) VALUES (
+        ${walletId}::uuid, ${accountId}::uuid, ${jobId}::uuid, ${onChainWalletPubkey},
+        ${config.sponsorAccountId}, ${config.contractId}, ${STORE_WALLET_POLICY_METHOD},
+        ${BigInt(signRes.version)}, ${encrypted.policy_hash},
+        ${estimatedStorageYocto.toString()}::numeric, ${estimatedStorageYocto.toString()}::numeric,
+        ${maxProjectedFeeYocto.toString()}::numeric,
+        ${txHash}, 'BROADCASTING', ${fencingToken}
+      )
+      ON CONFLICT (wallet_id) DO UPDATE SET
+        wallet_pubkey = EXCLUDED.wallet_pubkey,
+        tx_hash = EXCLUDED.tx_hash,
+        policy_version = EXCLUDED.policy_version,
+        policy_hash = EXCLUDED.policy_hash,
+        estimated_storage_yocto = EXCLUDED.estimated_storage_yocto,
+        attached_deposit_yocto = EXCLUDED.attached_deposit_yocto,
+        max_allowed_fee_yocto = EXCLUDED.max_allowed_fee_yocto,
+        status = 'BROADCASTING',
+        error_code = NULL,
+        fencing_token = EXCLUDED.fencing_token,
+        updated_at = CURRENT_TIMESTAMP
+    `;
 
-  await recordSponsorAudit(
-    db,
-    "wallet_policy_sponsor_submitted",
-    accountId,
-    `${walletId}:${txHash}`,
-  );
-
-  // 10. Broadcast transaction with finality confirmation
-  let outcome: NearSponsorTxOutcome;
-  try {
-    outcome = await nearRpc.sendSignedTransactionFinal(
-      signedTxBase64,
-      estimatedStorageYocto,
-      config.sponsorAccountId,
+    await recordSponsorAudit(
+      db,
+      "wallet_policy_sponsor_submitted",
+      accountId,
+      `${walletId}:${txHash}`,
     );
-  } catch (error) {
-    // Reconcile immediately by deterministic tx_hash before deciding ambiguous/failed
-    const recovered = await nearRpc.queryTransactionStatus(
-      txHash,
-      config.sponsorAccountId,
-      estimatedStorageYocto,
-    );
-    if (!recovered) {
+
+    // 10. Broadcast transaction with finality confirmation
+    try {
+      outcome = await nearRpc.sendSignedTransactionFinal(
+        signedTxBase64,
+        estimatedStorageYocto,
+        config.sponsorAccountId,
+      );
+      break;
+    } catch (error) {
+      // Reconcile immediately by deterministic tx_hash before deciding rejected/ambiguous
+      const recovered = await nearRpc.queryTransactionStatus(
+        txHash,
+        config.sponsorAccountId,
+        estimatedStorageYocto,
+      );
+      if (recovered) {
+        outcome = recovered;
+        break;
+      }
+
+      const isPreMempoolInvalidTx =
+        error instanceof FlowError &&
+        error.code === "UPSTREAM_UNAVAILABLE" &&
+        error.message.includes("INVALID_TRANSACTION");
+
+      if (isPreMempoolInvalidTx) {
+        await db.$executeRaw`
+          UPDATE flow.custody_policy_sponsorships
+          SET status = 'FAILED', error_code = 'NEAR_INVALID_TRANSACTION', updated_at = CURRENT_TIMESTAMP
+          WHERE wallet_id = ${walletId}::uuid
+        `;
+        if (broadcastAttempt === 0) {
+          log("info", "policy_sponsor_retrying_invalid_tx", {
+            walletId,
+            reason: error.message,
+          });
+          continue;
+        }
+        await bumpCircuitFailure(
+          db,
+          config.circuitFailureThreshold,
+          "NEAR_INVALID_TRANSACTION",
+        );
+        await recordSponsorAudit(
+          db,
+          "wallet_policy_sponsor_failed",
+          accountId,
+          `${walletId}:${txHash}`,
+        );
+        throw error;
+      }
+
       await db.$executeRaw`
         UPDATE flow.custody_policy_sponsorships
         SET status = 'AMBIGUOUS', error_code = 'POST_DISPATCH_AMBIGUOUS', updated_at = CURRENT_TIMESTAMP
@@ -1243,7 +1303,9 @@ export async function sponsorAndStoreWalletPolicy(
         ? error
         : new FlowError("POST_DISPATCH_AMBIGUOUS", "NEAR policy tx status ambiguous.");
     }
-    outcome = recovered;
+  }
+  if (!outcome) {
+    throw new FlowError("UPSTREAM_UNAVAILABLE", "NEAR policy transaction did not complete.");
   }
 
   if (!outcome.succeeded) {

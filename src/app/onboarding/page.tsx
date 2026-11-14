@@ -65,7 +65,7 @@ export default async function Onboarding({
     <CompleteOnboarding
       initialStep={step}
       userEmail={identity.email}
-      userName={identity.name ?? ""}
+      userName={identity.email}
       initialAccount={account}
     />
   );

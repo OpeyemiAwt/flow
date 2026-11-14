@@ -133,7 +133,7 @@ export function TeamManager({
               <p>
                 <strong className="text-[var(--text-primary)]">OWNER:</strong>{" "}
                 Full governance over members, roles, invitations, and treasury
-                custody settings.
+                security settings.
               </p>
               <p>
                 <strong className="text-[var(--text-primary)]">ADMIN:</strong>{" "}

@@ -7,6 +7,7 @@ import {
 import { getAccountBalances } from "../../../../server/assets/asset-service.ts";
 import { pageData, pagePrincipal } from "../../../../server/pages.ts";
 import { serializePortfolio } from "../../../../server/portfolio.ts";
+import { getUserProfilePreference } from "../../../../server/preferences-service.ts";
 import { PortfolioView, type WorkspaceTab } from "./portfolio-view.tsx";
 import { redirect } from "next/navigation";
 import { isFinancialExecutionDisabled } from "../../../../domain/custody.ts";
@@ -39,14 +40,23 @@ export default async function AccountPage({
   if (account.kind === "PERSONAL" && !account.provisioningComplete) {
     redirect("/onboarding?step=status");
   }
-  const allAccounts = await pageData(() =>
-    accessibleAccounts(runtime().db, actor),
-  );
+  const db = runtime().db;
+  const [allAccounts, initialProfilePreference] = await Promise.all([
+    pageData(() => accessibleAccounts(db, actor)),
+    actor.session.token
+      ? pageData(() =>
+          db.$transaction(async (tx) => {
+            await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${actor.session.token}, true)`;
+            return getUserProfilePreference(tx, actor.userId);
+          }),
+        )
+      : Promise.resolve({ displayName: null, avatarDataUrl: null }),
+  ]);
   const initialPortfolio = await pageData(async () => {
     if (!actor.session.token) {
       throw new Error("Session token required to view portfolio.");
     }
-    const projection = await getAccountBalances(runtime().db, account.id, {
+    const projection = await getAccountBalances(db, account.id, {
       sessionToken: actor.session.token,
     });
     return serializePortfolio(projection);
@@ -66,6 +76,7 @@ export default async function AccountPage({
         allAccounts={allAccounts}
         initialView={initialView}
         userEmail={actor.email}
+        initialDisplayName={initialProfilePreference.displayName}
         profileId={actor.userId}
         executionDisabled={isFinancialExecutionDisabled()}
       />

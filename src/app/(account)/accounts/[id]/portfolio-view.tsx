@@ -194,6 +194,46 @@ function ledgerMovementLabel(
   return labels.join(", ") || "No posted movement";
 }
 
+async function fetchVerifiedAddMoneyPreview(params: {
+  accountId: string;
+  body: string;
+  originAsset: string;
+  sourceNetwork: string;
+  amountAtomic: string;
+  recipient: string;
+  refundTo: string;
+  signal: AbortSignal;
+}) {
+  const quote = await fetchAccountPreview(params.accountId, params.body, params.signal);
+  if (
+    quote.identity.operationId !== "ADD_MONEY:" + params.accountId ||
+    quote.identity.originAsset !== params.originAsset ||
+    quote.identity.sourceNetwork !== params.sourceNetwork ||
+    quote.destinationDeploymentId !== "near-mainnet:NEAR" ||
+    quote.identity.swapType !== "EXACT_INPUT" ||
+    quote.identity.destinationNetwork !== "near-mainnet" ||
+    quote.identity.amountAtomic !== params.amountAtomic ||
+    quote.identity.recipient !== params.recipient ||
+    quote.identity.refundTo !== params.refundTo
+  ) {
+    throw new Error("The quote did not match the selected deposit route.");
+  }
+  return { quote, expiresAt: quote.identity.expiresAt };
+}
+
+function sanitizeNonNegativeDecimal(raw: string): string {
+  const cleaned = raw.replace(/[-+eE]/g, "");
+  const numeric = Number(cleaned);
+  if (cleaned !== "" && !Number.isNaN(numeric) && numeric < 0) return "0";
+  return cleaned;
+}
+
+function blockNegativeKey(e: React.KeyboardEvent<HTMLInputElement>) {
+  if (e.key === "-" || e.key === "e" || e.key === "E") {
+    e.preventDefault();
+  }
+}
+
 function positiveQuoteAmount(value: string, decimals: number): string | null {
   try {
     const atomic = parseDisplayToAtomic(value, decimals);
@@ -277,20 +317,20 @@ function useOutgoingPreview(input: {
           recipientAddress: operation === "SEND" ? recipient : undefined,
         })
       : null;
-  const preview = useQuotePreview<OneClickPreview>(
-    body
-      ? JSON.stringify([
-          accountId,
-          body,
-          recipient,
-          refund,
-          balance?.atomicBalance,
-        ])
-      : null,
-  );
-  const review = () => {
+  const previewKey = body
+    ? JSON.stringify([
+        accountId,
+        body,
+        recipient,
+        refund,
+        balance?.atomicBalance,
+      ])
+    : null;
+  const preview = useQuotePreview<OneClickPreview>(previewKey);
+  const { load: loadPreview } = preview;
+  const review = useCallback(() => {
     if (!body) return;
-    void preview.load(async (signal) => {
+    void loadPreview(async (signal) => {
       const quote = await fetchAccountPreview(accountId, body, signal);
       if (
         quote.identity.operationId !== operation + ":" + accountId ||
@@ -307,7 +347,26 @@ function useOutgoingPreview(input: {
       }
       return { quote, expiresAt: quote.identity.expiresAt };
     });
-  };
+  }, [
+    accountId,
+    amountAtomic,
+    body,
+    destination.id,
+    destination.networkKey,
+    loadPreview,
+    operation,
+    recipient,
+    refund,
+    sourceDeployment?.id,
+    sourceDeployment?.networkKey,
+  ]);
+  useEffect(() => {
+    if (!previewKey) return;
+    const timer = window.setTimeout(() => {
+      review();
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [previewKey, review]);
   return { ...preview, review, canReview: Boolean(body) };
 }
 
@@ -341,7 +400,7 @@ function OutgoingQuoteDetails({
           </div>
           <div>
             <p className="text-neutral-500 dark:text-neutral-400">
-              Provider fees
+              Network &amp; route fees
             </p>
             <p className="mt-1 text-neutral-900 dark:text-neutral-200">
               {quote.fees.description}
@@ -356,7 +415,7 @@ function OutgoingQuoteDetails({
             </p>
             {quote.estimatedTimeSeconds !== null && (
               <p className="mt-1 text-neutral-600 dark:text-neutral-400">
-                Provider estimate {quote.estimatedTimeSeconds} seconds
+                Est. arrival {quote.estimatedTimeSeconds} seconds
               </p>
             )}
           </div>
@@ -377,6 +436,7 @@ export function PortfolioView({
   account,
   initialView = "dashboard",
   userEmail,
+  initialDisplayName,
   profileId,
   executionDisabled = false,
 }: {
@@ -386,6 +446,7 @@ export function PortfolioView({
   allAccounts?: ReadonlyArray<WorkspaceAccountSummary>;
   initialView?: WorkspaceTab;
   userEmail?: string;
+  initialDisplayName?: string | null;
   profileId?: string;
   executionDisabled?: boolean;
 }) {
@@ -778,8 +839,8 @@ export function PortfolioView({
     {
       title: "Move and receive money across chains",
       description:
-        "Explore cross-chain assets and review quotes through NEAR Intents.",
-      badge: "NEAR Intents Powered",
+        "Explore cross-chain assets and preview instant conversion rates.",
+      badge: "Cross-Chain Routing",
     },
     {
       title: "Multi-chain guest checkout",
@@ -788,10 +849,10 @@ export function PortfolioView({
       badge: "One-Click Settlement",
     },
     {
-      title: "Institutional multi-chain security",
+      title: "Enterprise multi-chain security",
       description:
-        "Isolated MPC key generation with non-custodial cryptographic verification.",
-      badge: "OutLayer Protocol",
+        "Protected multi-network account keys with independent on-chain verification.",
+      badge: "Multi-Chain Security",
     },
   ];
 
@@ -950,7 +1011,7 @@ export function PortfolioView({
           ? "On-chain activity synchronized."
           : res.syncStatus === "unavailable"
             ? "Activity sync is unavailable until a wallet is ready."
-            : "Activity sync queued. New entries appear after worker verification.",
+            : "Activity sync started. New transactions will appear shortly.",
       );
     } catch (err) {
       setMessage(describe(err));
@@ -1000,25 +1061,50 @@ export function PortfolioView({
   ]);
 
   const handleReviewCrossChainQuote = () => {
-    if (!addMoneyBody || !crossChainSourceToken) return;
-    void loadCrossChainQuote(async (signal) => {
-      const quote = await fetchAccountPreview(accountId, addMoneyBody, signal);
-      if (
-        quote.identity.operationId !== "ADD_MONEY:" + accountId ||
-        quote.identity.originAsset !== crossChainSourceToken.assetId ||
-        quote.identity.sourceNetwork !== crossChainSourceToken.networkKey ||
-        quote.destinationDeploymentId !== "near-mainnet:NEAR" ||
-        quote.identity.swapType !== "EXACT_INPUT" ||
-        quote.identity.destinationNetwork !== "near-mainnet" ||
-        quote.identity.amountAtomic !== crossChainAmountAtomic ||
-        quote.identity.recipient !== nearAddr ||
-        quote.identity.refundTo !== crossChainRefundAddress.trim()
-      ) {
-        throw new Error("The quote did not match the selected deposit route.");
-      }
-      return { quote, expiresAt: quote.identity.expiresAt };
-    });
+    if (!addMoneyBody || !crossChainSourceToken || !crossChainAmountAtomic) return;
+    const params = {
+      accountId,
+      body: addMoneyBody,
+      originAsset: crossChainSourceToken.assetId,
+      sourceNetwork: crossChainSourceToken.networkKey,
+      amountAtomic: crossChainAmountAtomic,
+      recipient: nearAddr,
+      refundTo: crossChainRefundAddress.trim(),
+    };
+    void loadCrossChainQuote((signal) =>
+      fetchVerifiedAddMoneyPreview({ ...params, signal }),
+    );
   };
+
+  useEffect(() => {
+    if (!addMoneyKey || !addMoneyBody || !crossChainSourceToken || !crossChainAmountAtomic) {
+      return;
+    }
+    const params = {
+      accountId,
+      body: addMoneyBody,
+      originAsset: crossChainSourceToken.assetId,
+      sourceNetwork: crossChainSourceToken.networkKey,
+      amountAtomic: crossChainAmountAtomic,
+      recipient: nearAddr,
+      refundTo: crossChainRefundAddress.trim(),
+    };
+    const timer = window.setTimeout(() => {
+      void loadCrossChainQuote((signal) =>
+        fetchVerifiedAddMoneyPreview({ ...params, signal }),
+      );
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [
+    accountId,
+    addMoneyBody,
+    addMoneyKey,
+    crossChainAmountAtomic,
+    crossChainRefundAddress,
+    crossChainSourceToken,
+    loadCrossChainQuote,
+    nearAddr,
+  ]);
 
   useEffect(() => {
     if (
@@ -1149,7 +1235,7 @@ export function PortfolioView({
           data.detail || data.error || "Unable to submit outgoing transfer.";
         throw new Error(
           msg.includes("PAYMENT_EXECUTION_DISABLED")
-            ? "Outgoing execution is currently paused while final release checks finish."
+            ? "Sending is temporarily paused in preview mode."
             : msg,
         );
       }
@@ -1251,9 +1337,9 @@ export function PortfolioView({
         unreadCount={unreadNotifications}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         onOpenAssistant={() => setIsAssistantOpen(true)}
-        userName={account?.name ?? "Personal"}
+        userName={initialDisplayName?.trim() || userEmail || account?.name || "Personal"}
         profileId={profileId}
-        userEmail={userEmail ?? "opeyemimosesawt@gmail.com"}
+        userEmail={userEmail}
       />
 
       {/* Main Content Area */}
@@ -1770,9 +1856,13 @@ export function PortfolioView({
                       <input
                         type="number"
                         step="any"
+                        min="0"
                         aria-label="Send amount"
                         value={sendAmount}
-                        onChange={(e) => setSendAmount(e.target.value)}
+                        onKeyDown={blockNegativeKey}
+                        onChange={(e) =>
+                          setSendAmount(sanitizeNonNegativeDecimal(e.target.value))
+                        }
                         placeholder="1.00"
                         className="w-full text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden"
                       />
@@ -1870,7 +1960,7 @@ export function PortfolioView({
                       className="flow-liquid-btn w-full py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
                     >
                       {sendPreview.loading
-                        ? "Fetching NEAR Intents Quote..."
+                        ? "Updating quote…"
                         : "Review Quote"}
                     </button>
 
@@ -1894,7 +1984,7 @@ export function PortfolioView({
                       className="flow-liquid-btn-primary w-full py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                     >
                       {executionDisabled
-                        ? "Outgoing Execution Disabled (Preview Only)"
+                        ? "Sending Paused (Preview)"
                         : outgoingExecuting
                           ? "Authorizing Send…"
                           : "Send Now"}
@@ -1960,9 +2050,15 @@ export function PortfolioView({
                       <input
                         type="number"
                         step="any"
+                        min="0"
                         aria-label="Convert amount"
                         value={convertAmount}
-                        onChange={(e) => setConvertAmount(e.target.value)}
+                        onKeyDown={blockNegativeKey}
+                        onChange={(e) =>
+                          setConvertAmount(
+                            sanitizeNonNegativeDecimal(e.target.value),
+                          )
+                        }
                         placeholder="1.00"
                         className="w-full text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden"
                       />
@@ -2023,7 +2119,7 @@ export function PortfolioView({
                       className="flow-liquid-btn w-full py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
                     >
                       {convertPreview.loading
-                        ? "Calculating Convert Quote..."
+                        ? "Updating quote…"
                         : "Review Quote"}
                     </button>
 
@@ -2048,7 +2144,7 @@ export function PortfolioView({
                       className="flow-liquid-btn-primary w-full py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                     >
                       {executionDisabled
-                        ? "Swap Execution Disabled (Preview Only)"
+                        ? "Swap Paused (Preview)"
                         : outgoingExecuting
                           ? "Authorizing Conversion…"
                           : "Convert Now"}
@@ -2292,9 +2388,13 @@ export function PortfolioView({
                     <input
                       type="number"
                       step="any"
+                      min="0"
                       value={crossChainDepositAmount}
+                      onKeyDown={blockNegativeKey}
                       onChange={(e) =>
-                        setCrossChainDepositAmount(e.target.value)
+                        setCrossChainDepositAmount(
+                          sanitizeNonNegativeDecimal(e.target.value),
+                        )
                       }
                       placeholder="10"
                       className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
@@ -2425,7 +2525,7 @@ export function PortfolioView({
                     )}
                     <div className="flex justify-between gap-4">
                       <dt className="shrink-0 text-neutral-500 dark:text-neutral-400">
-                        Solver / network fee
+                        Network &amp; route fee
                       </dt>
                       <dd className="text-right font-semibold text-neutral-950 dark:text-white">
                         {crossChainQuote?.fees.description ?? "Unavailable"}
@@ -2447,7 +2547,7 @@ export function PortfolioView({
                       </dt>
                       <dd className="text-right font-semibold text-neutral-950 dark:text-white">
                         {crossChainQuote
-                          ? "1Click Cross-Chain Solver"
+                          ? "Instant Cross-Chain Route"
                           : crossChainQuoteLoading
                             ? "Checking route…"
                             : addMoneyRouteUnavailable ||
@@ -2456,7 +2556,7 @@ export function PortfolioView({
                               : crossChainQuoteError
                                 ? "Quote unavailable"
                                 : addMoneyKey
-                                  ? "Click Review Deposit Quote"
+                                  ? "Preparing quote…"
                                   : "Enter amount & refund address"}
                       </dd>
                     </div>
@@ -2478,7 +2578,7 @@ export function PortfolioView({
                     className="flow-liquid-btn w-full py-3 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
                   >
                     {crossChainQuoteLoading
-                      ? "Fetching dry quote…"
+                      ? "Updating quote…"
                       : "Review Deposit Quote"}
                   </button>
 
@@ -2524,7 +2624,7 @@ export function PortfolioView({
                             "Unable to generate deposit address.";
                           throw new Error(
                             msg.includes("PAYMENT_EXECUTION_DISABLED")
-                              ? "Cross-chain Add Money execution is paused while live release checks finish."
+                              ? "Cross-chain deposits are temporarily paused in preview mode."
                               : msg,
                           );
                         }
@@ -2538,7 +2638,7 @@ export function PortfolioView({
                     className="flow-liquid-btn-primary w-full py-3.5 rounded-full text-xs font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {executionDisabled
-                      ? "Continue to Deposit (Execution Disabled)"
+                      ? "Continue to Deposit (Preview Only)"
                       : addMoneyCommitting
                         ? "Generating Deposit Address…"
                         : "Continue to Deposit"}
@@ -2671,7 +2771,8 @@ export function PortfolioView({
                 Request Payment
               </h1>
               <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
-                Create shareable checkout links with 1Click route previews.
+                Create shareable checkout links with live cross-chain rate
+                previews.
               </p>
             </div>
 
@@ -2706,7 +2807,10 @@ export function PortfolioView({
                       min="0"
                       disabled={prAmountMode === "OPTIONAL"}
                       value={prAmount}
-                      onChange={(e) => setPrAmount(e.target.value)}
+                      onKeyDown={blockNegativeKey}
+                      onChange={(e) =>
+                        setPrAmount(sanitizeNonNegativeDecimal(e.target.value))
+                      }
                       placeholder="0.00"
                       className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden disabled:opacity-40"
                     />

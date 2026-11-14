@@ -1320,9 +1320,30 @@ export function CheckoutView({
                               ? (quotedSendAmount ?? "")
                               : customAmount
                           }
-                          onChange={(event) =>
-                            setCustomAmount(event.target.value)
-                          }
+                          onKeyDown={(event) => {
+                            if (
+                              event.key === "-" ||
+                              event.key === "+" ||
+                              event.key === "e" ||
+                              event.key === "E"
+                            ) {
+                              event.preventDefault();
+                            }
+                          }}
+                          onChange={(event) => {
+                            const cleaned = event.target.value.replace(
+                              /[-+eE]/g,
+                              "",
+                            );
+                            const numeric = Number(cleaned);
+                            setCustomAmount(
+                              cleaned !== "" &&
+                                !Number.isNaN(numeric) &&
+                                numeric < 0
+                                ? "0"
+                                : cleaned,
+                            );
+                          }}
                           readOnly={request.amountMode === "FIXED"}
                           placeholder={
                             request.amountMode === "FIXED"
@@ -1346,12 +1367,12 @@ export function CheckoutView({
                         className="text-xs font-semibold text-neutral-800 dark:text-neutral-200"
                       >
                         {payerMode === "EXCHANGE"
-                          ? "Self-custody refund address required for exchange withdrawals"
+                          ? "Personal wallet refund address required for exchange withdrawals"
                           : "Payer refund address"}
                       </label>
                       <span
                         className="text-[11px] text-neutral-400 dark:text-neutral-500"
-                        title="Self-custody wallet for automated refund fallback"
+                        title="Personal wallet address used for refunds"
                       >
                         ⓘ
                       </span>
@@ -1399,7 +1420,7 @@ export function CheckoutView({
                         }`}
                       >
                         <IconWallet size={14} />
-                        <span>Self-Custody Wallet</span>
+                        <span>Personal Wallet</span>
                       </button>
 
                       <button
@@ -1424,7 +1445,7 @@ export function CheckoutView({
                       </h3>
                       {quote && (
                         <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
-                          Provider preview · {quoteSecondsRemaining}s
+                          Live quote · {quoteSecondsRemaining}s
                         </span>
                       )}
                     </div>
@@ -1451,7 +1472,7 @@ export function CheckoutView({
                       </div>
                       <div className="flex justify-between gap-3">
                         <dt className="shrink-0 max-w-[40%]">
-                          Network / Solver fee
+                          Network &amp; route fee
                         </dt>
                         <dd className="text-right font-semibold text-neutral-950 dark:text-white">
                           {quote?.fees.description ??
@@ -1754,7 +1775,7 @@ export function CheckoutView({
                             "Failed to generate deposit instructions.";
                           setCommitError(
                             msg.includes("PAYMENT_EXECUTION_DISABLED")
-                              ? "Payment execution is temporarily paused while live release checks finish."
+                              ? "Payments are temporarily paused in preview mode."
                               : msg,
                           );
                           return;
@@ -1773,7 +1794,7 @@ export function CheckoutView({
                     {committing
                       ? "Generating Deposit Instructions…"
                       : executionDisabled || quote?.isExecutionDisabled
-                        ? "Pay Now (Payment Execution Disabled)"
+                        ? "Pay Now (Preview Only)"
                         : isDirect && payerMode === "WALLET"
                           ? "Show Direct Deposit Address"
                           : "Pay Now"}
@@ -2095,7 +2116,7 @@ export function CheckoutView({
                       !isUnderReview && (
                         <div className="space-y-2">
                           <div className="rounded-[14px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-[#FF1A1A] dark:text-red-400">
-                            <strong>Route Execution Failed:</strong> This
+                            <strong>Payment Failed:</strong> This
                             payment attempt could not be completed.
                           </div>
                           <button
@@ -2137,7 +2158,7 @@ export function CheckoutView({
                       <strong className="text-neutral-950 dark:text-white">
                         Automatic routing:
                       </strong>{" "}
-                      The provider previews settlement in{" "}
+                      Payments automatically convert and settle into{" "}
                       {request.destinationAssetSymbol} on{" "}
                       {request.destinationNetwork}.
                     </span>

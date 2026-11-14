@@ -748,6 +748,7 @@ test("OutLayerAdapter.getPolicy binds verifiedOnChainController only when coordi
     mockController = "attacker.near";
     const mismatched = await adapter.getPolicy("wk_test_key", walletId, {
       verifiedOnChainController: verifiedOwner,
+      selfWalletAccountId: "2f6482da111122223333444455556666",
     });
     assert.throws(
       () =>
@@ -756,6 +757,19 @@ test("OutLayerAdapter.getPolicy binds verifiedOnChainController only when coordi
         }),
       { code: "POLICY_VERIFICATION_FAILED" },
     );
+
+    // Self-wallet placeholder returned by OutLayer must bind verifiedOnChainController
+    mockController = "2f6482da111122223333444455556666";
+    const selfPlaceholder = await adapter.getPolicy("wk_test_key", walletId, {
+      verifiedOnChainController: verifiedOwner,
+      selfWalletAccountId: "2f6482da111122223333444455556666",
+    });
+    const verifiedSelf = verifyCustodyPolicyEvidence(
+      selfPlaceholder,
+      walletId,
+      { expectedController: verifiedOwner },
+    );
+    assert.equal(verifiedSelf.controllerAccountId, verifiedOwner);
   } finally {
     globalThis.fetch = origFetch;
   }

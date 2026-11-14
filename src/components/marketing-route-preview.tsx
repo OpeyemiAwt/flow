@@ -111,7 +111,7 @@ export function MarketingRoutePreview() {
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-neutral-200 bg-neutral-50 dark:bg-neutral-900 dark:border-neutral-800 px-2.5 py-1 text-[11px] font-semibold text-neutral-800 dark:text-neutral-300">
           <IconLock size={12} />
-          Interactive Preview · Execution Disabled
+          Interactive Route Preview
         </span>
       </div>
 

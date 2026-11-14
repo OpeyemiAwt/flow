@@ -151,14 +151,15 @@ export function FloatingNav({
   onOpenNotifications,
   onOpenAssistant,
   userEmail = "user@flow.xyz",
-  userName = "Personal",
+  userName,
   profileId,
 }: FloatingNavProps) {
+  const effectiveUserName = userName || userEmail;
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [currentUserName, setCurrentUserName] = useState(userName);
+  const [currentUserName, setCurrentUserName] = useState(effectiveUserName);
   const [isDark, setIsDark] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -205,11 +206,13 @@ export function FloatingNav({
 
   useEffect(() => {
     const sync = () =>
-      setCurrentUserName(readProfilePreference(profileId, "name") || userName);
+      setCurrentUserName(
+        readProfilePreference(profileId, "name")?.trim() || effectiveUserName,
+      );
     sync();
     window.addEventListener(PROFILE_PREFERENCE_EVENT, sync);
     return () => window.removeEventListener(PROFILE_PREFERENCE_EVENT, sync);
-  }, [profileId, userName]);
+  }, [effectiveUserName, profileId]);
 
   useEffect(() => {
     const syncTheme = () => setIsDark(readIsDarkTheme());

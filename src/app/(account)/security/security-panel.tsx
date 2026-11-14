@@ -137,11 +137,11 @@ export function SecurityPanel({
         return { label: "Wallet setup pending", dot: "bg-amber-500" };
     }
   })();
-  const [displayName, setDisplayName] = useState(
-    initialProfilePreference?.displayName ||
-      primaryAccount?.name ||
-      "Personal Workspace",
-  );
+  const initialResolvedName =
+    initialProfilePreference?.displayName?.trim() || email;
+  const [displayName, setDisplayName] = useState(initialResolvedName);
+  const [savedDisplayName, setSavedDisplayName] = useState(initialResolvedName);
+  const [editingDisplayName, setEditingDisplayName] = useState(false);
   const [profileSavedMessage, setProfileSavedMessage] = useState<string | null>(
     null,
   );
@@ -157,10 +157,7 @@ export function SecurityPanel({
 
   const backHref = primaryAccount ? `/accounts/${primaryAccount.id}` : "/";
 
-  const defaultName =
-    initialProfilePreference?.displayName ||
-    primaryAccount?.name ||
-    "Personal Workspace";
+  const defaultName = initialProfilePreference?.displayName?.trim() || email;
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       if (initialProfilePreference) {
@@ -192,7 +189,10 @@ export function SecurityPanel({
           String(initialNotificationPreferences.securityAlerts),
         );
       }
-      setDisplayName(readProfilePreference(profileId, "name") || defaultName);
+      const hydratedName =
+        readProfilePreference(profileId, "name")?.trim() || defaultName;
+      setDisplayName(hydratedName);
+      setSavedDisplayName(hydratedName);
       setNotificationPreferences({
         incomingPayments:
           initialNotificationPreferences?.incomingPayments ??
@@ -246,6 +246,8 @@ export function SecurityPanel({
       await send("/api/me/preferences", { displayName: name }, "PATCH");
       writeProfilePreference(profileId, "name", name);
       setDisplayName(name);
+      setSavedDisplayName(name);
+      setEditingDisplayName(false);
       setProfileSavedMessage("Display name saved to your account.");
     } catch (err) {
       setProfileSavedMessage(describe(err));
@@ -345,7 +347,7 @@ export function SecurityPanel({
           );
         }}
         userEmail={email}
-        userName={primaryAccount?.name ?? "Personal"}
+        userName={savedDisplayName || email}
         profileId={profileId}
       />
 
@@ -378,7 +380,6 @@ export function SecurityPanel({
               <span>{walletStatusInfo.label}</span>
             </p>
           </div>
-          <ThemeToggle />
         </div>
 
         {message && (
@@ -1056,44 +1057,101 @@ export function SecurityPanel({
                   </div>
                 </div>
 
-                {/* Personal Name Form */}
-                <form
-                  onSubmit={handleSaveDisplayName}
-                  className="p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 space-y-4"
-                >
-                  <div>
-                    <label
-                      htmlFor="display-name-input"
-                      className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5"
-                    >
-                      Display Name
-                    </label>
-                    <input
-                      id="display-name-input"
-                      type="text"
-                      maxLength={100}
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Your name or workspace title"
-                      className="w-full px-4 py-2.5 rounded-2xl text-xs bg-white dark:bg-[#1a1a1a] border border-neutral-200 dark:border-neutral-700 text-neutral-950 dark:text-white focus:outline-hidden focus:border-neutral-900 dark:focus:border-white"
-                    />
-                  </div>
+                {/* Personal Name Summary & Pencil Edit */}
+                {editingDisplayName ? (
+                  <form
+                    onSubmit={handleSaveDisplayName}
+                    className="p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 space-y-4"
+                  >
+                    <div>
+                      <label
+                        htmlFor="display-name-input"
+                        className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5"
+                      >
+                        Display Name
+                      </label>
+                      <input
+                        id="display-name-input"
+                        type="text"
+                        maxLength={100}
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        placeholder={email}
+                        className="w-full px-4 py-2.5 rounded-2xl text-xs bg-white dark:bg-[#1a1a1a] border border-neutral-200 dark:border-neutral-700 text-neutral-950 dark:text-white focus:outline-hidden focus:border-neutral-900 dark:focus:border-white"
+                      />
+                    </div>
 
-                  <div className="flex items-center justify-between pt-1">
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                      Primary Email:{" "}
-                      <span className="font-mono text-neutral-800 dark:text-neutral-200">
-                        {email}
-                      </span>
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                        Primary Email:{" "}
+                        <span className="font-mono text-neutral-800 dark:text-neutral-200">
+                          {email}
+                        </span>
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDisplayName(savedDisplayName);
+                            setEditingDisplayName(false);
+                          }}
+                          className="px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                        Display Name
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-neutral-950 dark:text-white truncate">
+                        {savedDisplayName}
+                      </p>
+                      <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+                        Primary Email:{" "}
+                        <span className="font-mono text-neutral-800 dark:text-neutral-200">
+                          {email}
+                        </span>
+                      </p>
+                    </div>
                     <button
-                      type="submit"
-                      className="px-5 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                      type="button"
+                      aria-label="Edit display name"
+                      title="Edit display name"
+                      onClick={() => {
+                        setProfileSavedMessage(null);
+                        setDisplayName(savedDisplayName);
+                        setEditingDisplayName(true);
+                      }}
+                      className="shrink-0 p-2.5 rounded-full border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                     >
-                      Save Changes
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
                     </button>
                   </div>
-                </form>
+                )}
 
                 {/* Account Details */}
                 <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 text-xs space-y-2">

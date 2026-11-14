@@ -197,7 +197,7 @@ export async function processAssistantQuery(params: {
             });
             if (preview.ok) {
               routeText = `${requestedAmount} ${srcDep.symbol} → ~${preview.quote.recipientDisplayAmount} ${dstDep.symbol}`;
-              assistantSummary = `Live NEAR Intents dry quote: ${requestedAmount} ${srcDep.symbol} (${srcDep.networkName}) → ~${preview.quote.recipientDisplayAmount} ${dstDep.symbol} (${dstDep.networkName}). Explicitly authorize with a security code in Convert before sending.`;
+              assistantSummary = `Live exchange quote: ${requestedAmount} ${srcDep.symbol} (${srcDep.networkName}) → ~${preview.quote.recipientDisplayAmount} ${dstDep.symbol} (${dstDep.networkName}). Confirm with a verification code in Convert before sending.`;
             }
           }
         }
@@ -211,7 +211,7 @@ export async function processAssistantQuery(params: {
       content: assistantSummary,
       card: {
         type: "PREVIEW_SWAP",
-        title: "Swap via NEAR Intents",
+        title: "Cross-Chain Swap Preview",
         data: {
           fromAsset: `${srcDep.symbol} (${srcDep.networkName})`,
           toAsset: `${dstDep.symbol} (${dstDep.networkName})`,
@@ -409,7 +409,7 @@ export async function processAssistantQuery(params: {
     return {
       role: "assistant",
       content:
-        "FLOW supports 4 primary self-custody wallet networks: Ethereum Mainnet, Base Mainnet, Solana Mainnet, and NEAR Mainnet with 11 curated deployments. Through NEAR Intents/1Click integration, payers can also pay with over 200 non-wrapped tokens across 35+ blockchains, which are automatically converted into your preferred settlement asset.",
+        "FLOW supports 4 primary wallet networks: Ethereum Mainnet, Base Mainnet, Solana Mainnet, and NEAR Mainnet with 11 supported assets. Payers can also settle with over 200 tokens across 35+ blockchains, automatically converted into your preferred settlement asset.",
       timestamp: new Date().toISOString(),
     };
   }
@@ -418,7 +418,7 @@ export async function processAssistantQuery(params: {
   return {
     role: "assistant",
     content:
-      "I am your Flow AI Assistant. I can help you check verified balances, review your recent payments, draft a new payment link, or preview cross-chain swaps powered by NEAR Intents. What would you like to do?",
+      "I am your Flow AI Assistant. I can help you check verified balances, review your recent payments, draft a new payment link, or preview cross-chain swaps across supported networks. What would you like to do?",
     timestamp: new Date().toISOString(),
   };
 }

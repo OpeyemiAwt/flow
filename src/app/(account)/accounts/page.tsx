@@ -240,12 +240,12 @@ export default async function AccountsPage() {
                   PERSONAL WALLET
                 </span>
                 <h2 className="font-serif text-2xl text-neutral-950 dark:text-white">
-                  Four-chain self-custody
+                  Multi-chain wallet security
                 </h2>
                 <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
-                  Every Personal FLOW account provisions permanent verified
-                  addresses across Ethereum, Base, Solana, and NEAR, with
-                  step-up security controls and session management in Settings.
+                  Every Personal FLOW account includes verified addresses across
+                  Ethereum, Base, Solana, and NEAR, with step-up security
+                  controls and session management in Settings.
                 </p>
                 <div className="flex flex-wrap gap-2.5 pt-1">
                   {primaryAccount && (

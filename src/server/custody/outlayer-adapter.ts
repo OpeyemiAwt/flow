@@ -751,7 +751,10 @@ export class OutLayerAdapter {
   async getPolicy(
     apiKey: string,
     expectedWalletId?: string,
-    options?: { readonly verifiedOnChainController?: string },
+    options?: {
+      readonly verifiedOnChainController?: string;
+      readonly selfWalletAccountId?: string;
+    },
   ): Promise<OutLayerPolicyResult> {
     const response = await this.fetchWithTimeout("/wallet/v1/policy", {
       method: "GET",
@@ -816,11 +819,15 @@ export class OutLayerAdapter {
       normalizedRawController.length === 0 ||
       normalizedRawController.toLowerCase() === "none" ||
       normalizedRawController.toLowerCase() === "null";
+    const isSelfPlaceholderController =
+      Boolean(options?.selfWalletAccountId) &&
+      normalizedRawController ===
+        options!.selfWalletAccountId!.trim().toLowerCase();
     let effectiveController: string | undefined = isUnsetController
       ? undefined
       : normalizedRawController;
     if (
-      !effectiveController &&
+      (!effectiveController || isSelfPlaceholderController) &&
       options?.verifiedOnChainController &&
       isValidNearAddress(options.verifiedOnChainController)
     ) {
