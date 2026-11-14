@@ -8,12 +8,11 @@ import { UserAvatar } from "../../../components/user-avatar.tsx";
 import { runtime } from "../../../foundation/prisma.ts";
 import { accessibleAccounts } from "../../../server/accounts.ts";
 import { pageData, pagePrincipal } from "../../../server/pages.ts";
-import { AccountNameForm } from "./forms.tsx";
 
 const walletLabels: Record<string, string> = {
   setup_pending: "Wallet setup pending",
   provisioning: "Wallet provisioning in progress",
-  active: "Wallet provisioned (execution disabled)",
+  active: "Wallet active",
   setup_failed: "Wallet setup failed",
   frozen: "Wallet frozen",
   recovery_pending: "Wallet recovery pending",
@@ -130,11 +129,11 @@ export default async function AccountsPage() {
                 WORKSPACES
               </p>
               <h1 className="mt-1 font-serif text-3xl sm:text-[42px] font-normal tracking-[-0.02em] text-neutral-950 dark:text-white">
-                Your FLOW accounts
+                Your FLOW account
               </h1>
               <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                Switch between your personal account and your business
-                workspaces, or create a new business organization.
+                Manage your Personal multi-chain FLOW wallet, payment links, and
+                security settings.
               </p>
             </div>
           </div>
@@ -187,22 +186,11 @@ export default async function AccountsPage() {
                 </ul>
               </section>
 
-              <section className="space-y-3 pt-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
-                  Business Accounts ({businessAccounts.length})
-                </h2>
-
-                {businessAccounts.length === 0 ? (
-                  <div className="rounded-[22px] border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 text-center shadow-2xs">
-                    <p className="font-display text-sm font-bold text-neutral-950 dark:text-white">
-                      No business accounts yet
-                    </p>
-                    <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                      Create a business workspace on the right to manage team
-                      payments and invoices.
-                    </p>
-                  </div>
-                ) : (
+              {businessAccounts.length > 0 && (
+                <section className="space-y-3 pt-2">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+                    Additional Workspaces ({businessAccounts.length})
+                  </h2>
                   <ul className="space-y-3">
                     {businessAccounts.map((account) => (
                       <li key={account.id}>
@@ -222,7 +210,7 @@ export default async function AccountsPage() {
                                     {account.name}
                                   </strong>
                                   <span className="rounded-full bg-neutral-100 dark:bg-neutral-800 px-2.5 py-0.5 text-[10px] font-bold uppercase text-neutral-800 dark:text-neutral-200">
-                                    Business account
+                                    Workspace
                                   </span>
                                 </div>
                                 <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
@@ -241,24 +229,42 @@ export default async function AccountsPage() {
                       </li>
                     ))}
                   </ul>
-                )}
-              </section>
+                </section>
+              )}
             </div>
 
-            {/* Right 5 Columns: Create Business Account Card */}
+            {/* Right 5 Columns: Security & Wallet Quick Access */}
             <div className="lg:col-span-5">
               <section className="rounded-[26px] border border-neutral-200/90 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-4">
                 <span className="inline-block text-[10px] font-bold uppercase tracking-[0.14em] text-[#FF1A1A]">
-                  FOR BUSINESS
+                  PERSONAL WALLET
                 </span>
                 <h2 className="font-serif text-2xl text-neutral-950 dark:text-white">
-                  Create a business account
+                  Four-chain self-custody
                 </h2>
                 <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
-                  Accept payments from customers, send invoices, manage team
-                  access, and track business activity in one place.
+                  Every Personal FLOW account provisions permanent verified
+                  addresses across Ethereum, Base, Solana, and NEAR, with
+                  step-up security controls and session management in Settings.
                 </p>
-                <AccountNameForm />
+                <div className="flex flex-wrap gap-2.5 pt-1">
+                  {primaryAccount && (
+                    <Link
+                      prefetch={false}
+                      href={`/accounts/${primaryAccount.id}`}
+                      className="rounded-full bg-neutral-950 dark:bg-white px-5 py-2.5 text-xs font-semibold text-white dark:text-neutral-950 hover:bg-[#FF1A1A] hover:text-white transition-colors"
+                    >
+                      Open Personal Dashboard
+                    </Link>
+                  )}
+                  <Link
+                    prefetch={false}
+                    href="/security"
+                    className="rounded-full border border-neutral-200 dark:border-neutral-800 px-5 py-2.5 text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors"
+                  >
+                    Account Settings
+                  </Link>
+                </div>
               </section>
             </div>
           </div>

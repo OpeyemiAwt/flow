@@ -14,6 +14,7 @@ import {
   canonicalizeNetworkId,
   isSamePaymentDeployment,
 } from "../domain/supported-assets-catalog.ts";
+import { isFinancialExecutionDisabled } from "../domain/custody.ts";
 import { supportsQuoteAddress } from "../domain/quote-addresses.ts";
 import { clientBudget } from "./auth/limits.ts";
 import { ApiFailure, reply } from "./http.ts";
@@ -92,7 +93,7 @@ export async function requestPaymentQuote(
   if (!source || source.isWrapped || !supportsQuoteAddress(source)) {
     return reply(200, {
       routeStatus: "UNSUPPORTED_PAIR",
-      isExecutionDisabled: true,
+      isExecutionDisabled: isFinancialExecutionDisabled(),
       statusMessage: "Route unavailable",
     });
   }
@@ -159,6 +160,7 @@ export async function requestPaymentQuote(
     }
   }
   const attemptPublicId = generatePaymentAttemptPublicId();
+  const execDisabled = isFinancialExecutionDisabled();
   const quoteBase = {
     requestVersion: input.data.requestVersion,
     attemptPublicId,
@@ -179,9 +181,10 @@ export async function requestPaymentQuote(
     isProviderVerified: false,
     isExchangeCompatible: !isDirect,
     isIndicativeOnly: true,
-    isExecutionDisabled: true,
-    executionBlockedNotice:
-      "Payment execution is disabled (FLOW_EXECUTION=disabled).",
+    isExecutionDisabled: execDisabled,
+    executionBlockedNotice: execDisabled
+      ? "Payment execution is disabled (FLOW_EXECUTION=disabled)."
+      : "",
   } as const;
 
   if (isDirect) {
@@ -234,29 +237,27 @@ export async function requestPaymentQuote(
     ),
   );
 
-  // Retain the existing observation workflow for curated sources.
-  if (source.capabilities.includes("CAN_HOLD_IN_FLOW")) {
-    await recordPaymentAttemptRow(db, {
-      paymentRequestPublicId: publicId,
-      attemptPublicId,
-      payerMode,
-      payerRefundAddress: refundTo,
-      sourceNetwork: source.networkKey,
-      sourceAssetId: source.id,
-      sourceAssetSymbol: source.symbol,
-      sourceDecimals: source.decimals,
-      routeType: "CROSS_CHAIN_1CLICK",
-      routeStatus: "SUPPORTED_AND_QUOTABLE",
-      swapType,
-      quotedSourceAtomic: preview.amountInAtomic,
-      quotedDestinationAtomic: preview.amountOutAtomic,
-      estimatedDurationSeconds: preview.estimatedTimeSeconds,
-      providerFees: preview.fees,
-      providerCorrelationId: result.correlationId,
-      providerSignature: result.signature,
-      quoteExpiresAt: expiresAt,
-    });
-  }
+  // Persist every valid quotable payment attempt so any supported cross-chain payer route can be committed.
+  await recordPaymentAttemptRow(db, {
+    paymentRequestPublicId: publicId,
+    attemptPublicId,
+    payerMode,
+    payerRefundAddress: refundTo,
+    sourceNetwork: source.networkKey,
+    sourceAssetId: source.id,
+    sourceAssetSymbol: source.symbol,
+    sourceDecimals: source.decimals,
+    routeType: "CROSS_CHAIN_1CLICK",
+    routeStatus: "SUPPORTED_AND_QUOTABLE",
+    swapType,
+    quotedSourceAtomic: preview.amountInAtomic,
+    quotedDestinationAtomic: preview.amountOutAtomic,
+    estimatedDurationSeconds: preview.estimatedTimeSeconds,
+    providerFees: preview.fees,
+    providerCorrelationId: result.correlationId,
+    providerSignature: result.signature,
+    quoteExpiresAt: expiresAt,
+  });
 
   return reply(200, {
     ...quoteBase,

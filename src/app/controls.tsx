@@ -127,7 +127,8 @@ export type ProofPurpose =
   | "unlink-google"
   | "disable-email"
   | "revoke-all"
-  | "team-change";
+  | "team-change"
+  | "transfer-authorize";
 
 export function FreshProof({
   purpose,

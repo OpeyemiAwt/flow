@@ -164,6 +164,42 @@ export async function getAccountNotifications(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
+  const prefRows = await db.$queryRaw<
+    Array<{
+      incoming_payments: boolean;
+      payment_link_activity: boolean;
+      security_alerts: boolean;
+    }>
+  >`
+    SELECT incoming_payments, payment_link_activity, security_alerts
+    FROM flow.account_notification_preferences
+    WHERE account_id = ${accountId}::uuid
+      AND user_id = ${viewerUserId}::uuid
+    LIMIT 1
+  `;
+  const prefs = prefRows[0] ?? {
+    incoming_payments: true,
+    payment_link_activity: true,
+    security_alerts: true,
+  };
+
+  const visibleNotifications = notifications.filter((notification) => {
+    if (
+      notification.type === "PAYMENT_RECEIVED" ||
+      notification.type === "PAYMENT_COMPLETED" ||
+      notification.type === "DEPOSIT_DETECTED"
+    ) {
+      return prefs.incoming_payments;
+    }
+    if (notification.type === "PAYMENT_LINK_CREATED") {
+      return prefs.payment_link_activity;
+    }
+    if (notification.type === "SECURITY_NOTICE") {
+      return prefs.security_alerts;
+    }
+    return true;
+  });
+
   const readRows = await db.$queryRaw<Array<{ notification_id: string }>>`
     SELECT notification_id
     FROM flow.account_notification_reads
@@ -171,7 +207,7 @@ export async function getAccountNotifications(
       AND viewer_user_id = ${viewerUserId}::uuid
   `;
   const readIds = new Set(readRows.map((row) => row.notification_id));
-  return notifications.map((notification) => ({
+  return visibleNotifications.map((notification) => ({
     ...notification,
     isRead: readIds.has(notification.id),
   }));

@@ -9,6 +9,7 @@ type AuditKind =
   | "unlink-google"
   | "enroll-email"
   | "disable-email"
+  | "transfer-authorize"
   | "sign-out"
   | "revoke-all"
   | "revoke-session"

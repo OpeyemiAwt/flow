@@ -294,10 +294,16 @@ export function FlowAIAssistantDrawer({
                             <p className="font-mono text-[11px] truncate">
                               ID: {String(msg.card.data?.publicId || "")}
                             </p>
-                            <p className="font-mono text-[11px] truncate">
-                              Tx:{" "}
-                              {String(msg.card.data?.settlementTxHash || "")}
-                            </p>
+                            {msg.card.data?.amount ? (
+                              <p className="font-mono text-[11px] truncate">
+                                Amount: {String(msg.card.data.amount)}
+                              </p>
+                            ) : null}
+                            {msg.card.data?.settlementTxHash ? (
+                              <p className="font-mono text-[11px] truncate">
+                                Tx: {String(msg.card.data.settlementTxHash)}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       )}

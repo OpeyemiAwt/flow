@@ -81,6 +81,121 @@ function accountActivityRows(accountId: string) {
           AND indexed.tx_hash = receipt.tx_hash AND indexed.direction = receipt.direction
           AND indexed.reorg_status = 'CANONICAL'
       )
+      UNION ALL
+      SELECT
+        ot.id,
+        ot.account_id,
+        ot.wallet_id,
+        ot.source_network AS network,
+        CASE ot.source_network
+          WHEN 'ethereum-mainnet' THEN '1'
+          WHEN 'base-mainnet' THEN '8453'
+          WHEN 'solana-mainnet' THEN 'solana-mainnet'
+          ELSE ot.source_network
+        END AS chain_id,
+        CASE
+          WHEN ot.source_network IN ('ethereum-mainnet', 'base-mainnet', 'ethereum-sepolia', 'base-sepolia') THEN 'evm'
+          WHEN ot.source_network LIKE 'solana%' THEN 'solana'
+          ELSE 'near'
+        END AS ecosystem,
+        CASE WHEN ot.job_kind = 'CONVERT' THEN 'FLOW_CONVERT' ELSE 'FLOW_PAYMENT' END AS activity_type,
+        'OUTGOING'::text AS direction,
+        COALESCE(ot.source_tx_hash, ot.public_id) AS tx_hash,
+        0::integer AS event_index,
+        COALESCE(wa_src.address, '') AS from_address,
+        ot.recipient_address AS to_address,
+        ot.source_asset_id AS asset_id,
+        NULL::uuid AS network_asset_id,
+        ot.source_asset_symbol AS asset_symbol,
+        ot.source_atomic_amount AS atomic_amount,
+        ot.source_decimals AS decimals,
+        NULL::bigint AS block_height,
+        NULL::text AS block_hash,
+        NULL::timestamptz AS block_timestamp,
+        CASE
+          WHEN ot.status = 'SETTLED' THEN 'FINALIZED'
+          WHEN ot.status IN ('CONFIRMING', 'PROVIDER_SETTLING') THEN 'CONFIRMED'
+          ELSE 'PENDING'
+        END AS finality,
+        'CANONICAL'::text AS reorg_status,
+        ot.fee_atomic_amount,
+        jsonb_build_object(
+          'executionStatus', ot.status,
+          'publicId', ot.public_id,
+          'jobKind', ot.job_kind,
+          'destinationNetwork', ot.destination_network,
+          'destinationAssetSymbol', ot.destination_asset_symbol,
+          'destinationTxHash', ot.destination_tx_hash,
+          'errorCode', ot.error_code,
+          'errorMessage', ot.error_message
+        ) AS metadata,
+        COALESCE(ot.settled_at, ot.broadcast_at, ot.created_at) AS observed_at,
+        ot.created_at,
+        ot.updated_at
+      FROM flow.outgoing_transfer_jobs ot
+      LEFT JOIN flow.wallet_addresses wa_src
+        ON wa_src.wallet_id = ot.wallet_id
+       AND wa_src.network = ot.source_network
+      WHERE ot.account_id = ${accountId}::uuid
+        AND NOT EXISTS (
+          SELECT 1 FROM flow.wallet_activities indexed
+          WHERE indexed.account_id = ot.account_id
+            AND ot.source_tx_hash IS NOT NULL
+            AND indexed.tx_hash = ot.source_tx_hash
+            AND indexed.direction = 'OUTGOING'
+            AND indexed.reorg_status = 'CANONICAL'
+        )
+      UNION ALL
+      SELECT
+        am.id,
+        am.account_id,
+        am.wallet_id,
+        am.destination_network AS network,
+        'near-mainnet'::text AS chain_id,
+        'near'::text AS ecosystem,
+        'FLOW_CROSS_CHAIN_SETTLEMENT'::text AS activity_type,
+        'INCOMING'::text AS direction,
+        COALESCE(am.destination_tx_hash, am.source_tx_hash, am.public_id) AS tx_hash,
+        0::integer AS event_index,
+        COALESCE(am.deposit_address, am.refund_address) AS from_address,
+        am.destination_address AS to_address,
+        am.destination_asset_id AS asset_id,
+        NULL::uuid AS network_asset_id,
+        am.destination_asset_symbol AS asset_symbol,
+        am.quoted_destination_atomic_amount AS atomic_amount,
+        am.destination_decimals AS decimals,
+        NULL::bigint AS block_height,
+        NULL::text AS block_hash,
+        NULL::timestamptz AS block_timestamp,
+        CASE
+          WHEN am.status = 'SETTLED' THEN 'FINALIZED'
+          WHEN am.status = 'SETTLING' THEN 'CONFIRMED'
+          ELSE 'PENDING'
+        END AS finality,
+        'CANONICAL'::text AS reorg_status,
+        NULL::numeric AS fee_atomic_amount,
+        jsonb_build_object(
+          'executionStatus', am.status,
+          'publicId', am.public_id,
+          'sourceNetwork', am.source_network,
+          'sourceAssetSymbol', am.source_asset_symbol,
+          'sourceTxHash', am.source_tx_hash,
+          'destinationTxHash', am.destination_tx_hash,
+          'settlementError', am.settlement_error
+        ) AS metadata,
+        COALESCE(am.settled_at, am.created_at) AS observed_at,
+        am.created_at,
+        am.updated_at
+      FROM flow.add_money_intents am
+      WHERE am.account_id = ${accountId}::uuid
+        AND NOT EXISTS (
+          SELECT 1 FROM flow.wallet_activities indexed
+          WHERE indexed.account_id = am.account_id
+            AND am.destination_tx_hash IS NOT NULL
+            AND indexed.tx_hash = am.destination_tx_hash
+            AND indexed.direction = 'INCOMING'
+            AND indexed.reorg_status = 'CANONICAL'
+        )
     )
   `;
 }

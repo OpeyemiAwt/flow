@@ -784,6 +784,130 @@ export class PaymentMonitoringWorker {
   }
 
   /**
+   * Monitors active cross-chain Add Money intents settling into permanent native NEAR.
+   */
+  async monitorAddMoneyIntents(
+    batchSize = 10,
+    leaseSeconds = 30,
+  ): Promise<number> {
+    const claimed = await this.workerDb.$queryRaw<
+      Array<{
+        id: string;
+        public_id: string;
+        account_id: string;
+        wallet_id: string;
+        destination_address: string;
+        quoted_destination_atomic_amount: string;
+        deposit_address: string | null;
+        deposit_memo: string | null;
+        deposit_deadline: Date | null;
+        source_tx_hash: string | null;
+        destination_tx_hash: string | null;
+        status: string;
+      }>
+    >`
+      SELECT id, public_id, account_id, wallet_id, destination_address,
+        quoted_destination_atomic_amount, deposit_address, deposit_memo,
+        deposit_deadline, source_tx_hash, destination_tx_hash, status
+      FROM flow.claim_active_add_money_intents(
+        ${this.workerId},
+        ${leaseSeconds}::integer,
+        ${batchSize}::integer
+      )
+    `;
+
+    let processed = 0;
+    for (const intent of claimed) {
+      try {
+        if (!intent.deposit_address) {
+          await this.workerDb.$executeRaw`
+            SELECT flow.transition_add_money_intent(
+              ${intent.id}::uuid,
+              ${this.workerId},
+              'FAILED',
+              NULL,
+              NULL,
+              'Missing provider deposit address.'
+            )
+          `;
+          processed++;
+          continue;
+        }
+
+        const execStatus = await fetchOneClickExecutionStatus({
+          depositAddress: intent.deposit_address,
+          depositMemo: intent.deposit_memo,
+        });
+
+        const sTx = execStatus.sourceTxHash ?? intent.source_tx_hash;
+        const dTx = execStatus.destinationTxHash ?? intent.destination_tx_hash;
+        let nextStatus = intent.status;
+        let nextError: string | null = null;
+
+        if (execStatus.stage === "REFUNDED") {
+          nextStatus = "REFUNDED";
+          nextError = execStatus.failureReason ?? "Provider refunded deposit.";
+        } else if (execStatus.stage === "FAILED") {
+          nextStatus = "FAILED";
+          nextError = execStatus.failureReason ?? "Cross-chain swap failed.";
+        } else if (
+          (execStatus.stage === "DESTINATION_FINALIZED" ||
+            execStatus.stage === "DESTINATION_TRANSFER_OBSERVED") &&
+          dTx
+        ) {
+          const verified = await this.onChainVerifier({
+            network: "near-mainnet",
+            txHash: dTx,
+            expectedRecipient: intent.destination_address,
+            expectedAssetId: "near-mainnet:NEAR",
+            expectedTokenContract: null,
+            minimumAtomicAmount: BigInt(
+              intent.quoted_destination_atomic_amount || "1",
+            ),
+          });
+          if (verified.finality === "FINALIZED") {
+            nextStatus = "SETTLED";
+          } else {
+            nextStatus = "SETTLING";
+          }
+        } else if (
+          execStatus.stage === "SOURCE_DEPOSIT_OBSERVED" ||
+          execStatus.stage === "SOURCE_FINALIZED" ||
+          execStatus.stage === "ROUTING_IN_PROGRESS" ||
+          execStatus.stage === "DESTINATION_TRANSFER_OBSERVED"
+        ) {
+          nextStatus = "SETTLING";
+        } else if (
+          execStatus.stage === "PENDING_DEPOSIT" &&
+          intent.deposit_deadline &&
+          new Date(intent.deposit_deadline).getTime() <= Date.now()
+        ) {
+          nextStatus = "EXPIRED";
+        }
+
+        await this.workerDb.$executeRaw`
+          SELECT flow.transition_add_money_intent(
+            ${intent.id}::uuid,
+            ${this.workerId},
+            ${nextStatus},
+            ${sTx},
+            ${dTx},
+            ${nextError}
+          )
+        `;
+        processed++;
+      } catch (err) {
+        log("error", "add_money_monitoring_error", {
+          workerId: this.workerId,
+          publicId: intent.public_id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return processed;
+  }
+
+  /**
    * Continuous monitoring loop with durable leasing and graceful shutdown (Requirement 13).
    */
   async runLoop(options?: {
@@ -810,6 +934,7 @@ export class PaymentMonitoringWorker {
       while (this.isRunning && !options?.signal?.aborted) {
         try {
           await this.expireStaleAttempts();
+          await this.monitorAddMoneyIntents(batchSize, leaseSeconds);
 
           const leasedAttempts = await this.acquireLeases(
             batchSize,

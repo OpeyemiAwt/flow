@@ -10,7 +10,13 @@ import {
   readProfilePreference,
   writeProfilePreference,
 } from "../../../components/profile-preferences.ts";
-import { describe, Feedback, send } from "../../controls.tsx";
+import {
+  describe,
+  Feedback,
+  FreshProof,
+  googleNavigate,
+  send,
+} from "../../controls.tsx";
 
 export interface SessionRecord {
   readonly id: string;
@@ -33,17 +39,68 @@ export interface SecurityPanelProps {
     readonly role: string;
     readonly walletStatus: string;
   }[];
+  readonly initialProfilePreference?: {
+    readonly displayName: string | null;
+    readonly avatarDataUrl: string | null;
+  };
+  readonly initialNotificationPreferences?: {
+    readonly incomingPayments: boolean;
+    readonly paymentLinkActivity: boolean;
+    readonly securityAlerts: boolean;
+  };
 }
 
 type SettingsTab = "notifications" | "security" | "preferences" | "profile";
+type SecurityAction =
+  | "enroll-email"
+  | "disable-email"
+  | "link-google"
+  | "unlink-google"
+  | "revoke-all";
+
+async function compressAvatarDataUrl(file: File): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("Could not read image"));
+    reader.onerror = () => reject(new Error("Could not read image"));
+    reader.readAsDataURL(file);
+  });
+  if (dataUrl.length <= 280_000) return dataUrl;
+  return new Promise<string>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 256;
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas unavailable"));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const encoded = canvas.toDataURL("image/jpeg", 0.85);
+      if (encoded.length > 340_000) {
+        return reject(new Error("Avatar image is too large."));
+      }
+      resolve(encoded);
+    };
+    img.onerror = () => reject(new Error("Could not decode image"));
+    img.src = dataUrl;
+  });
+}
 
 export function SecurityPanel({
   profileId,
   email,
   emailEnrolled,
+  mailboxPaused,
   googleLinked,
   sessions: initialSessions,
   accounts,
+  initialProfilePreference,
+  initialNotificationPreferences,
 }: SecurityPanelProps) {
   const searchParams = useSearchParams();
   const initialTab =
@@ -51,9 +108,10 @@ export function SecurityPanel({
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
   const [notificationPreferences, setNotificationPreferences] = useState({
-    incomingPayments: true,
-    paymentLinkActivity: true,
-    securityAlerts: true,
+    incomingPayments: initialNotificationPreferences?.incomingPayments ?? true,
+    paymentLinkActivity:
+      initialNotificationPreferences?.paymentLinkActivity ?? true,
+    securityAlerts: initialNotificationPreferences?.securityAlerts ?? true,
   });
   const { incomingPayments, paymentLinkActivity, securityAlerts } =
     notificationPreferences;
@@ -61,95 +119,149 @@ export function SecurityPanel({
   // Profile Customization state
   const primaryAccount = accounts[0];
   const [displayName, setDisplayName] = useState(
-    primaryAccount?.name ?? "Personal Workspace",
+    initialProfilePreference?.displayName ||
+      primaryAccount?.name ||
+      "Personal Workspace",
   );
   const [profileSavedMessage, setProfileSavedMessage] = useState<string | null>(
     null,
   );
 
-  // Sessions state
+  // Sessions & security proof state
   const [sessions, setSessions] =
     useState<readonly SessionRecord[]>(initialSessions);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [pendingSecurityAction, setPendingSecurityAction] =
+    useState<SecurityAction | null>(null);
+  const [securityBusy, setSecurityBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   const backHref = primaryAccount ? `/accounts/${primaryAccount.id}` : "/";
 
-  const defaultName = primaryAccount?.name ?? "Personal Workspace";
+  const defaultName =
+    initialProfilePreference?.displayName ||
+    primaryAccount?.name ||
+    "Personal Workspace";
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
+      if (initialProfilePreference) {
+        writeProfilePreference(
+          profileId,
+          "name",
+          initialProfilePreference.displayName,
+        );
+        writeProfilePreference(
+          profileId,
+          "avatar",
+          initialProfilePreference.avatarDataUrl,
+        );
+      }
+      if (initialNotificationPreferences) {
+        writeProfilePreference(
+          profileId,
+          "incomingPayments",
+          String(initialNotificationPreferences.incomingPayments),
+        );
+        writeProfilePreference(
+          profileId,
+          "paymentLinkActivity",
+          String(initialNotificationPreferences.paymentLinkActivity),
+        );
+        writeProfilePreference(
+          profileId,
+          "securityAlerts",
+          String(initialNotificationPreferences.securityAlerts),
+        );
+      }
       setDisplayName(readProfilePreference(profileId, "name") || defaultName);
       setNotificationPreferences({
         incomingPayments:
+          initialNotificationPreferences?.incomingPayments ??
           readProfilePreference(profileId, "incomingPayments") !== "false",
         paymentLinkActivity:
+          initialNotificationPreferences?.paymentLinkActivity ??
           readProfilePreference(profileId, "paymentLinkActivity") !== "false",
         securityAlerts:
+          initialNotificationPreferences?.securityAlerts ??
           readProfilePreference(profileId, "securityAlerts") !== "false",
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [defaultName, profileId]);
+  }, [
+    defaultName,
+    initialNotificationPreferences,
+    initialProfilePreference,
+    profileId,
+  ]);
 
-  function toggleNotification(key: keyof typeof notificationPreferences) {
+  async function toggleNotification(key: keyof typeof notificationPreferences) {
     const next = !notificationPreferences[key];
+    setNotificationPreferences({ ...notificationPreferences, [key]: next });
     try {
       writeProfilePreference(profileId, key, String(next));
-      setNotificationPreferences({ ...notificationPreferences, [key]: next });
-    } catch {
-      setMessage("Could not save the notification preference.");
+      if (primaryAccount) {
+        await send(
+          `/api/accounts/${primaryAccount.id}/notification-preferences`,
+          { [key]: next },
+          "PATCH",
+        );
+      }
+      setMessage("");
+    } catch (err) {
+      setNotificationPreferences({ ...notificationPreferences, [key]: !next });
+      writeProfilePreference(profileId, key, String(!next));
+      setMessage(describe(err));
     }
   }
 
-  function handleSaveDisplayName(event: React.FormEvent) {
+  async function handleSaveDisplayName(event: React.FormEvent) {
     event.preventDefault();
     const name = displayName.trim();
-    if (!name || name.length > 100) {
+    if (!name || name.length > 80) {
       setProfileSavedMessage(
-        "Enter a display name between 1 and 100 characters.",
+        "Enter a display name between 1 and 80 characters.",
       );
       return;
     }
     try {
+      await send("/api/me/preferences", { displayName: name }, "PATCH");
       writeProfilePreference(profileId, "name", name);
       setDisplayName(name);
-      setProfileSavedMessage("Display name saved in this browser.");
-    } catch {
-      setProfileSavedMessage("Could not save the display name.");
+      setProfileSavedMessage("Display name saved to your account.");
+    } catch (err) {
+      setProfileSavedMessage(describe(err));
     }
   }
 
-  function handleAvatarUpload(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleAvatarUpload(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (
-      !["image/png", "image/jpeg"].includes(file.type) ||
+      !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
       file.size > 2 * 1024 * 1024
     ) {
-      setProfileSavedMessage("Choose a PNG or JPEG image up to 2 MB.");
+      setProfileSavedMessage("Choose a PNG, JPEG, or WebP image up to 2 MB.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      try {
-        writeProfilePreference(profileId, "avatar", reader.result);
-        setProfileSavedMessage("Avatar saved in this browser.");
-      } catch {
-        setProfileSavedMessage("Could not save the avatar.");
-      }
-    };
-    reader.onerror = () =>
-      setProfileSavedMessage("Could not read the avatar image.");
-    reader.readAsDataURL(file);
+    try {
+      const encoded = await compressAvatarDataUrl(file);
+      await send("/api/me/preferences", { avatarDataUrl: encoded }, "PATCH");
+      writeProfilePreference(profileId, "avatar", encoded);
+      setProfileSavedMessage("Avatar saved to your account.");
+    } catch (err) {
+      setProfileSavedMessage(describe(err));
+    }
   }
 
-  function handleResetAvatar() {
+  async function handleResetAvatar() {
     try {
+      await send("/api/me/preferences", { avatarDataUrl: null }, "PATCH");
       writeProfilePreference(profileId, "avatar", null);
       setProfileSavedMessage("Avatar reset to default.");
-    } catch {
-      setProfileSavedMessage("Could not reset the avatar.");
+    } catch (err) {
+      setProfileSavedMessage(describe(err));
     }
   }
 
@@ -168,19 +280,40 @@ export function SecurityPanel({
     }
   }
 
-  // Revoke all other sessions
-  async function handleRevokeAll() {
-    setRevokingId("all");
+  async function executeSecurityAction(action: SecurityAction) {
+    setSecurityBusy(true);
     setMessage("");
     try {
-      await send("/api/security/sessions/revoke-all", {}, "POST");
-      setSessions((prev) => prev.filter((s) => s.current));
-      setMessage("All other sessions have been signed out.");
+      if (action === "enroll-email") {
+        await send("/api/security/email/enroll", {}, "POST");
+        window.location.replace("/sign-in?notice=email-enrolled");
+      } else if (action === "disable-email") {
+        await send("/api/security/email/disable", {}, "POST");
+        window.location.replace("/sign-in?notice=email-disabled");
+      } else if (action === "link-google") {
+        const res = await send<{ url: string }>(
+          "/api/security/google/link",
+          {},
+          "POST",
+        );
+        googleNavigate(res.url);
+      } else if (action === "unlink-google") {
+        await send("/api/security/google/unlink", {}, "POST");
+        window.location.replace("/sign-in?notice=google-unlinked");
+      } else if (action === "revoke-all") {
+        await send("/api/security/sessions/revoke-all", {}, "POST");
+        window.location.replace("/sign-in?notice=sessions-revoked");
+      }
     } catch (err) {
       setMessage(describe(err));
-    } finally {
-      setRevokingId(null);
+      setSecurityBusy(false);
+      setPendingSecurityAction(null);
     }
+  }
+
+  function handleRevokeAll() {
+    setMessage("");
+    setPendingSecurityAction("revoke-all");
   }
 
   return (
@@ -601,40 +734,145 @@ export function SecurityPanel({
                   </div>
 
                   {/* Authentication Methods */}
+                  {mailboxPaused && (
+                    <div className="p-3.5 rounded-2xl border border-amber-200 bg-amber-50 text-xs text-amber-900">
+                      Security changes requiring email verification are paused
+                      while your mailbox is flagged. Contact support to restore
+                      mailbox access.
+                    </div>
+                  )}
+
+                  {pendingSecurityAction && (
+                    <FreshProof
+                      purpose={pendingSecurityAction}
+                      onConfirm={() =>
+                        executeSecurityAction(pendingSecurityAction)
+                      }
+                      onCancel={() => {
+                        setPendingSecurityAction(null);
+                        setSecurityBusy(false);
+                      }}
+                    >
+                      {pendingSecurityAction === "enroll-email"
+                        ? `Verify your mailbox (${email}) to enable Email OTP sign-in. Your session will refresh afterward.`
+                        : pendingSecurityAction === "disable-email"
+                          ? `Verify your mailbox (${email}) to disable Email OTP sign-in. Your session will refresh afterward.`
+                          : pendingSecurityAction === "link-google"
+                            ? `Confirm with a security code before linking Google SSO to ${email}.`
+                            : pendingSecurityAction === "unlink-google"
+                              ? `Confirm with a security code before disconnecting Google SSO from ${email}.`
+                              : `Verify with a security code to sign out all devices.`}
+                    </FreshProof>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-neutral-950 dark:text-white">
-                          Email OTP
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                          {emailEnrolled ? "Enrolled" : "Available"}
-                        </span>
+                    <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 flex flex-col justify-between gap-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-neutral-950 dark:text-white">
+                            Email OTP
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              emailEnrolled
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                                : "bg-neutral-100 text-neutral-700 border-neutral-200/60"
+                            }`}
+                          >
+                            {emailEnrolled ? "Enrolled" : "Available"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-500">
+                          Passwordless one-time verification codes sent to{" "}
+                          {email}.
+                        </p>
                       </div>
-                      <p className="text-[11px] text-neutral-500">
-                        Passwordless one-time verification codes sent to {email}
-                        .
-                      </p>
+                      <div>
+                        {!emailEnrolled ? (
+                          <button
+                            type="button"
+                            disabled={mailboxPaused || securityBusy}
+                            onClick={() =>
+                              setPendingSecurityAction("enroll-email")
+                            }
+                            className="px-3 py-1.5 rounded-xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 text-[11px] font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
+                          >
+                            Enroll Email OTP
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={
+                              !googleLinked || mailboxPaused || securityBusy
+                            }
+                            title={
+                              !googleLinked
+                                ? "Connect Google SSO before disabling Email OTP."
+                                : undefined
+                            }
+                            onClick={() =>
+                              setPendingSecurityAction("disable-email")
+                            }
+                            className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-[11px] font-semibold hover:border-red-300 hover:text-red-600 disabled:opacity-40 transition-colors"
+                          >
+                            Disable Email OTP
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-neutral-950 dark:text-white">
-                          Google SSO
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            googleLinked
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-neutral-100 text-neutral-600"
-                          }`}
-                        >
-                          {googleLinked ? "Connected" : "Not connected"}
-                        </span>
+                    <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 flex flex-col justify-between gap-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-neutral-950 dark:text-white">
+                            Google SSO
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              googleLinked
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-neutral-100 text-neutral-600"
+                            }`}
+                          >
+                            {googleLinked ? "Connected" : "Not connected"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-500">
+                          Sign in directly using your verified Google account.
+                        </p>
                       </div>
-                      <p className="text-[11px] text-neutral-500">
-                        Sign in directly using your verified Google account.
-                      </p>
+                      <div>
+                        {!googleLinked ? (
+                          <button
+                            type="button"
+                            disabled={mailboxPaused || securityBusy}
+                            onClick={() =>
+                              setPendingSecurityAction("link-google")
+                            }
+                            className="px-3 py-1.5 rounded-xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 text-[11px] font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
+                          >
+                            Connect Google
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={
+                              !emailEnrolled || mailboxPaused || securityBusy
+                            }
+                            title={
+                              !emailEnrolled
+                                ? "Enroll Email OTP before disconnecting Google SSO."
+                                : undefined
+                            }
+                            onClick={() =>
+                              setPendingSecurityAction("unlink-google")
+                            }
+                            className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-[11px] font-semibold hover:border-red-300 hover:text-red-600 disabled:opacity-40 transition-colors"
+                          >
+                            Disconnect Google
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 

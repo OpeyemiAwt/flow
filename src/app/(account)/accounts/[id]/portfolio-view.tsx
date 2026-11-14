@@ -52,7 +52,46 @@ import {
 import { useQuotePreview } from "../../../../components/use-quote-preview.ts";
 import type { OneClickPreview } from "../../../../server/providers/one-click-preview.ts";
 import type { SerializedPaymentRequest } from "../../../../domain/payment-requests.ts";
-import { describe, send } from "../../../controls.tsx";
+import { FreshProof, describe, send } from "../../../controls.tsx";
+
+interface SerializedOutgoingTransfer {
+  readonly id: string;
+  readonly publicId: string;
+  readonly jobKind: "SEND" | "CONVERT";
+  readonly sourceNetwork: string;
+  readonly sourceAssetSymbol: string;
+  readonly sourceDisplayAmount: string;
+  readonly recipientAddress: string;
+  readonly destinationNetwork: string;
+  readonly destinationAssetSymbol: string;
+  readonly quotedDestinationDisplayAmount: string | null;
+  readonly status: string;
+  readonly sourceTxHash: string | null;
+  readonly destinationTxHash: string | null;
+  readonly errorMessage: string | null;
+  readonly settledAt: string | null;
+  readonly createdAt: string;
+}
+
+interface SerializedAddMoneyIntent {
+  readonly id: string;
+  readonly publicId: string;
+  readonly sourceNetwork: string;
+  readonly sourceAssetSymbol: string;
+  readonly quotedSourceDisplayAmount: string;
+  readonly destinationNetwork: string;
+  readonly destinationAssetSymbol: string;
+  readonly quotedDestinationDisplayAmount: string;
+  readonly destinationAddress: string;
+  readonly depositAddress: string | null;
+  readonly depositMemo: string | null;
+  readonly depositDeadline: string | null;
+  readonly sourceTxHash: string | null;
+  readonly destinationTxHash: string | null;
+  readonly status: string;
+  readonly settlementError: string | null;
+  readonly settledAt: string | null;
+}
 
 export type WorkspaceTab = NavTabId;
 
@@ -370,6 +409,32 @@ export function PortfolioView({
     useState<string>("solana-mainnet:SOL");
   const [sendAmount, setSendAmount] = useState<string>("");
   const [sendRecipientAddress, setSendRecipientAddress] = useState<string>("");
+
+  // Outgoing execution (Send & Convert) + Add Money + Payment Links management state
+  const [outgoingProofOpenFor, setOutgoingProofOpenFor] = useState<
+    "SEND" | "CONVERT" | null
+  >(null);
+  const [outgoingExecuting, setOutgoingExecuting] = useState(false);
+  const [outgoingError, setOutgoingError] = useState<string | null>(null);
+  const [outgoingIdempotencyKey, setOutgoingIdempotencyKey] = useState<string>(
+    () => crypto.randomUUID(),
+  );
+  const [activeOutgoingTransfer, setActiveOutgoingTransfer] =
+    useState<SerializedOutgoingTransfer | null>(null);
+
+  const [addMoneyIntent, setAddMoneyIntent] =
+    useState<SerializedAddMoneyIntent | null>(null);
+  const [addMoneyCommitting, setAddMoneyCommitting] = useState(false);
+  const [addMoneyError, setAddMoneyError] = useState<string | null>(null);
+  const [addMoneySecondsRemaining, setAddMoneySecondsRemaining] =
+    useState<number>(0);
+
+  const [paymentLinksModalFilter, setPaymentLinksModalFilter] = useState<
+    "ACTIVE" | "PAST" | null
+  >(null);
+  const [togglingPaymentRequestId, setTogglingPaymentRequestId] = useState<
+    string | null
+  >(null);
 
   // Add Money state (Matches media_1794490079680_0a50f095.jpg)
   const [depositMode, setDepositMode] = useState<"DIRECT" | "DEPOSIT">(
@@ -877,6 +942,225 @@ export function PortfolioView({
     });
   };
 
+  useEffect(() => {
+    if (
+      !activeOutgoingTransfer ||
+      ["SETTLED", "FAILED", "REFUNDED", "UNKNOWN_AMBIGUOUS"].includes(
+        activeOutgoingTransfer.status,
+      )
+    ) {
+      return;
+    }
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/accounts/${accountId}/transfers/${activeOutgoingTransfer.id}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          transfer?: SerializedOutgoingTransfer;
+        };
+        if (data.transfer) {
+          setActiveOutgoingTransfer(data.transfer);
+          if (data.transfer.status === "SETTLED") {
+            void send<SerializedAccountPortfolio>(
+              `/api/accounts/${accountId}/portfolio`,
+              {},
+              "GET",
+            )
+              .then((p) => setPortfolio(p))
+              .catch(() => {});
+          }
+        }
+      } catch {
+        // Ignore transient poll errors
+      }
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [accountId, activeOutgoingTransfer]);
+
+  useEffect(() => {
+    if (!addMoneyIntent?.depositDeadline) return;
+    const deadlineMs = Date.parse(addMoneyIntent.depositDeadline);
+    const update = () =>
+      setAddMoneySecondsRemaining(
+        Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000)),
+      );
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [addMoneyIntent?.depositDeadline]);
+
+  useEffect(() => {
+    if (
+      !addMoneyIntent ||
+      ["SETTLED", "FAILED", "REFUNDED", "EXPIRED"].includes(
+        addMoneyIntent.status,
+      )
+    ) {
+      return;
+    }
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/accounts/${accountId}/add-money/${addMoneyIntent.id}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          intent?: SerializedAddMoneyIntent;
+        };
+        if (data.intent) {
+          setAddMoneyIntent(data.intent);
+          if (data.intent.status === "SETTLED") {
+            void send<SerializedAccountPortfolio>(
+              `/api/accounts/${accountId}/portfolio`,
+              {},
+              "GET",
+            )
+              .then((p) => setPortfolio(p))
+              .catch(() => {});
+          }
+        }
+      } catch {
+        // Ignore transient poll errors
+      }
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [accountId, addMoneyIntent]);
+
+  const executeAuthorizedTransfer = async (kind: "SEND" | "CONVERT") => {
+    setOutgoingExecuting(true);
+    setOutgoingError(null);
+    try {
+      const endpoint =
+        kind === "SEND"
+          ? `/api/accounts/${accountId}/send/execute`
+          : `/api/accounts/${accountId}/convert/execute`;
+      const payload =
+        kind === "SEND"
+          ? {
+              sourceDeploymentId: sendSource?.deployment.id,
+              destinationDeploymentId: sendDestDeployment.id,
+              recipientAddress: sendRecipientAddress.trim(),
+              sourceDisplayAmount: sendAmount,
+              idempotencyKey: outgoingIdempotencyKey,
+            }
+          : {
+              sourceDeploymentId: convertSource?.deployment.id,
+              destinationDeploymentId: convertDestDeployment.id,
+              sourceDisplayAmount: convertAmount,
+              idempotencyKey: outgoingIdempotencyKey,
+            };
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": outgoingIdempotencyKey,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        transfer?: SerializedOutgoingTransfer;
+        error?: string;
+        detail?: string;
+      };
+      if (!res.ok || !data.transfer) {
+        const msg =
+          data.detail || data.error || "Unable to submit outgoing transfer.";
+        throw new Error(
+          msg.includes("PAYMENT_EXECUTION_DISABLED")
+            ? "Outgoing execution is currently paused while final release checks finish."
+            : msg,
+        );
+      }
+      setActiveOutgoingTransfer(data.transfer);
+      setOutgoingProofOpenFor(null);
+      setOutgoingIdempotencyKey(crypto.randomUUID());
+    } catch (error) {
+      setOutgoingError(describe(error));
+    } finally {
+      setOutgoingExecuting(false);
+    }
+  };
+
+  const handleTogglePaymentRequestStatus = async (
+    req: SerializedPaymentRequest,
+    nextStatus: "DISABLED" | "ACTIVE",
+  ) => {
+    setTogglingPaymentRequestId(req.id);
+    try {
+      const updated = await send<SerializedPaymentRequest>(
+        `/api/accounts/${accountId}/payment-requests/${req.id}`,
+        { status: nextStatus },
+        "PATCH",
+      );
+      setPaymentRequests((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item)),
+      );
+    } catch (error) {
+      setMessage(describe(error));
+    } finally {
+      setTogglingPaymentRequestId(null);
+    }
+  };
+
+  const renderOutgoingStatusCard = (kind: "SEND" | "CONVERT") => {
+    if (!activeOutgoingTransfer || activeOutgoingTransfer.jobKind !== kind) {
+      return null;
+    }
+    const isDone = activeOutgoingTransfer.status === "SETTLED";
+    const isBad = ["FAILED", "REFUNDED", "UNKNOWN_AMBIGUOUS"].includes(
+      activeOutgoingTransfer.status,
+    );
+    return (
+      <div
+        className={`mt-4 rounded-2xl border p-4 space-y-2 text-xs ${
+          isDone
+            ? "border-emerald-200 bg-emerald-50/70"
+            : isBad
+              ? "border-red-200 bg-red-50/70"
+              : "border-amber-200 bg-amber-50/60"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-neutral-950">
+            {kind === "SEND" ? "Transfer Receipt" : "Conversion Receipt"} ·{" "}
+            {activeOutgoingTransfer.publicId}
+          </span>
+          <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-white border border-neutral-200 text-neutral-800">
+            {activeOutgoingTransfer.status}
+          </span>
+        </div>
+        <p className="text-neutral-700">
+          {activeOutgoingTransfer.sourceDisplayAmount}{" "}
+          {activeOutgoingTransfer.sourceAssetSymbol} (
+          {activeOutgoingTransfer.sourceNetwork}) →{" "}
+          {activeOutgoingTransfer.quotedDestinationDisplayAmount ??
+            activeOutgoingTransfer.sourceDisplayAmount}{" "}
+          {activeOutgoingTransfer.destinationAssetSymbol} (
+          {activeOutgoingTransfer.destinationNetwork})
+        </p>
+        {activeOutgoingTransfer.sourceTxHash && (
+          <p className="font-mono text-[11px] break-all text-neutral-600">
+            Source tx: {activeOutgoingTransfer.sourceTxHash}
+          </p>
+        )}
+        {activeOutgoingTransfer.destinationTxHash && (
+          <p className="font-mono text-[11px] break-all text-neutral-600">
+            Destination tx: {activeOutgoingTransfer.destinationTxHash}
+          </p>
+        )}
+        {activeOutgoingTransfer.errorMessage && (
+          <p className="text-[#FF1A1A] font-medium">
+            {activeOutgoingTransfer.errorMessage}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-neutral-900 transition-colors duration-200">
       {/* Floating Top Navigation */}
@@ -956,7 +1240,7 @@ export function PortfolioView({
                   <span>
                     {(account?.walletStatus ?? "setup_pending") === "active" ||
                     portfolio.wallet
-                      ? "Wallet provisioned (execution disabled)"
+                      ? "Wallet active"
                       : "Wallet setup pending"}
                   </span>
                 </span>
@@ -1495,7 +1779,7 @@ export function PortfolioView({
                       type="button"
                       onClick={sendPreview.review}
                       disabled={!sendPreview.canReview || sendPreview.loading}
-                      className="w-full py-4 rounded-full text-sm font-bold bg-neutral-950 text-white shadow-md hover:bg-neutral-800 transition-all hover:scale-[1.005] active:scale-[0.995] disabled:opacity-40 cursor-pointer"
+                      className="w-full py-3.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors disabled:opacity-40 cursor-pointer"
                     >
                       {sendPreview.loading
                         ? "Fetching NEAR Intents Quote..."
@@ -1504,12 +1788,51 @@ export function PortfolioView({
 
                     <button
                       type="button"
-                      disabled
-                      className="w-full py-3 rounded-full text-xs font-semibold bg-neutral-100 text-neutral-600 cursor-not-allowed"
+                      disabled={
+                        outgoingExecuting ||
+                        !sendSource ||
+                        !sendAddressValidation.valid ||
+                        !positiveQuoteAmount(
+                          sendAmount,
+                          sendSource.deployment.decimals,
+                        )
+                      }
+                      onClick={() => {
+                        setOutgoingError(null);
+                        setOutgoingIdempotencyKey(crypto.randomUUID());
+                        setOutgoingProofOpenFor("SEND");
+                      }}
+                      className="w-full py-4 rounded-full text-sm font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                     >
-                      Outgoing Execution Disabled (Safety Gate Active)
+                      {outgoingExecuting ? "Authorizing Send…" : "Send Now"}
                     </button>
                   </div>
+
+                  {outgoingError && outgoingProofOpenFor !== "CONVERT" && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-[#FF1A1A]"
+                    >
+                      {outgoingError}
+                    </p>
+                  )}
+
+                  {outgoingProofOpenFor === "SEND" && (
+                    <div className="mt-3">
+                      <FreshProof
+                        purpose="transfer-authorize"
+                        target={accountId}
+                        onConfirm={() => executeAuthorizedTransfer("SEND")}
+                        onCancel={() => setOutgoingProofOpenFor(null)}
+                      >
+                        Verify your identity to authorize sending{" "}
+                        {sendAmount || "0"} {sendSource?.deployment.symbol} to{" "}
+                        {truncateMiddle(sendRecipientAddress, 8, 6)}.
+                      </FreshProof>
+                    </div>
+                  )}
+
+                  {renderOutgoingStatusCard("SEND")}
                 </>
               ) : (
                 <>
@@ -1601,7 +1924,7 @@ export function PortfolioView({
                       disabled={
                         !convertPreview.canReview || convertPreview.loading
                       }
-                      className="w-full py-4 rounded-full text-sm font-bold bg-neutral-950 text-white shadow-md hover:bg-neutral-800 transition-all hover:scale-[1.005] active:scale-[0.995] disabled:opacity-40 cursor-pointer"
+                      className="w-full py-3.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors disabled:opacity-40 cursor-pointer"
                     >
                       {convertPreview.loading
                         ? "Calculating Convert Quote..."
@@ -1610,12 +1933,55 @@ export function PortfolioView({
 
                     <button
                       type="button"
-                      disabled
-                      className="w-full py-3 rounded-full text-xs font-semibold bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"
+                      disabled={
+                        outgoingExecuting ||
+                        !convertSource ||
+                        convertSource.deployment.id ===
+                          convertDestDeployment.id ||
+                        !positiveQuoteAmount(
+                          convertAmount,
+                          convertSource.deployment.decimals,
+                        )
+                      }
+                      onClick={() => {
+                        setOutgoingError(null);
+                        setOutgoingIdempotencyKey(crypto.randomUUID());
+                        setOutgoingProofOpenFor("CONVERT");
+                      }}
+                      className="w-full py-4 rounded-full text-sm font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                     >
-                      Swap Execution Disabled (Safety Gate Active)
+                      {outgoingExecuting
+                        ? "Authorizing Conversion…"
+                        : "Convert Now"}
                     </button>
                   </div>
+
+                  {outgoingError && outgoingProofOpenFor !== "SEND" && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-[#FF1A1A]"
+                    >
+                      {outgoingError}
+                    </p>
+                  )}
+
+                  {outgoingProofOpenFor === "CONVERT" && (
+                    <div className="mt-3">
+                      <FreshProof
+                        purpose="transfer-authorize"
+                        target={accountId}
+                        onConfirm={() => executeAuthorizedTransfer("CONVERT")}
+                        onCancel={() => setOutgoingProofOpenFor(null)}
+                      >
+                        Verify your identity to convert {convertAmount || "0"}{" "}
+                        {convertSource?.deployment.symbol} into{" "}
+                        {convertDestDeployment.symbol} on{" "}
+                        {convertDestDeployment.networkName}.
+                      </FreshProof>
+                    </div>
+                  )}
+
+                  {renderOutgoingStatusCard("CONVERT")}
                 </>
               )}
             </div>
@@ -2013,15 +2379,181 @@ export function PortfolioView({
                     type="button"
                     onClick={handleReviewCrossChainQuote}
                     disabled={!addMoneyKey || crossChainQuoteLoading}
-                    className="w-full py-3.5 rounded-full text-xs font-bold bg-neutral-950 text-white shadow-md hover:bg-neutral-800 transition-all disabled:opacity-40 cursor-pointer"
+                    className="w-full py-3 rounded-full text-xs font-bold bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors disabled:opacity-40 cursor-pointer"
                   >
                     {crossChainQuoteLoading
                       ? "Fetching dry quote…"
                       : "Review Deposit Quote"}
                   </button>
-                  <p className="text-xs text-neutral-600">
-                    Deposit execution is disabled.
-                  </p>
+
+                  <button
+                    type="button"
+                    disabled={
+                      !addMoneyBody ||
+                      addMoneyCommitting ||
+                      addMoneyRouteUnavailable
+                    }
+                    onClick={async () => {
+                      if (!crossChainSourceToken || !addMoneyBody) return;
+                      setAddMoneyError(null);
+                      setAddMoneyCommitting(true);
+                      try {
+                        const key = crypto.randomUUID();
+                        const res = await fetch(
+                          `/api/accounts/${accountId}/add-money`,
+                          {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              "Idempotency-Key": key,
+                            },
+                            body: JSON.stringify({
+                              sourceDeploymentId: crossChainSourceToken.assetId,
+                              sourceAmount: crossChainDepositAmount,
+                              refundAddress: crossChainRefundAddress.trim(),
+                              idempotencyKey: key,
+                            }),
+                          },
+                        );
+                        const data = (await res.json().catch(() => ({}))) as {
+                          intent?: SerializedAddMoneyIntent;
+                          error?: string;
+                          detail?: string;
+                        };
+                        if (!res.ok || !data.intent) {
+                          const msg =
+                            data.detail ||
+                            data.error ||
+                            "Unable to generate deposit address.";
+                          throw new Error(
+                            msg.includes("PAYMENT_EXECUTION_DISABLED")
+                              ? "Cross-chain Add Money execution is paused while live release checks finish."
+                              : msg,
+                          );
+                        }
+                        setAddMoneyIntent(data.intent);
+                      } catch (err) {
+                        setAddMoneyError(describe(err));
+                      } finally {
+                        setAddMoneyCommitting(false);
+                      }
+                    }}
+                    className="w-full py-3.5 rounded-full text-xs font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {addMoneyCommitting
+                      ? "Generating Deposit Address…"
+                      : "Continue to Deposit"}
+                  </button>
+
+                  {addMoneyError && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-[#FF1A1A]"
+                    >
+                      {addMoneyError}
+                    </p>
+                  )}
+
+                  {addMoneyIntent && (
+                    <div className="mt-2 rounded-2xl border border-neutral-200 bg-neutral-50/70 p-4 space-y-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-neutral-950">
+                          Deposit {addMoneyIntent.quotedSourceDisplayAmount}{" "}
+                          {addMoneyIntent.sourceAssetSymbol}
+                        </span>
+                        <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-white border border-neutral-200 text-neutral-800">
+                          {addMoneyIntent.status}
+                        </span>
+                      </div>
+
+                      {addMoneyIntent.depositAddress &&
+                        addMoneyIntent.status === "DEPOSIT_COMMITTED" && (
+                          <>
+                            <div className="flex justify-center py-2">
+                              <QrCode
+                                value={addMoneyIntent.depositAddress}
+                                size={136}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <span className="text-[11px] font-semibold text-neutral-600 block">
+                                Deposit Address ({addMoneyIntent.sourceNetwork})
+                              </span>
+                              <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-[11px]">
+                                <span className="truncate select-all text-neutral-800">
+                                  {addMoneyIntent.depositAddress}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    copyText(
+                                      `am-addr-${addMoneyIntent.id}`,
+                                      addMoneyIntent.depositAddress ?? "",
+                                    )
+                                  }
+                                  className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline"
+                                >
+                                  {copiedKey === `am-addr-${addMoneyIntent.id}`
+                                    ? "Copied"
+                                    : "Copy"}
+                                </button>
+                              </div>
+                            </div>
+                            {addMoneyIntent.depositMemo && (
+                              <div className="space-y-1">
+                                <span className="text-[11px] font-semibold text-neutral-600 block">
+                                  Required Memo
+                                </span>
+                                <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-[11px]">
+                                  <span className="truncate select-all text-neutral-800">
+                                    {addMoneyIntent.depositMemo}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      copyText(
+                                        `am-memo-${addMoneyIntent.id}`,
+                                        addMoneyIntent.depositMemo ?? "",
+                                      )
+                                    }
+                                    className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline"
+                                  >
+                                    {copiedKey ===
+                                    `am-memo-${addMoneyIntent.id}`
+                                      ? "Copied"
+                                      : "Copy"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            <p className="text-[11px] text-neutral-600">
+                              Settles ~
+                              {addMoneyIntent.quotedDestinationDisplayAmount}{" "}
+                              NEAR to{" "}
+                              {truncateMiddle(
+                                addMoneyIntent.destinationAddress,
+                                10,
+                                6,
+                              )}
+                              .
+                              {addMoneySecondsRemaining > 0 &&
+                                ` Expires in ${Math.floor(addMoneySecondsRemaining / 60)}m ${addMoneySecondsRemaining % 60}s.`}
+                            </p>
+                          </>
+                        )}
+
+                      {addMoneyIntent.destinationTxHash && (
+                        <p className="font-mono text-[11px] break-all text-emerald-700">
+                          NEAR settlement tx: {addMoneyIntent.destinationTxHash}
+                        </p>
+                      )}
+                      {addMoneyIntent.settlementError && (
+                        <p className="text-[#FF1A1A] font-medium">
+                          {addMoneyIntent.settlementError}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2177,7 +2709,8 @@ export function PortfolioView({
                   </div>
                   <button
                     type="button"
-                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950"
+                    onClick={() => setPaymentLinksModalFilter("ACTIVE")}
+                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950 cursor-pointer"
                   >
                     View all →
                   </button>
@@ -2225,9 +2758,18 @@ export function PortfolioView({
                             </button>
                             <button
                               type="button"
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-500 hover:text-neutral-950 ml-auto"
+                              disabled={togglingPaymentRequestId === req.id}
+                              onClick={() =>
+                                void handleTogglePaymentRequestStatus(
+                                  req,
+                                  "DISABLED",
+                                )
+                              }
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-500 hover:text-neutral-950 ml-auto disabled:opacity-40 cursor-pointer"
                             >
-                              Pause
+                              {togglingPaymentRequestId === req.id
+                                ? "Updating…"
+                                : "Pause"}
                             </button>
                           </div>
                         </div>
@@ -2256,7 +2798,8 @@ export function PortfolioView({
                   </div>
                   <button
                     type="button"
-                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950"
+                    onClick={() => setPaymentLinksModalFilter("PAST")}
+                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950 cursor-pointer"
                   >
                     View all →
                   </button>
@@ -2287,7 +2830,9 @@ export function PortfolioView({
                               ●{" "}
                               {req.status === "COMPLETED"
                                 ? "Completed"
-                                : "Expired"}
+                                : req.status === "DISABLED"
+                                  ? "Paused"
+                                  : "Expired"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 pt-1 border-t border-neutral-200/50">
@@ -2305,6 +2850,23 @@ export function PortfolioView({
                             >
                               {copiedKey === req.id ? "Copied!" : "Copy Link"}
                             </button>
+                            {req.status === "DISABLED" && (
+                              <button
+                                type="button"
+                                disabled={togglingPaymentRequestId === req.id}
+                                onClick={() =>
+                                  void handleTogglePaymentRequestStatus(
+                                    req,
+                                    "ACTIVE",
+                                  )
+                                }
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-[#FF1A1A] hover:underline ml-auto disabled:opacity-40 cursor-pointer"
+                              >
+                                {togglingPaymentRequestId === req.id
+                                  ? "Updating…"
+                                  : "Resume"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))
@@ -2529,6 +3091,101 @@ export function PortfolioView({
           setCrossChainSourceToken(t);
         }}
       />
+
+      {/* Payment Links Directory Modal */}
+      {paymentLinksModalFilter && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Payment links"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
+        >
+          <div className="w-full max-w-xl rounded-[28px] border border-neutral-200 bg-white p-6 shadow-xl space-y-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between">
+              <h2 className="font-serif text-xl text-neutral-950">
+                {paymentLinksModalFilter === "ACTIVE"
+                  ? "Active Payment Links"
+                  : "Past Payment Links"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setPaymentLinksModalFilter(null)}
+                className="rounded-full px-3 py-1 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-800 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+            <div className="space-y-3 overflow-y-auto pr-1">
+              {paymentRequests
+                .filter((r) =>
+                  paymentLinksModalFilter === "ACTIVE"
+                    ? r.status === "ACTIVE"
+                    : r.status !== "ACTIVE",
+                )
+                .map((req) => (
+                  <div
+                    key={req.id}
+                    className="p-3.5 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 flex flex-col gap-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-bold text-neutral-950">
+                          {req.title}
+                        </div>
+                        <div className="text-[11px] text-neutral-500">
+                          {req.amountMode === "FIXED"
+                            ? `${req.displayAmount} ${req.destinationAssetSymbol} • ${req.destinationNetwork}`
+                            : `Open amount • ${req.destinationNetwork}`}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-neutral-200 text-neutral-700">
+                        {req.status === "ACTIVE"
+                          ? "Active"
+                          : req.status === "DISABLED"
+                            ? "Paused"
+                            : req.status === "COMPLETED"
+                              ? "Completed"
+                              : "Expired"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/pay/${req.publicId}`}
+                        target="_blank"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-800 hover:bg-neutral-100"
+                      >
+                        View
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => copyText(req.id, req.shareUrl)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-800 hover:bg-neutral-100 cursor-pointer"
+                      >
+                        {copiedKey === req.id ? "Copied!" : "Copy Link"}
+                      </button>
+                      {(req.status === "ACTIVE" ||
+                        req.status === "DISABLED") && (
+                        <button
+                          type="button"
+                          disabled={togglingPaymentRequestId === req.id}
+                          onClick={() =>
+                            void handleTogglePaymentRequestStatus(
+                              req,
+                              req.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-600 hover:text-neutral-950 ml-auto cursor-pointer"
+                        >
+                          {req.status === "ACTIVE" ? "Pause" : "Resume"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

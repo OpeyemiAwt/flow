@@ -47,13 +47,18 @@ const securityPurpose = z.enum([
   "disable-email",
   "revoke-all",
   "team-change",
+  "transfer-authorize",
 ]);
 const securityStart = z
   .strictObject({
     purpose: securityPurpose,
     target: z.uuid().optional(),
   })
-  .refine(({ purpose, target }) => (purpose === "team-change") === !!target);
+  .refine(
+    ({ purpose, target }) =>
+      (purpose === "team-change" || purpose === "transfer-authorize") ===
+      !!target,
+  );
 type SecurityPurpose = z.infer<typeof securityPurpose>;
 
 const nonce = () => randomBytes(32).toString("hex");

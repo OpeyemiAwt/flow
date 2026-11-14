@@ -10,6 +10,7 @@ import {
 } from "../src/foundation/prisma.ts";
 import { readWalletConfig } from "../src/foundation/wallet-environment.ts";
 import { OutLayerAdapter } from "../src/server/custody/outlayer-adapter.ts";
+import { processOutgoingTransferCycle } from "../src/server/custody/outgoing-executor.ts";
 import { WalletProvisioningWorker } from "../src/server/custody/provisioning-worker.ts";
 
 async function main(): Promise<void> {
@@ -50,9 +51,9 @@ async function main(): Promise<void> {
     await disconnectPrismaClients();
     return;
   }
-  if (mode !== "provision") {
+  if (mode !== "provision" && mode !== "execute") {
     throw new Error(
-      "FLOW_CUSTODY_WORKER_MODE must be provision or heartbeat-only.",
+      "FLOW_CUSTODY_WORKER_MODE must be provision, execute, or heartbeat-only.",
     );
   }
   const walletConfig = readWalletConfig(process.env, {
@@ -72,6 +73,7 @@ async function main(): Promise<void> {
     throw new Error("FLOW_CUSTODY_REGISTRATION_ACCOUNT_ID must be a UUID.");
   }
   if (
+    mode === "provision" &&
     registrationAuthorized &&
     (config.environment !== "staging" ||
       walletConfig.compatibility.mode !== "disabled" ||
@@ -79,6 +81,15 @@ async function main(): Promise<void> {
   ) {
     throw new Error(
       "Controlled registration requires staging, compatibility disabled, and one valid authorized account ID.",
+    );
+  }
+  if (
+    mode === "execute" &&
+    registrationAuthorized &&
+    walletConfig.compatibility.mode !== "disabled"
+  ) {
+    throw new Error(
+      "Execute mode registration requires provider compatibility mode to be disabled.",
     );
   }
   const providerEnvironment = walletConfig.compatibility.authorizationId
@@ -100,8 +111,9 @@ async function main(): Promise<void> {
     );
   }
 
+  const db = getPrismaClient("custody");
   const worker = new WalletProvisioningWorker({
-    db: getPrismaClient("custody"),
+    db,
     adapter,
     walletConfig,
     workerId,
@@ -111,11 +123,31 @@ async function main(): Promise<void> {
     allowNewRegistrations: registrationAuthorized,
   });
 
+  let outgoingTimer: ReturnType<typeof setInterval> | null = null;
+  let outgoingInFlight = false;
+  if (mode === "execute") {
+    outgoingTimer = setInterval(() => {
+      if (stopping || outgoingInFlight) return;
+      outgoingInFlight = true;
+      void processOutgoingTransferCycle(db, adapter, walletConfig, workerId)
+        .catch((error: unknown) => {
+          log("error", "custody_outgoing_cycle_failed", {
+            workerId,
+            reason: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+          });
+        })
+        .finally(() => {
+          outgoingInFlight = false;
+        });
+    }, pollIntervalMs);
+  }
+
   let stopping = false;
   const shutdown = async (signal: string) => {
     if (stopping) return;
     stopping = true;
-    log("info", "custody_worker_shutdown", { workerId, signal });
+    if (outgoingTimer) clearInterval(outgoingTimer);
+    log("info", "custody_worker_shutdown", { workerId, signal, mode });
     await worker.stop();
     await disconnectPrismaClients();
     process.exit(0);
@@ -125,8 +157,9 @@ async function main(): Promise<void> {
 
   log("info", "custody_worker_started", {
     workerId,
+    mode,
     databaseRole: config.database.role,
-    registrationEnabled: false,
+    registrationEnabled: registrationAuthorized,
     environment: providerEnvironment,
     registrationAccountAuthorized: registrationAuthorized,
   });

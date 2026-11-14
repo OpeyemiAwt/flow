@@ -260,8 +260,21 @@ export function assertIndexerEnvironment(source: EnvironmentInput): void {
 export function assertCustodyEnvironment(source: EnvironmentInput): void {
   assertCredentialScope(source, "custody");
   const heartbeatOnly = source.FLOW_CUSTODY_WORKER_MODE === "heartbeat-only";
+  const executeMode = source.FLOW_CUSTODY_WORKER_MODE === "execute";
   if (!heartbeatOnly && !source.FLOW_WALLET_ENCRYPTION_KEY) {
     invalidConfig("Custody worker encryption configuration is required.");
+  }
+  if (executeMode) {
+    if (
+      source.FLOW_EXECUTION === "enabled" &&
+      source.FLOW_PROVIDER_COMPATIBILITY_MODE &&
+      source.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+    ) {
+      invalidConfig(
+        "Custody worker execute mode requires provider compatibility mode to remain disabled.",
+      );
+    }
+    return;
   }
   if (source.FLOW_EXECUTION !== "disabled") {
     invalidConfig("Custody worker requires FLOW_EXECUTION=disabled.");

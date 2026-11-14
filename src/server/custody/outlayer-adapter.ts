@@ -28,11 +28,21 @@ export type SanitizedProviderErrorCode =
   | "CORRELATION_ERROR"
   | "INVALID_ADDRESS";
 
+export type OutLayerEndpoint =
+  | "/register"
+  | "/wallet/v1/address"
+  | "/wallet/v1/policy"
+  | "/wallet/v1/transfer"
+  | "/wallet/v1/call"
+  | "/wallet/v1/evm/sign-transaction"
+  | "/wallet/v1/solana/sign-transaction"
+  | "/wallet/v1/requests";
+
 export interface SanitizedProviderError {
   readonly classification: SanitizedProviderErrorCode;
   readonly safeMessage: string;
   readonly httpStatus?: number;
-  readonly endpoint?: "/register" | "/wallet/v1/address" | "/wallet/v1/policy";
+  readonly endpoint?: OutLayerEndpoint;
   readonly chain?: OutLayerChain;
 }
 
@@ -44,8 +54,7 @@ export interface SanitizedProviderError {
 export function classifyProviderError(
   status: number | null,
   context?: {
-    readonly endpoint?:
-      "/register" | "/wallet/v1/address" | "/wallet/v1/policy";
+    readonly endpoint?: OutLayerEndpoint;
     readonly chain?: OutLayerChain;
   },
 ): SanitizedProviderError {
@@ -190,6 +199,37 @@ export type OutLayerRegisterResult = z.infer<typeof registerResponseSchema>;
 export type OutLayerAddressResult = z.infer<typeof addressResponseSchema>;
 export type OutLayerPolicyResult = TrustedProviderPolicyEvidence;
 
+const transferOrCallResponseSchema = z.object({
+  request_id: z.string().min(1),
+  status: z.string().min(1),
+  tx_hash: z.string().nullable().optional(),
+  approval_id: z.string().nullable().optional(),
+  poll_url: z.string().nullable().optional(),
+});
+
+const signTransactionResponseSchema = z.object({
+  signature: z.string().min(1),
+  chain: z.string().min(1),
+  wallet_id: z.string().min(1),
+});
+
+const requestStatusResponseSchema = z.object({
+  request_id: z.string().min(1),
+  type: z.string().min(1),
+  status: z.string().min(1),
+  result: z.unknown().optional(),
+});
+
+export type OutLayerTransferOrCallResult = z.infer<
+  typeof transferOrCallResponseSchema
+>;
+export type OutLayerSignTransactionResult = z.infer<
+  typeof signTransactionResponseSchema
+>;
+export type OutLayerRequestStatusResult = z.infer<
+  typeof requestStatusResponseSchema
+>;
+
 /**
  * Strips any one-time bearer credential (`key`, `api_key`, `token`, or `wk_...`)
  * from an OutLayer handoff URL before persisting it to `flow.wallets.handoff_url`.
@@ -274,15 +314,42 @@ export class OutLayerAdapter {
     }
 
     // Remote endpoint reachability check:
-    // 1. Live financial execution must be disabled in FLOW
     if (!isFinancialExecutionDisabled()) {
-      throw new FlowError(
-        "INVALID_CONFIGURATION",
-        "Live OutLayer network requests are prohibited while FLOW_EXECUTION is not disabled.",
-      );
+      // Live execution path: compatibility rehearsal mode cannot remain enabled.
+      if (this.compatibilityConfig?.mode === "authorized") {
+        throw new FlowError(
+          "INVALID_CONFIGURATION",
+          "Provider compatibility mode cannot remain authorized when FLOW_EXECUTION is enabled.",
+        );
+      }
+      if (!ALLOWED_OUTLAYER_HOSTS.includes(parsed.hostname.toLowerCase())) {
+        throw new FlowError(
+          "INVALID_CONFIGURATION",
+          `OutLayer host ${parsed.hostname} is not in the authorized OutLayer host allowlist.`,
+        );
+      }
+      const ALLOWED_LIVE_ENDPOINTS = new Set([
+        "/register",
+        "/wallet/v1/address",
+        "/wallet/v1/policy",
+        "/wallet/v1/transfer",
+        "/wallet/v1/call",
+        "/wallet/v1/evm/sign-transaction",
+        "/wallet/v1/solana/sign-transaction",
+      ]);
+      if (
+        !ALLOWED_LIVE_ENDPOINTS.has(endpointPath) &&
+        !endpointPath.startsWith("/wallet/v1/requests/")
+      ) {
+        throw new FlowError(
+          "INVALID_CONFIGURATION",
+          `OutLayer endpoint ${endpointPath} is not in the authorized OutLayer endpoint allowlist.`,
+        );
+      }
+      return;
     }
 
-    // 2. Separate fail-closed Provider Compatibility Mode check
+    // 2. Separate fail-closed Provider Compatibility Mode check when FLOW_EXECUTION=disabled
     if (
       !this.compatibilityConfig ||
       this.compatibilityConfig.mode !== "authorized"
@@ -621,6 +688,273 @@ export class OutLayerAdapter {
     }
 
     return mintTrustedAdapterPolicyEvidence(parsed.data);
+  }
+
+  private assertLiveExecutionEnabled(): void {
+    if (isFinancialExecutionDisabled()) {
+      throw new FlowError(
+        "CUSTODY_EXECUTION_BLOCKED",
+        "Custody signing and transfer operations are strictly prohibited while FLOW_EXECUTION=disabled.",
+      );
+    }
+  }
+
+  /**
+   * Executes a native NEAR transfer via OutLayer (`POST /wallet/v1/transfer`).
+   * Strictly gated on FLOW_EXECUTION != disabled.
+   */
+  async transferNearNative(
+    apiKey: string,
+    input: {
+      readonly to: string;
+      readonly amountYocto: string;
+      readonly chain?: "near";
+    },
+  ): Promise<OutLayerTransferOrCallResult> {
+    this.assertLiveExecutionEnabled();
+    const response = await this.fetchWithTimeout("/wallet/v1/transfer", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        chain: input.chain ?? "near",
+        to: input.to,
+        amount: input.amountYocto,
+      }),
+    });
+
+    if (!response.ok) {
+      const sanitized = classifyProviderError(response.status, {
+        endpoint: "/wallet/v1/transfer",
+        chain: "near",
+      });
+      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+    }
+
+    const json = await response.json().catch(() => {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "Invalid JSON received from OutLayer transfer endpoint.",
+      );
+    });
+    const parsed = transferOrCallResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "OutLayer transfer response schema mismatch.",
+      );
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Executes a NEAR contract call (e.g. NEP-141 ft_transfer / storage_deposit)
+   * via OutLayer (`POST /wallet/v1/call`). Strictly gated on FLOW_EXECUTION != disabled.
+   */
+  async callNearContract(
+    apiKey: string,
+    input: {
+      readonly receiverId: string;
+      readonly methodName: string;
+      readonly args?: Record<string, unknown>;
+      readonly argsBase64?: string;
+      readonly gas?: string;
+      readonly deposit?: string;
+    },
+  ): Promise<OutLayerTransferOrCallResult> {
+    this.assertLiveExecutionEnabled();
+    const response = await this.fetchWithTimeout("/wallet/v1/call", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        receiver_id: input.receiverId,
+        method_name: input.methodName,
+        ...(input.args !== undefined ? { args: input.args } : {}),
+        ...(input.argsBase64 !== undefined
+          ? { args_base64: input.argsBase64 }
+          : {}),
+        ...(input.gas !== undefined ? { gas: input.gas } : {}),
+        ...(input.deposit !== undefined ? { deposit: input.deposit } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const sanitized = classifyProviderError(response.status, {
+        endpoint: "/wallet/v1/call",
+        chain: "near",
+      });
+      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+    }
+
+    const json = await response.json().catch(() => {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "Invalid JSON received from OutLayer contract call endpoint.",
+      );
+    });
+    const parsed = transferOrCallResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "OutLayer contract call response schema mismatch.",
+      );
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Signs an unsigned RLP-serialized EVM transaction via OutLayer
+   * (`POST /wallet/v1/evm/sign-transaction`).
+   */
+  async signEvmTransaction(
+    apiKey: string,
+    input: {
+      readonly chain:
+        | "ethereum"
+        | "base"
+        | "polygon"
+        | "arbitrum"
+        | "optimism"
+        | "bsc"
+        | "avalanche";
+      readonly unsignedTxHex: string;
+    },
+  ): Promise<OutLayerSignTransactionResult> {
+    this.assertLiveExecutionEnabled();
+    const response = await this.fetchWithTimeout(
+      "/wallet/v1/evm/sign-transaction",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          chain: input.chain,
+          unsigned_tx: input.unsignedTxHex,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const sanitized = classifyProviderError(response.status, {
+        endpoint: "/wallet/v1/evm/sign-transaction",
+        chain: input.chain,
+      });
+      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+    }
+
+    const json = await response.json().catch(() => {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "Invalid JSON received from OutLayer EVM sign endpoint.",
+      );
+    });
+    const parsed = signTransactionResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "OutLayer EVM sign response schema mismatch.",
+      );
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Signs an unsigned base64-encoded Solana transaction message via OutLayer
+   * (`POST /wallet/v1/solana/sign-transaction`).
+   */
+  async signSolanaTransaction(
+    apiKey: string,
+    input: {
+      readonly unsignedTxBase64: string;
+      readonly chain?: "solana";
+    },
+  ): Promise<OutLayerSignTransactionResult> {
+    this.assertLiveExecutionEnabled();
+    const response = await this.fetchWithTimeout(
+      "/wallet/v1/solana/sign-transaction",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          chain: input.chain ?? "solana",
+          unsigned_tx: input.unsignedTxBase64,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const sanitized = classifyProviderError(response.status, {
+        endpoint: "/wallet/v1/solana/sign-transaction",
+        chain: "solana",
+      });
+      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+    }
+
+    const json = await response.json().catch(() => {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "Invalid JSON received from OutLayer Solana sign endpoint.",
+      );
+    });
+    const parsed = signTransactionResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "OutLayer Solana sign response schema mismatch.",
+      );
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Polls an async OutLayer wallet request status (`GET /wallet/v1/requests/{id}`).
+   */
+  async getRequestStatus(
+    apiKey: string,
+    requestId: string,
+  ): Promise<OutLayerRequestStatusResult> {
+    this.assertLiveExecutionEnabled();
+    const response = await this.fetchWithTimeout(
+      `/wallet/v1/requests/${encodeURIComponent(requestId)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const sanitized = classifyProviderError(response.status, {
+        endpoint: "/wallet/v1/requests",
+      });
+      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+    }
+
+    const json = await response.json().catch(() => {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "Invalid JSON received from OutLayer request status endpoint.",
+      );
+    });
+    const parsed = requestStatusResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        "OutLayer request status response schema mismatch.",
+      );
+    }
+    return parsed.data;
   }
 
   /**

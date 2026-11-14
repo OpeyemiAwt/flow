@@ -87,6 +87,9 @@ export function CheckoutView({ request }: CheckoutViewProps) {
   // Deposit Instructions & Settlement Lifecycle State
   const [instructions, setInstructions] =
     useState<PaymentDepositInstructions | null>(request.activeAttempt ?? null);
+  const [committing, setCommitting] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
+  const [directVisible, setDirectVisible] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState<boolean>(false);
   const [copiedMemo, setCopiedMemo] = useState<boolean>(false);
   const [depositSecondsRemaining, setDepositSecondsRemaining] =
@@ -356,7 +359,7 @@ export function CheckoutView({ request }: CheckoutViewProps) {
         if (
           data.requestVersion !== requestVersion ||
           data.payerMode !== payerMode ||
-          data.isExecutionDisabled !== true ||
+          typeof data.isExecutionDisabled !== "boolean" ||
           data.identity?.operationId !== request.publicId ||
           data.identity.sourceNetwork !== selectedSource?.networkKey ||
           data.identity.destinationNetwork !== request.destinationNetwork ||
@@ -1617,12 +1620,125 @@ export function CheckoutView({ request }: CheckoutViewProps) {
                     </div>
                   </div>
 
+                  {commitError && (
+                    <div
+                      role="alert"
+                      className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-[#FF1A1A]"
+                    >
+                      {commitError}
+                    </div>
+                  )}
+
+                  {directVisible && isDirect && payerMode === "WALLET" && (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-emerald-900">
+                          Direct {request.destinationAssetSymbol} Payment
+                        </span>
+                        <span className="text-[11px] text-emerald-700 font-medium">
+                          {request.destinationNetwork}
+                        </span>
+                      </div>
+                      <div className="flex justify-center py-2">
+                        <QrCode
+                          value={request.recipientAddress || ""}
+                          size={140}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 font-mono text-[11px]">
+                        <span className="truncate select-all text-neutral-800">
+                          {request.recipientAddress}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopyRecipientAddress}
+                          className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline"
+                        >
+                          {copiedRecipientAddress ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-emerald-800">
+                        Send exactly {quotedSendAmount ?? "—"}{" "}
+                        {selectedSource?.symbol} on {request.destinationNetwork}
+                        . Deposits to this verified address settle directly into
+                        the recipient’s wallet.
+                      </p>
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    disabled
-                    className="w-full py-4 rounded-full text-xs sm:text-sm font-semibold bg-neutral-900 text-white cursor-not-allowed"
+                    disabled={
+                      committing ||
+                      isReadOnly ||
+                      (quoteSecondsRemaining <= 0 &&
+                        !(
+                          isDirect &&
+                          payerMode === "WALLET" &&
+                          Boolean(directDisplay)
+                        )) ||
+                      (!quote?.attemptPublicId &&
+                        !(
+                          isDirect &&
+                          payerMode === "WALLET" &&
+                          Boolean(directDisplay)
+                        ))
+                    }
+                    onClick={async () => {
+                      setCommitError(null);
+                      if (isDirect && payerMode === "WALLET") {
+                        setDirectVisible(true);
+                        return;
+                      }
+                      if (!quote?.attemptPublicId) return;
+                      setCommitting(true);
+                      try {
+                        const res = await fetch(
+                          `/api/pay/${request.publicId}/commit`,
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              attemptPublicId: quote.attemptPublicId,
+                              payerRefundAddress: trimmedRefund || undefined,
+                            }),
+                          },
+                        );
+                        const data = (await res.json().catch(() => ({}))) as
+                          | PaymentDepositInstructions
+                          | { error?: string; detail?: string };
+                        if (!res.ok) {
+                          const err = data as {
+                            error?: string;
+                            detail?: string;
+                          };
+                          const msg =
+                            err.detail ||
+                            err.error ||
+                            "Failed to generate deposit instructions.";
+                          setCommitError(
+                            msg.includes("PAYMENT_EXECUTION_DISABLED")
+                              ? "Payment execution is temporarily paused while live release checks finish."
+                              : msg,
+                          );
+                          return;
+                        }
+                        setInstructions(data as PaymentDepositInstructions);
+                      } catch {
+                        setCommitError(
+                          "Network error committing payment instructions. Please try again.",
+                        );
+                      } finally {
+                        setCommitting(false);
+                      }
+                    }}
+                    className="w-full py-4 rounded-full text-xs sm:text-sm font-semibold bg-neutral-950 hover:bg-[#FF1A1A] disabled:bg-neutral-300 disabled:text-neutral-500 text-white transition-colors cursor-pointer disabled:cursor-not-allowed"
                   >
-                    Pay Now (Payment Execution Disabled)
+                    {committing
+                      ? "Generating Deposit Instructions…"
+                      : isDirect && payerMode === "WALLET"
+                        ? "Show Direct Deposit Address"
+                        : "Pay Now"}
                   </button>
                 </div>
               ) : (

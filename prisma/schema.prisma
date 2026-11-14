@@ -169,9 +169,13 @@ model FlowUser {
   createdAt       DateTime            @default(now()) @map("created_at")
   authUser        AuthUser            @relation(fields: [authUserId], references: [id], onDelete: Restrict)
   personalAccount FlowAccount?
-  memberships     AccountMembership[]
-  sentInvites     AccountInvite[]
-  businessKeys    BusinessCreation[]
+  memberships        AccountMembership[]
+  sentInvites        AccountInvite[]
+  businessKeys       BusinessCreation[]
+  profilePreference  UserProfilePreference?
+  notificationPrefs  AccountNotificationPreference[]
+  addMoneyIntents    AddMoneyIntent[]
+  outgoingTransfers  OutgoingTransferJob[]
 
   @@map("users")
   @@schema("flow")
@@ -192,8 +196,11 @@ model FlowAccount {
   recoveryApprovals CustodyRecoveryApproval[]
   refreshLease    PortfolioRefreshLease?
   activities      WalletActivity[]
-  paymentRequests PaymentRequest[]
-  ledgerAccounts  LedgerAccount[]
+  paymentRequests   PaymentRequest[]
+  ledgerAccounts    LedgerAccount[]
+  notificationPrefs AccountNotificationPreference[]
+  addMoneyIntents   AddMoneyIntent[]
+  outgoingTransfers OutgoingTransferJob[]
 
   @@unique([id, kind])
   @@map("accounts")
@@ -306,6 +313,8 @@ model FlowWallet {
   capabilities        WalletCapability[]
   balances            WalletBalance[]
   activities          WalletActivity[]
+  addMoneyIntents     AddMoneyIntent[]
+  outgoingTransfers   OutgoingTransferJob[]
 
   @@index([providerWalletId])
   @@map("wallets")
@@ -810,3 +819,130 @@ model OperatorApprovalAssertion {
 }
 
 
+
+model UserProfilePreference {
+  userId        String   @id @map("user_id") @db.Uuid
+  displayName   String?  @map("display_name") @db.VarChar(80)
+  avatarDataUrl String?  @map("avatar_data_url") @db.Text
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user          FlowUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profile_preferences")
+  @@schema("flow")
+}
+
+model AccountNotificationPreference {
+  accountId           String      @map("account_id") @db.Uuid
+  userId              String      @map("user_id") @db.Uuid
+  incomingPayments    Boolean     @default(true) @map("incoming_payments")
+  paymentLinkActivity Boolean     @default(true) @map("payment_link_activity")
+  securityAlerts      Boolean     @default(true) @map("security_alerts")
+  updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  account             FlowAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user                FlowUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, userId])
+  @@map("account_notification_preferences")
+  @@schema("flow")
+}
+
+model AddMoneyIntent {
+  id                             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicId                       String      @unique @map("public_id") @db.VarChar(64)
+  accountId                      String      @map("account_id") @db.Uuid
+  walletId                       String      @map("wallet_id") @db.Uuid
+  createdByUserId                String      @map("created_by_user_id") @db.Uuid
+  idempotencyKey                 String      @map("idempotency_key") @db.Uuid
+  sourceNetwork                  String      @map("source_network") @db.VarChar(64)
+  sourceAssetId                  String      @map("source_asset_id") @db.VarChar(128)
+  sourceAssetSymbol              String      @map("source_asset_symbol") @db.VarChar(32)
+  sourceDecimals                 Int         @map("source_decimals")
+  destinationNetwork             String      @default("near-mainnet") @map("destination_network") @db.VarChar(64)
+  destinationAssetId             String      @default("near-mainnet:NEAR") @map("destination_asset_id") @db.VarChar(128)
+  destinationAssetSymbol         String      @default("NEAR") @map("destination_asset_symbol") @db.VarChar(32)
+  destinationDecimals            Int         @default(24) @map("destination_decimals")
+  destinationAddress             String      @map("destination_address") @db.VarChar(256)
+  refundAddress                  String      @map("refund_address") @db.VarChar(256)
+  quotedSourceAtomicAmount       Decimal     @map("quoted_source_atomic_amount") @db.Decimal(78, 0)
+  quotedDestinationAtomicAmount  Decimal     @map("quoted_destination_atomic_amount") @db.Decimal(78, 0)
+  minDestinationAtomicAmount     Decimal?    @map("min_destination_atomic_amount") @db.Decimal(78, 0)
+  estimatedDurationSeconds       Int?        @map("estimated_duration_seconds")
+  providerFees                   Json        @default("{}") @map("provider_fees") @db.JsonB
+  providerCorrelationId          String?     @map("provider_correlation_id") @db.VarChar(128)
+  providerSignature              String?     @map("provider_signature") @db.Text
+  depositAddress                 String?     @map("deposit_address") @db.VarChar(256)
+  depositMemo                    String?     @map("deposit_memo") @db.VarChar(128)
+  depositDeadline                DateTime?   @map("deposit_deadline") @db.Timestamptz(3)
+  depositInstructions            Json        @default("{}") @map("deposit_instructions") @db.JsonB
+  sourceTxHash                   String?     @map("source_tx_hash") @db.VarChar(128)
+  destinationTxHash              String?     @map("destination_tx_hash") @db.VarChar(128)
+  status                         String      @default("DEPOSIT_COMMITTED") @db.VarChar(32)
+  settlementError                String?     @map("settlement_error") @db.Text
+  settledAt                      DateTime?   @map("settled_at") @db.Timestamptz(3)
+  monitoringLeaseWorkerId        String?     @map("monitoring_lease_worker_id") @db.VarChar(64)
+  monitoringLeaseExpiresAt       DateTime?   @map("monitoring_lease_expires_at") @db.Timestamptz(3)
+  lastPolledAt                   DateTime?   @map("last_polled_at") @db.Timestamptz(3)
+  pollCount                      Int         @default(0) @map("poll_count")
+  createdAt                      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                      DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  account                        FlowAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  wallet                         FlowWallet  @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  createdByUser                  FlowUser    @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([accountId, idempotencyKey])
+  @@index([accountId, createdAt(sort: Desc)])
+  @@index([status, monitoringLeaseExpiresAt])
+  @@map("add_money_intents")
+  @@schema("flow")
+}
+
+model OutgoingTransferJob {
+  id                              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicId                        String      @unique @map("public_id") @db.VarChar(64)
+  accountId                       String      @map("account_id") @db.Uuid
+  walletId                        String      @map("wallet_id") @db.Uuid
+  createdByUserId                 String      @map("created_by_user_id") @db.Uuid
+  idempotencyKey                  String      @map("idempotency_key") @db.Uuid
+  jobKind                         String      @map("job_kind") @db.VarChar(16)
+  sourceNetwork                   String      @map("source_network") @db.VarChar(64)
+  sourceAssetId                   String      @map("source_asset_id") @db.VarChar(128)
+  sourceAssetSymbol               String      @map("source_asset_symbol") @db.VarChar(32)
+  sourceDecimals                  Int         @map("source_decimals")
+  sourceAtomicAmount              Decimal     @map("source_atomic_amount") @db.Decimal(78, 0)
+  recipientAddress                String      @map("recipient_address") @db.VarChar(256)
+  destinationNetwork              String      @map("destination_network") @db.VarChar(64)
+  destinationAssetId              String      @map("destination_asset_id") @db.VarChar(128)
+  destinationAssetSymbol          String      @map("destination_asset_symbol") @db.VarChar(32)
+  destinationDecimals             Int         @map("destination_decimals")
+  expectedDestinationAtomicAmount Decimal?    @map("expected_destination_atomic_amount") @db.Decimal(78, 0)
+  minDestinationAtomicAmount      Decimal?    @map("min_destination_atomic_amount") @db.Decimal(78, 0)
+  providerCorrelationId           String?     @map("provider_correlation_id") @db.VarChar(128)
+  providerDepositAddress          String?     @map("provider_deposit_address") @db.VarChar(256)
+  providerDepositMemo             String?     @map("provider_deposit_memo") @db.VarChar(128)
+  providerDeadline                DateTime?   @map("provider_deadline") @db.Timestamptz(3)
+  providerQuotePayload            Json        @default("{}") @map("provider_quote_payload") @db.JsonB
+  status                          String      @default("PENDING_CUSTODY") @db.VarChar(32)
+  fencingToken                    BigInt      @default(0) @map("fencing_token")
+  leaseHolder                     String?     @map("lease_holder") @db.VarChar(128)
+  leaseExpiresAt                  DateTime?   @map("lease_expires_at") @db.Timestamptz(3)
+  providerRequestId               String?     @map("provider_request_id") @db.VarChar(128)
+  sourceTxHash                    String?     @map("source_tx_hash") @db.VarChar(128)
+  destinationTxHash               String?     @map("destination_tx_hash") @db.VarChar(128)
+  feeAtomicAmount                 Decimal?    @map("fee_atomic_amount") @db.Decimal(78, 0)
+  errorCode                       String?     @map("error_code") @db.VarChar(64)
+  errorMessage                    String?     @map("error_message") @db.Text
+  authorizedAt                    DateTime    @default(now()) @map("authorized_at") @db.Timestamptz(3)
+  broadcastAt                     DateTime?   @map("broadcast_at") @db.Timestamptz(3)
+  settledAt                       DateTime?   @map("settled_at") @db.Timestamptz(3)
+  createdAt                       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  account                         FlowAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  wallet                          FlowWallet  @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  createdByUser                   FlowUser    @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([accountId, idempotencyKey])
+  @@index([accountId, createdAt(sort: Desc)])
+  @@index([status, leaseExpiresAt])
+  @@map("outgoing_transfer_jobs")
+  @@schema("flow")
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  hydrateProfilePreferencesOnce,
   PROFILE_PREFERENCE_EVENT,
   readProfilePreference,
 } from "./profile-preferences.ts";
@@ -27,6 +28,7 @@ export function UserAvatar({
     const sync = () =>
       setSrc(readProfilePreference(profileId, "avatar") || defaultSrc);
     sync();
+    void hydrateProfilePreferencesOnce(profileId);
     window.addEventListener(PROFILE_PREFERENCE_EVENT, sync);
     return () => window.removeEventListener(PROFILE_PREFERENCE_EVENT, sync);
   }, [defaultSrc, profileId]);
