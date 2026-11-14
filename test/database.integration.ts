@@ -11,6 +11,8 @@ import {
 } from "../src/server/custody/near-policy-sponsor.ts";
 import { after, test } from "node:test";
 import pg from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../src/generated/prisma/client.ts";
 import {
   encodeBase58,
   evaluateWalletFundReadiness,
@@ -10017,7 +10019,9 @@ test("database integration: M37 automated NEAR policy sponsorship RLS isolation,
     },
   };
 
-  const custodyDb = getPrismaClient("custody");
+  const custodyDb = new PrismaClient({
+    adapter: new PrismaPg(custodyPool, { schema: "flow" }),
+  });
   const testKeyHex =
     "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
 
@@ -10224,6 +10228,7 @@ test("database integration: M37 automated NEAR policy sponsorship RLS isolation,
       SET circuit_open = false, consecutive_failures = 0, opened_at = NULL, opened_reason = NULL
       WHERE id = 'DEFAULT'
     `;
+    await custodyDb.$disconnect();
     await mockServer.close();
   }
 });
