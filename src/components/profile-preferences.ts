@@ -1,4 +1,48 @@
 export const PROFILE_PREFERENCE_EVENT = "flow-profile-preference-change";
+export const BALANCE_VISIBILITY_EVENT = "flow-balance-visibility-change";
+export const THEME_CHANGE_EVENT = "flow-theme-change";
+
+export function readBalanceHidden(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem("flow-hide-balance") === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function writeBalanceHidden(hidden: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem("flow-hide-balance", hidden ? "true" : "false");
+  } catch {
+    // ignore storage errors
+  }
+  window.dispatchEvent(new Event(BALANCE_VISIBILITY_EVENT));
+}
+
+export function readIsDarkTheme(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      document.documentElement.classList.contains("dark") ||
+      window.localStorage.getItem("flow-theme") === "dark"
+    );
+  } catch {
+    return document.documentElement.classList.contains("dark");
+  }
+}
+
+export function applyDarkTheme(next: boolean): void {
+  if (typeof window === "undefined") return;
+  document.documentElement.classList.toggle("dark", next);
+  try {
+    window.localStorage.setItem("flow-theme", next ? "dark" : "light");
+  } catch {
+    // ignore storage errors
+  }
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+}
 
 export type ProfilePreference =
   | "name"

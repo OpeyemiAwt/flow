@@ -512,8 +512,8 @@ export function CheckoutView({
     Boolean(instructions.destinationTxHash);
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-neutral-950 relative overflow-hidden">
-      {/* Top-Right & Bottom-Left Red Diagonal Wave Accents (Matches Flow Crypto Payment Checkout.png) */}
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0B0B] text-neutral-950 dark:text-neutral-100 relative overflow-hidden transition-colors duration-200">
+      {/* Top-Right & Bottom-Left Red Diagonal Wave Accents */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -top-10 right-0 w-[340px] sm:w-[500px] h-[200px] z-0 overflow-hidden"
@@ -544,14 +544,14 @@ export function CheckoutView({
         </Link>
 
         <div className="flex items-center gap-2.5">
-          <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3.5 py-1.5 text-xs font-medium text-neutral-700 shadow-2xs">
+          <span className="hidden sm:inline-flex items-center gap-1.5 px-2 text-xs font-medium text-neutral-700 dark:text-neutral-300">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             Secure Checkout
           </span>
           <button
             onClick={handleCopyLink}
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-4 py-1.5 text-xs font-semibold text-neutral-900 shadow-2xs hover:bg-neutral-50 transition-colors"
+            className="flow-liquid-btn inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
           >
             {copiedLink ? (
               <>
@@ -575,7 +575,7 @@ export function CheckoutView({
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#FF1A1A]">
             {isCompletedReceipt ? "PAYMENT RECEIPT" : "FLOW CHECKOUT"}
           </p>
-          <h1 className="mt-1 font-serif text-3xl sm:text-[44px] font-normal tracking-[-0.02em] text-neutral-950 leading-[1.08]">
+          <h1 className="mt-1 font-serif text-3xl sm:text-[44px] font-normal tracking-[-0.02em] text-neutral-950 dark:text-white leading-[1.08]">
             {isCompletedReceipt ? (
               "Payment Successful"
             ) : isReadOnly ? (
@@ -601,7 +601,7 @@ export function CheckoutView({
               </>
             )}
           </h1>
-          <p className="mt-2 text-sm text-neutral-600">
+          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
             {isCompletedReceipt
               ? "Your payment has been verified on-chain and settled to the recipient."
               : isReadOnly
@@ -612,61 +612,68 @@ export function CheckoutView({
 
         {/* Expired Banner */}
         {isExpired && !isCompletedReceipt && (
-          <div className="rounded-[20px] border border-red-200 bg-red-50 p-4 text-sm text-[#FF1A1A]">
+          <div className="rounded-[20px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-4 text-sm text-[#FF1A1A] dark:text-red-400">
             <strong>Payment Request Expired:</strong> This payment request is
             past its expiration deadline and cannot accept new payments.
           </div>
         )}
 
         {/* ===================================================================
-            COMPLETED RECEIPT VIEW (Matches Flow Payment Successful Receipt-4.png & 08_56_36 PM-10.png)
+            COMPLETED RECEIPT VIEW
            =================================================================== */}
         {isCompletedReceipt ? (
-          <div className="mx-auto max-w-2xl rounded-[28px] border border-neutral-200/90 bg-white p-6 sm:p-10 shadow-md space-y-6">
+          <div className="mx-auto max-w-2xl rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-10 shadow-md space-y-6">
             <div className="flex flex-col items-center text-center space-y-3">
               <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#FF1A1A] text-white shadow-lg">
                 <IconCheck size={30} />
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 Paid &amp; Settled
               </span>
-              <h2 className="font-serif text-3xl text-neutral-950">
+              <h2 className="font-serif text-3xl text-neutral-950 dark:text-white">
                 Payment Completed!
               </h2>
-              <p className="text-sm text-neutral-600">
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
                 Funds credited to{" "}
-                <strong className="text-neutral-950">
+                <strong className="text-neutral-950 dark:text-white">
                   {request.recipientName}
                 </strong>{" "}
                 for{" "}
-                <strong className="text-neutral-950">{request.title}</strong>.
+                <strong className="text-neutral-950 dark:text-white">
+                  {request.title}
+                </strong>
+                .
               </p>
             </div>
 
-            <div className="rounded-[20px] border border-neutral-200/80 bg-neutral-50 p-5 space-y-3 text-xs">
+            <div className="rounded-[20px] border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50 dark:bg-[#1A1A1A] p-5 space-y-3 text-xs">
               <div className="flex justify-between items-center">
-                <span className="text-neutral-500">Recipient</span>
-                <span className="font-bold text-neutral-950">
+                <span className="text-neutral-500 dark:text-neutral-400">
+                  Recipient
+                </span>
+                <span className="font-bold text-neutral-950 dark:text-white">
                   {request.recipientName}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-neutral-500">Recipient Address</span>
+                <span className="text-neutral-500 dark:text-neutral-400">
+                  Recipient Address
+                </span>
                 {request.recipientAddress ? (
                   <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-neutral-800">
+                    <span className="font-mono text-neutral-800 dark:text-neutral-200">
                       {`${request.recipientAddress.slice(0, 8)}...${request.recipientAddress.slice(-6)}`}
                     </span>
                     <button
                       type="button"
                       onClick={handleCopyRecipientAddress}
-                      className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 text-[11px] font-semibold text-neutral-700 border border-neutral-200 hover:bg-neutral-100 transition-colors cursor-pointer"
+                      className="flow-liquid-btn inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold text-neutral-700 dark:text-neutral-200 cursor-pointer"
                       title="Copy recipient address"
                     >
                       {copiedRecipientAddress ? (
                         <>
-                          <IconCheck size={11} className="text-emerald-600" />
+                          <IconCheck size={11} className="text-emerald-500" />
                           <span>Copied</span>
                         </>
                       ) : (
@@ -678,14 +685,16 @@ export function CheckoutView({
                     </button>
                   </div>
                 ) : (
-                  <span className="font-mono text-neutral-400 italic text-[11px]">
+                  <span className="font-mono text-neutral-400 dark:text-neutral-500 italic text-[11px]">
                     Address unavailable
                   </span>
                 )}
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-neutral-500">Settled Amount</span>
-                <span className="font-display text-base font-bold text-neutral-950">
+                <span className="text-neutral-500 dark:text-neutral-400">
+                  Settled Amount
+                </span>
+                <span className="font-display text-base font-bold text-neutral-950 dark:text-white">
                   {instructions?.destinationDisplayAmount ??
                     request.displayAmount ??
                     "1.00"}{" "}
@@ -695,42 +704,52 @@ export function CheckoutView({
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-neutral-500">Destination Network</span>
-                <span className="font-semibold text-neutral-900">
+                <span className="text-neutral-500 dark:text-neutral-400">
+                  Destination Network
+                </span>
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">
                   Base Mainnet
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-neutral-500">Payment Reference</span>
-                <span className="font-mono text-neutral-800">
+                <span className="text-neutral-500 dark:text-neutral-400">
+                  Payment Reference
+                </span>
+                <span className="font-mono text-neutral-800 dark:text-neutral-200">
                   {request.publicId}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-neutral-500">Invoice Title</span>
-                <span className="font-medium text-neutral-900">
+                <span className="text-neutral-500 dark:text-neutral-400">
+                  Invoice Title
+                </span>
+                <span className="font-medium text-neutral-900 dark:text-neutral-100">
                   {request.title}
                 </span>
               </div>
               {request.description && (
                 <div className="flex justify-between items-center">
-                  <span className="text-neutral-500">Description</span>
-                  <span className="text-neutral-800 text-right max-w-xs truncate">
+                  <span className="text-neutral-500 dark:text-neutral-400">
+                    Description
+                  </span>
+                  <span className="text-neutral-800 dark:text-neutral-200 text-right max-w-xs truncate">
                     {request.description}
                   </span>
                 </div>
               )}
               <div className="flex justify-between items-center">
-                <span className="text-neutral-500">Settlement Time</span>
-                <span className="font-mono text-neutral-800 text-[11px]">
+                <span className="text-neutral-500 dark:text-neutral-400">
+                  Settlement Time
+                </span>
+                <span className="font-mono text-neutral-800 dark:text-neutral-200 text-[11px]">
                   {instructions?.settledAt
                     ? new Date(instructions.settledAt).toUTCString()
                     : "Confirmed on-chain"}
                 </span>
               </div>
               {instructions?.sourceTxHash && (
-                <div className="flex justify-between items-center pt-2 border-t border-neutral-200">
-                  <span className="text-neutral-500">
+                <div className="flex justify-between items-center pt-2 border-t border-neutral-200 dark:border-white/[0.08]">
+                  <span className="text-neutral-500 dark:text-neutral-400">
                     Source Transaction (Solana)
                   </span>
                   <a
@@ -749,7 +768,7 @@ export function CheckoutView({
               )}
               {instructions?.destinationTxHash && (
                 <div className="flex justify-between items-center">
-                  <span className="text-neutral-500">
+                  <span className="text-neutral-500 dark:text-neutral-400">
                     Settlement Transaction (Base)
                   </span>
                   <a
@@ -772,48 +791,48 @@ export function CheckoutView({
               <Link
                 href="/"
                 prefetch={false}
-                className="flex items-center justify-center rounded-full border border-neutral-200 bg-white py-3 text-xs font-semibold text-neutral-900 hover:bg-neutral-50 transition-colors shadow-2xs"
+                className="flow-liquid-btn flex items-center justify-center rounded-full py-3 text-xs font-semibold text-neutral-900 dark:text-white"
               >
                 Return to Flow
               </Link>
             </div>
           </div>
         ) : isReadOnly && !instructions ? (
-          <div className="rounded-[28px] border border-neutral-200 bg-white p-6 text-sm text-neutral-700">
+          <div className="rounded-[28px] border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 text-sm text-neutral-700 dark:text-neutral-300">
             {isExpired
               ? "This invoice is available for reference."
               : "Quote unavailable. This payment request cannot accept payments."}
             {request.displayAmount && (
-              <p className="mt-3 font-semibold">
+              <p className="mt-3 font-semibold text-neutral-950 dark:text-white">
                 {request.displayAmount} {request.destinationAssetSymbol}
               </p>
             )}
-            <p className="mt-1 text-xs text-neutral-600">
+            <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
               {request.destinationNetwork}
             </p>
           </div>
         ) : (
           /* ===================================================================
-              MAIN 2-COLUMN CHECKOUT (Matches Flow Crypto Payment Checkout.png & Flow Mobile Crypto Payment Screen-8.png)
+              MAIN 2-COLUMN CHECKOUT
              =================================================================== */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
             {/* LEFT 7 COLUMNS: Stage B Payment Instructions OR Stage A Payment Selection */}
             <div className="lg:col-span-7">
               {instructions ? (
                 /* ============================================================
-                   STAGE B: PAYMENT INSTRUCTIONS (Simplified Left Column)
+                   STAGE B: PAYMENT INSTRUCTIONS
                    ============================================================ */
-                <div className="relative rounded-[28px] border border-neutral-200/90 bg-white p-6 sm:p-8 shadow-sm space-y-6 overflow-hidden">
+                <div className="relative rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-8 shadow-sm space-y-6 overflow-hidden">
                   {/* Expired Overlay */}
                   {isDepositExpired && (
-                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[28px] bg-white/85 p-6 text-center backdrop-blur-xs">
-                      <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-800 shadow-xs">
+                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[28px] bg-white/85 dark:bg-[#0B0B0B]/85 p-6 text-center backdrop-blur-xs">
+                      <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 shadow-xs">
                         <IconAlertTriangle size={24} />
                       </div>
-                      <h3 className="font-serif text-2xl font-normal text-neutral-950">
+                      <h3 className="font-serif text-2xl font-normal text-neutral-950 dark:text-white">
                         Quote Expired
                       </h3>
-                      <p className="mt-1.5 max-w-sm text-xs text-neutral-600">
+                      <p className="mt-1.5 max-w-sm text-xs text-neutral-600 dark:text-neutral-400">
                         The deposit deadline for this payment has expired. Do
                         not send funds to the previous deposit address.
                       </p>
@@ -828,29 +847,29 @@ export function CheckoutView({
                     </div>
                   )}
 
-                  {/* 1. Small Back button & Status badge */}
-                  <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
+                  {/* 1. Small Back button & Status */}
+                  <div className="flex items-center justify-between border-b border-neutral-100 dark:border-white/[0.08] pb-4">
                     <button
                       type="button"
                       onClick={handleBackToPaymentSelection}
                       disabled={isReadOnly}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-600 hover:text-neutral-950 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white transition-colors cursor-pointer"
                     >
                       <span aria-hidden="true">←</span>
                       <span>Back to Payment Selection</span>
                     </button>
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${
+                      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${
                         isFundedOrProcessing
-                          ? "bg-blue-50 border-blue-200 text-blue-700"
+                          ? "text-blue-700 dark:text-blue-400"
                           : isUnderReview
-                            ? "bg-purple-50 border-purple-200 text-purple-700"
+                            ? "text-purple-700 dark:text-purple-400"
                             : instructions.status === "FAILED" ||
                                 instructions.status ===
                                   "EXCEPTION_REFUND_REQUIRED" ||
                                 isDepositExpired
-                              ? "bg-red-50 border-red-200 text-[#FF1A1A]"
-                              : "bg-amber-50 border-amber-200 text-amber-800"
+                              ? "text-[#FF1A1A]"
+                              : "text-amber-800 dark:text-amber-400"
                       }`}
                     >
                       <span
@@ -885,19 +904,19 @@ export function CheckoutView({
 
                   {/* 2 & 3. Invoice/request name & Recipient info / Amount Due */}
                   <div>
-                    <p className="text-[11px] font-medium text-neutral-500">
+                    <p className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
                       Invoice:{" "}
-                      <strong className="text-neutral-900">
+                      <strong className="text-neutral-900 dark:text-white">
                         {request.title}
                       </strong>
                     </p>
-                    <p className="mt-0.5 text-xs text-neutral-600">
+                    <p className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">
                       Recipient:{" "}
-                      <strong className="text-neutral-950">
+                      <strong className="text-neutral-950 dark:text-white">
                         {request.recipientName}
                       </strong>{" "}
                       • Due:{" "}
-                      <strong className="text-neutral-950">
+                      <strong className="text-neutral-950 dark:text-white">
                         {request.displayAmount} {request.destinationAssetSymbol}{" "}
                         on {request.destinationNetwork}
                       </strong>
@@ -910,10 +929,10 @@ export function CheckoutView({
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF1A1A]">
                         PAYMENT INSTRUCTIONS
                       </span>
-                      <h2 className="font-serif text-2xl text-neutral-950 mt-0.5">
+                      <h2 className="font-serif text-2xl text-neutral-950 dark:text-white mt-0.5">
                         Send Exact Amount to Deposit Address
                       </h2>
-                      <p className="text-xs text-neutral-600 mt-1">
+                      <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
                         Deposit the exact amount below from any wallet or
                         exchange. Flow automatically converts and settles to the
                         recipient.
@@ -923,7 +942,7 @@ export function CheckoutView({
 
                   {/* Exception Refund Required Banner */}
                   {instructions.status === "EXCEPTION_REFUND_REQUIRED" && (
-                    <div className="rounded-[14px] border border-red-200 bg-red-50 p-3.5 text-xs text-[#FF1A1A]">
+                    <div className="rounded-[14px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3.5 text-xs text-[#FF1A1A] dark:text-red-400">
                       <strong>
                         Refund Required — Do Not Send Additional Funds:
                       </strong>{" "}
@@ -933,7 +952,7 @@ export function CheckoutView({
                   )}
 
                   {/* 5-10. Deposit Instructions Card: QR, Amount, Network, Address, Memo, Countdown */}
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center rounded-[20px] border border-neutral-200 bg-neutral-50/70 p-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center rounded-[20px] border border-neutral-200 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-5">
                     {canShowDeposit && (
                       <>
                         <div className="sm:col-span-5 flex flex-col items-center justify-center">
@@ -946,18 +965,18 @@ export function CheckoutView({
                               size={148}
                             />
                           </div>
-                          <span className="mt-2 text-[10px] text-neutral-400">
+                          <span className="mt-2 text-[10px] text-neutral-400 dark:text-neutral-500">
                             Scan with any wallet
                           </span>
                         </div>
 
                         <div className="sm:col-span-7 space-y-3.5 text-xs">
                           <div>
-                            <span className="text-[11px] text-neutral-500 block">
+                            <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block">
                               Exact Amount to Send
                             </span>
                             <div className="flex items-center justify-between gap-2 mt-0.5">
-                              <span className="font-display text-2xl font-bold text-neutral-950">
+                              <span className="font-display text-2xl font-bold text-neutral-950 dark:text-white">
                                 {instructions.requiredDisplayAmount}{" "}
                                 <span className="text-[#FF1A1A]">
                                   {instructions.sourceAssetSymbol}
@@ -967,32 +986,32 @@ export function CheckoutView({
                                 type="button"
                                 onClick={handleCopyAmount}
                                 disabled={isDepositExpired}
-                                className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-800 hover:bg-neutral-100 disabled:opacity-40"
+                                className="flow-liquid-btn rounded-full px-2.5 py-1 text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 disabled:opacity-40 cursor-pointer"
                               >
                                 {copiedAmount ? "Copied" : "Copy Amount"}
                               </button>
                             </div>
-                            <p className="text-[11px] text-neutral-500 mt-0.5">
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
                               Source Network:{" "}
-                              <strong className="text-neutral-900">
+                              <strong className="text-neutral-900 dark:text-white">
                                 {instructions.sourceNetwork}
                               </strong>
                             </p>
                           </div>
 
                           <div>
-                            <span className="text-[11px] text-neutral-500 block mb-1">
+                            <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block mb-1">
                               Deposit Address
                             </span>
-                            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-white px-3 py-2 font-mono text-[11px]">
-                              <span className="truncate select-all text-neutral-900">
+                            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#141414] px-3 py-2 font-mono text-[11px]">
+                              <span className="truncate select-all text-neutral-900 dark:text-neutral-100">
                                 {instructions.depositAddress}
                               </span>
                               <button
                                 type="button"
                                 onClick={handleCopyDepositAddress}
                                 disabled={isDepositExpired}
-                                className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
+                                className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40 cursor-pointer"
                               >
                                 {copiedAddress ? "Copied" : "Copy"}
                               </button>
@@ -1001,18 +1020,18 @@ export function CheckoutView({
 
                           {instructions.depositMemo && (
                             <div>
-                              <span className="text-[11px] font-semibold text-amber-800 block mb-1">
+                              <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 block mb-1">
                                 Required Memo / Tag
                               </span>
-                              <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2 font-mono text-[11px]">
-                                <span className="truncate select-all text-amber-950">
+                              <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 font-mono text-[11px]">
+                                <span className="truncate select-all text-amber-950 dark:text-amber-200">
                                   {instructions.depositMemo}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={handleCopyMemo}
                                   disabled={isDepositExpired}
-                                  className="shrink-0 font-sans font-semibold text-amber-900 hover:underline disabled:opacity-40"
+                                  className="shrink-0 font-sans font-semibold text-amber-900 dark:text-amber-300 hover:underline disabled:opacity-40 cursor-pointer"
                                 >
                                   {copiedMemo ? "Copied" : "Copy"}
                                 </button>
@@ -1024,11 +1043,11 @@ export function CheckoutView({
                     )}
                     <div className="sm:col-span-12 space-y-3.5 text-xs">
                       {isFundedOrProcessing ? (
-                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 text-[11px]">
-                          <span className="text-neutral-500">
+                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 dark:border-white/[0.08] text-[11px]">
+                          <span className="text-neutral-500 dark:text-neutral-400">
                             Payment Status:
                           </span>
-                          <span className="font-semibold text-blue-700 flex items-center gap-1.5">
+                          <span className="font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
                             <span className="h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse" />
                             {instructions.status === "DETECTED"
                               ? "Deposit Detected — Verifying"
@@ -1036,24 +1055,24 @@ export function CheckoutView({
                           </span>
                         </div>
                       ) : isUnderReview ? (
-                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 text-[11px]">
-                          <span className="text-neutral-500">
+                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 dark:border-white/[0.08] text-[11px]">
+                          <span className="text-neutral-500 dark:text-neutral-400">
                             Review Status:
                           </span>
-                          <span className="font-semibold text-purple-700">
+                          <span className="font-semibold text-purple-700 dark:text-purple-400">
                             Payment Under Review
                           </span>
                         </div>
                       ) : canShowDeposit ? (
-                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 text-[11px]">
-                          <span className="text-neutral-500">
+                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 dark:border-white/[0.08] text-[11px]">
+                          <span className="text-neutral-500 dark:text-neutral-400">
                             Deposit Deadline:
                           </span>
                           <span
                             className={`font-mono font-bold ${
                               depositSecondsRemaining <= 60
                                 ? "text-[#FF1A1A]"
-                                : "text-neutral-950"
+                                : "text-neutral-950 dark:text-white"
                             }`}
                           >
                             {Math.floor(depositSecondsRemaining / 60)}:
@@ -1066,12 +1085,12 @@ export function CheckoutView({
                       ) : null}
 
                       {instructions.sourceTxHash && (
-                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 text-[11px]">
-                          <span className="text-neutral-500">
+                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 dark:border-white/[0.08] text-[11px]">
+                          <span className="text-neutral-500 dark:text-neutral-400">
                             Source Transaction:
                           </span>
                           <span
-                            className="font-mono text-neutral-800 text-[10px] truncate max-w-[180px]"
+                            className="font-mono text-neutral-800 dark:text-neutral-200 text-[10px] truncate max-w-[180px]"
                             title={instructions.sourceTxHash}
                           >
                             {instructions.sourceTxHash.slice(0, 8)}...
@@ -1083,12 +1102,12 @@ export function CheckoutView({
                   </div>
 
                   {isFundedOrProcessing ? (
-                    <div className="rounded-[16px] border border-blue-200/80 bg-blue-50/60 p-4 text-xs text-blue-950 space-y-1">
-                      <p className="font-semibold text-blue-900 flex items-center gap-1.5">
+                    <div className="rounded-[16px] border border-blue-200/80 dark:border-blue-800/40 bg-blue-50/60 dark:bg-blue-950/30 p-4 text-xs text-blue-950 dark:text-blue-200 space-y-1">
+                      <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
                         <span className="h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
                         <span>Payment Detected — Settling In Progress</span>
                       </p>
-                      <p className="text-[11px] leading-relaxed text-blue-900/80">
+                      <p className="text-[11px] leading-relaxed text-blue-900/80 dark:text-blue-200/80">
                         Your deposit has been recognized on{" "}
                         {instructions.sourceNetwork}. Settlement to{" "}
                         {request.recipientName} on{" "}
@@ -1098,19 +1117,19 @@ export function CheckoutView({
                       </p>
                     </div>
                   ) : isUnderReview ? (
-                    <div className="rounded-[16px] border border-purple-200/80 bg-purple-50/60 p-4 text-xs text-purple-950 space-y-1">
-                      <p className="font-semibold text-purple-900">
+                    <div className="rounded-[16px] border border-purple-200/80 dark:border-purple-800/40 bg-purple-50/60 dark:bg-purple-950/30 p-4 text-xs text-purple-950 dark:text-purple-200 space-y-1">
+                      <p className="font-semibold text-purple-900 dark:text-purple-300">
                         Payment Under Review
                       </p>
-                      <p className="text-[11px] leading-relaxed text-purple-900/80">
+                      <p className="text-[11px] leading-relaxed text-purple-900/80 dark:text-purple-200/80">
                         Your deposit was received and is currently under
                         automated reconciliation. Do not initiate a new payment
                         attempt.
                       </p>
                     </div>
                   ) : (
-                    <div className="rounded-[16px] border border-neutral-200/80 bg-neutral-50/70 p-4 text-xs text-neutral-600 space-y-1">
-                      <p className="font-semibold text-neutral-900">
+                    <div className="rounded-[16px] border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-4 text-xs text-neutral-600 dark:text-neutral-400 space-y-1">
+                      <p className="font-semibold text-neutral-900 dark:text-white">
                         Payment Attempt Active
                       </p>
                       <p className="text-[11px] leading-relaxed">
@@ -1126,10 +1145,9 @@ export function CheckoutView({
                 /* ============================================================
                    STAGE A: PAYMENT SELECTION (Full Left Column)
                    ============================================================ */
-                <div className="rounded-[28px] border border-neutral-200/90 bg-white p-6 sm:p-8 shadow-xs space-y-6">
-                  {/* Mode Switcher matching media_1794490079536_b30a594b.jpg */}
+                <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-8 shadow-xs space-y-6">
                   <div>
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-800 mb-3">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-800 dark:text-neutral-200 mb-3">
                       Pay with
                     </h2>
                     <div className="flex flex-wrap items-center gap-2.5">
@@ -1146,8 +1164,8 @@ export function CheckoutView({
                         }}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                           payTab === "STABLES"
-                            ? "bg-neutral-950 text-white shadow-xs"
-                            : "border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                            ? "flow-liquid-btn-primary"
+                            : "flow-liquid-btn text-neutral-700 dark:text-neutral-200"
                         }`}
                       >
                         <svg
@@ -1173,8 +1191,8 @@ export function CheckoutView({
                         }}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                           payTab === "ANY_TOKEN"
-                            ? "bg-neutral-950 text-white shadow-xs"
-                            : "border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                            ? "flow-liquid-btn-primary"
+                            : "flow-liquid-btn text-neutral-700 dark:text-neutral-200"
                         }`}
                       >
                         <span className="text-amber-500">✦</span>
@@ -1184,8 +1202,8 @@ export function CheckoutView({
                   </div>
 
                   {payTab === "STABLES" && (
-                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-neutral-100">
-                      <span className="text-[11px] font-semibold text-neutral-500">
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-neutral-100 dark:border-white/[0.06]">
+                      <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
                         Paying from:
                       </span>
                       <button
@@ -1193,8 +1211,8 @@ export function CheckoutView({
                         onClick={() => handleSelectEcosystem("evm")}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                           selectedEcosystem === "evm"
-                            ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
-                            : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                            ? "border-[#FF1A1A] bg-red-50 dark:bg-red-950/30 text-[#FF1A1A] shadow-2xs"
+                            : "border-neutral-200 dark:border-white/[0.1] bg-white dark:bg-[#1A1A1A] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-white/[0.06]"
                         }`}
                       >
                         <ChainBadge chainKey="ethereum-mainnet" size={14} />
@@ -1206,8 +1224,8 @@ export function CheckoutView({
                         onClick={() => handleSelectEcosystem("solana")}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                           selectedEcosystem === "solana"
-                            ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
-                            : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                            ? "border-[#FF1A1A] bg-red-50 dark:bg-red-950/30 text-[#FF1A1A] shadow-2xs"
+                            : "border-neutral-200 dark:border-white/[0.1] bg-white dark:bg-[#1A1A1A] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-white/[0.06]"
                         }`}
                       >
                         <ChainBadge chainKey="solana-mainnet" size={14} />
@@ -1219,8 +1237,8 @@ export function CheckoutView({
                         onClick={() => handleSelectEcosystem("near")}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                           selectedEcosystem === "near"
-                            ? "border-[#FF1A1A] bg-red-50 text-[#FF1A1A] shadow-2xs"
-                            : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                            ? "border-[#FF1A1A] bg-red-50 dark:bg-red-950/30 text-[#FF1A1A] shadow-2xs"
+                            : "border-neutral-200 dark:border-white/[0.1] bg-white dark:bg-[#1A1A1A] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-white/[0.06]"
                         }`}
                       >
                         <ChainBadge chainKey="near-mainnet" size={14} />
@@ -1242,14 +1260,14 @@ export function CheckoutView({
                       />
                     ) : (
                       <div className="min-w-0">
-                        <span className="block text-xs font-semibold text-neutral-800 mb-1.5">
+                        <span className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                           You pay with
                         </span>
                         <button
                           type="button"
                           aria-label="Choose token and network"
                           onClick={() => setIsAnyTokenModalOpen(true)}
-                          className="flex w-full items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-3 text-left text-xs font-bold hover:bg-neutral-50"
+                          className="flex w-full items-center gap-3 rounded-2xl border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#1A1A1A] p-3 text-left text-xs font-bold text-neutral-950 dark:text-white hover:bg-neutral-50 dark:hover:bg-white/[0.06] cursor-pointer"
                         >
                           {selectedSource && (
                             <span className="relative shrink-0">
@@ -1257,7 +1275,7 @@ export function CheckoutView({
                                 symbol={selectedSource.symbol}
                                 size={31}
                               />
-                              <span className="absolute -right-1 -bottom-1 rounded-full bg-white p-0.5">
+                              <span className="absolute -right-1 -bottom-1 rounded-full bg-white dark:bg-[#141414] p-0.5">
                                 <ChainBadge
                                   chainKey={selectedSource.networkKey}
                                   size={12}
@@ -1269,12 +1287,15 @@ export function CheckoutView({
                             {selectedSource?.symbol ??
                               "Choose token and network"}
                             {selectedSource && (
-                              <span className="block truncate mt-0.5 font-normal text-neutral-500">
+                              <span className="block truncate mt-0.5 font-normal text-neutral-500 dark:text-neutral-400">
                                 on {selectedSource.networkName}
                               </span>
                             )}
                           </span>
-                          <span aria-hidden="true" className="text-neutral-500">
+                          <span
+                            aria-hidden="true"
+                            className="text-neutral-500 dark:text-neutral-400"
+                          >
                             ⌄
                           </span>
                         </button>
@@ -1283,13 +1304,13 @@ export function CheckoutView({
                     <div>
                       <label
                         htmlFor="checkout-amount"
-                        className="block text-xs font-semibold text-neutral-800 mb-1.5"
+                        className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5"
                       >
                         {request.amountMode === "FIXED"
                           ? "You send (estimated)"
                           : "Amount to send"}
                       </label>
-                      <div className="flex items-center justify-between p-3 rounded-2xl border border-neutral-200 bg-white shadow-2xs">
+                      <div className="flex items-center justify-between p-3 rounded-2xl border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#1A1A1A] shadow-2xs">
                         <input
                           id="checkout-amount"
                           type="text"
@@ -1308,9 +1329,9 @@ export function CheckoutView({
                               ? "—"
                               : "Enter amount"
                           }
-                          className="w-full font-display text-xl font-bold text-neutral-950 focus:outline-hidden bg-transparent"
+                          className="w-full font-display text-xl font-bold text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden bg-transparent"
                         />
-                        <span className="font-bold text-xs text-neutral-500 pl-2">
+                        <span className="font-bold text-xs text-neutral-500 dark:text-neutral-400 pl-2">
                           {selectedSource?.symbol}
                         </span>
                       </div>
@@ -1322,14 +1343,14 @@ export function CheckoutView({
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <label
                         htmlFor="checkout-refund"
-                        className="text-xs font-semibold text-neutral-800"
+                        className="text-xs font-semibold text-neutral-800 dark:text-neutral-200"
                       >
                         {payerMode === "EXCHANGE"
                           ? "Self-custody refund address required for exchange withdrawals"
                           : "Payer refund address"}
                       </label>
                       <span
-                        className="text-[11px] text-neutral-400"
+                        className="text-[11px] text-neutral-400 dark:text-neutral-500"
                         title="Self-custody wallet for automated refund fallback"
                       >
                         ⓘ
@@ -1346,7 +1367,7 @@ export function CheckoutView({
                             ? "Address on " + selectedSource.networkName
                             : "Choose a source network first"
                         }
-                        className="w-full px-4 py-3 rounded-2xl border border-neutral-200 bg-white text-xs font-mono text-neutral-950 focus:outline-hidden focus:border-neutral-900 shadow-2xs pr-10"
+                        className="w-full px-4 py-3 rounded-2xl border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#1A1A1A] text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden focus:border-neutral-900 dark:focus:border-white/30 shadow-2xs pr-10"
                       />
                       {refundAddress.trim().length > 0 &&
                         !refundValidationMessage && (
@@ -1356,25 +1377,25 @@ export function CheckoutView({
                         )}
                     </div>
                     {refundValidationMessage && (
-                      <p className="mt-1 text-xs font-medium text-amber-700">
+                      <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                         {refundValidationMessage}
                       </p>
                     )}
                   </div>
 
                   {/* Payment method selector: Wallet vs Exchange */}
-                  <div className="space-y-2 pt-1 border-t border-neutral-100">
-                    <span className="text-[11px] font-semibold text-neutral-500">
+                  <div className="space-y-2 pt-1 border-t border-neutral-100 dark:border-white/[0.06]">
+                    <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
                       Payment method:
                     </span>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => setPayerMode("WALLET")}
-                        className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                           payerMode === "WALLET"
-                            ? "border-neutral-950 bg-neutral-950 text-white"
-                            : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                            ? "flow-liquid-btn-primary"
+                            : "flow-liquid-btn text-neutral-700 dark:text-neutral-200"
                         }`}
                       >
                         <IconWallet size={14} />
@@ -1384,10 +1405,10 @@ export function CheckoutView({
                       <button
                         type="button"
                         onClick={() => setPayerMode("EXCHANGE")}
-                        className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                           payerMode === "EXCHANGE"
-                            ? "border-neutral-950 bg-neutral-950 text-white"
-                            : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                            ? "flow-liquid-btn-primary"
+                            : "flow-liquid-btn text-neutral-700 dark:text-neutral-200"
                         }`}
                       >
                         <IconExternalLink size={14} />
@@ -1396,18 +1417,18 @@ export function CheckoutView({
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl border border-neutral-200 bg-neutral-50/60 space-y-3">
+                  <div className="p-4 rounded-2xl border border-neutral-200 dark:border-white/[0.08] bg-neutral-50/60 dark:bg-[#1A1A1A] space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-xs font-bold text-neutral-900">
+                      <h3 className="text-xs font-bold text-neutral-900 dark:text-white">
                         Quote Summary
                       </h3>
                       {quote && (
-                        <span className="text-[10px] font-semibold text-emerald-700">
+                        <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
                           Provider preview · {quoteSecondsRemaining}s
                         </span>
                       )}
                     </div>
-                    <dl className="space-y-2 text-xs text-neutral-600">
+                    <dl className="space-y-2 text-xs text-neutral-600 dark:text-neutral-400">
                       <div className="flex justify-between gap-3">
                         <dt>
                           You send
@@ -1418,13 +1439,13 @@ export function CheckoutView({
                               selectedSource.networkName +
                               ")"}
                         </dt>
-                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950">
+                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950 dark:text-white">
                           {displaySource}
                         </dd>
                       </div>
                       <div className="flex justify-between gap-3">
                         <dt>Flow platform fee</dt>
-                        <dd className="font-semibold text-neutral-950">
+                        <dd className="font-semibold text-neutral-950 dark:text-white">
                           {flowFee}
                         </dd>
                       </div>
@@ -1432,22 +1453,27 @@ export function CheckoutView({
                         <dt className="shrink-0 max-w-[40%]">
                           Network / Solver fee
                         </dt>
-                        <dd className="text-right font-semibold text-neutral-950">
+                        <dd className="text-right font-semibold text-neutral-950 dark:text-white">
                           {quote?.fees.description ??
                             (directDisplay
                               ? "Network fee unavailable until broadcast."
                               : "Unavailable")}
                         </dd>
                       </div>
-                      <div className="flex justify-between gap-3 border-t border-neutral-200 pt-2">
-                        <dt className="font-bold text-neutral-950">Total</dt>
-                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950">
+                      <div className="flex justify-between gap-3 border-t border-neutral-200 dark:border-white/[0.08] pt-2">
+                        <dt className="font-bold text-neutral-950 dark:text-white">
+                          Total
+                        </dt>
+                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950 dark:text-white">
                           {displaySource}
                         </dd>
                       </div>
                     </dl>
                     {!quote && !directDisplay && (
-                      <div role="status" className="text-xs text-neutral-600">
+                      <div
+                        role="status"
+                        className="text-xs text-neutral-600 dark:text-neutral-400"
+                      >
                         <p>
                           {loadingQuote
                             ? "Checking route…"
@@ -1468,7 +1494,7 @@ export function CheckoutView({
                             onClick={() =>
                               setRefreshTrigger((value) => value + 1)
                             }
-                            className="mt-1 font-semibold text-neutral-950 underline"
+                            className="mt-1 font-semibold text-neutral-950 dark:text-white underline cursor-pointer"
                           >
                             Refresh quote
                           </button>
@@ -1480,31 +1506,31 @@ export function CheckoutView({
               )}
             </div>
 
-            {/* RIGHT 5 COLUMNS: Matches media_1794490079536_b30a594b.jpg */}
+            {/* RIGHT 5 COLUMNS */}
             <div className="lg:col-span-5 space-y-5">
               {!instructions ? (
                 /* STATE A: Right Column Invoice Summary & Proceed Button */
-                <div className="rounded-[28px] border border-neutral-200/90 bg-white p-6 sm:p-7 shadow-xs space-y-5">
+                <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
                   {/* Recipient Card */}
                   <div>
-                    <span className="text-xs font-semibold text-neutral-800 block mb-2">
+                    <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 block mb-2">
                       Recipient
                     </span>
-                    <div className="flex items-center justify-between p-3.5 rounded-2xl border border-neutral-200/80 bg-neutral-50/70">
+                    <div className="flex items-center justify-between p-3.5 rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A]">
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-[#FF1A1A]">
+                        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 dark:bg-red-950/50 text-[#FF1A1A]">
                           <IconWallet size={18} />
                         </span>
                         <div className="min-w-0">
-                          <h2 className="font-display font-bold text-xs text-neutral-950 truncate">
+                          <h2 className="font-display font-bold text-xs text-neutral-950 dark:text-white truncate">
                             {request.title}
                           </h2>
-                          <p className="font-sans text-[11px] text-neutral-500 truncate">
+                          <p className="font-sans text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
                             {request.recipientName}
                           </p>
                         </div>
                       </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200/60">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                         Verified
                       </span>
@@ -1513,10 +1539,10 @@ export function CheckoutView({
 
                   {/* Amount Due */}
                   <div>
-                    <span className="text-xs font-medium text-neutral-500 block">
+                    <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 block">
                       Amount due
                     </span>
-                    <p className="mt-1 font-display text-3xl font-extrabold text-neutral-950">
+                    <p className="mt-1 font-display text-3xl font-extrabold text-neutral-950 dark:text-white">
                       {request.displayAmount ??
                         quote?.destinationDisplayAmount ??
                         "—"}{" "}
@@ -1526,15 +1552,15 @@ export function CheckoutView({
 
                   {/* Settlement (Recipient receives) */}
                   <div>
-                    <span className="text-xs font-semibold text-neutral-800 block mb-1.5">
+                    <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 block mb-1.5">
                       Recipient receives
                     </span>
-                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl border border-neutral-200/80 bg-neutral-50/70">
+                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A]">
                       <AssetAvatar
                         symbol={request.destinationAssetSymbol}
                         size={24}
                       />
-                      <span className="font-display font-bold text-xs text-neutral-950">
+                      <span className="font-display font-bold text-xs text-neutral-950 dark:text-white">
                         {request.displayAmount} {request.destinationAssetSymbol}{" "}
                         on {request.destinationNetwork}
                       </span>
@@ -1543,20 +1569,20 @@ export function CheckoutView({
 
                   {/* Route */}
                   <div>
-                    <span className="text-xs font-semibold text-neutral-800 block mb-1.5">
+                    <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 block mb-1.5">
                       Route
                     </span>
-                    <div className="p-3.5 rounded-2xl border border-neutral-200/80 bg-neutral-50/70 space-y-2.5">
+                    <div className="p-3.5 rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] space-y-2.5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <AssetAvatar
                             symbol={selectedSource?.symbol ?? ""}
                             size={22}
                           />
-                          <span className="font-bold text-xs text-neutral-950">
+                          <span className="font-bold text-xs text-neutral-950 dark:text-white">
                             {selectedSource?.symbol}
                           </span>
-                          <span className="text-[11px] text-neutral-500">
+                          <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
                             {selectedSource?.networkName}
                           </span>
                         </div>
@@ -1568,16 +1594,16 @@ export function CheckoutView({
                             symbol={request.destinationAssetSymbol}
                             size={22}
                           />
-                          <span className="font-bold text-xs text-neutral-950">
+                          <span className="font-bold text-xs text-neutral-950 dark:text-white">
                             {request.destinationAssetSymbol}
                           </span>
-                          <span className="text-[11px] text-neutral-500">
+                          <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
                             {request.destinationNetwork}
                           </span>
                         </div>
                       </div>
                       <div className="pt-1 flex justify-center">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                           <span>⚡</span>
                           <span>
                             {isDirect
@@ -1592,29 +1618,29 @@ export function CheckoutView({
                   </div>
 
                   {/* You'll send (exact) summary box */}
-                  <div className="p-4 rounded-2xl bg-red-50/50 border border-red-100 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                  <div className="p-4 rounded-2xl bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                     <div className="min-w-0 flex-[1_1_12rem]">
-                      <span className="text-xs font-semibold text-neutral-800 block">
+                      <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 block">
                         You’ll send (estimated)
                       </span>
-                      <p className="mt-0.5 break-all font-display text-2xl font-extrabold text-neutral-950">
+                      <p className="mt-0.5 break-all font-display text-2xl font-extrabold text-neutral-950 dark:text-white">
                         {quotedSendAmount ?? "—"}{" "}
-                        <span className="inline-block text-sm font-bold text-neutral-700">
+                        <span className="inline-block text-sm font-bold text-neutral-700 dark:text-neutral-300">
                           {selectedSource?.symbol}
                         </span>
                       </p>
                     </div>
                     <div className="text-right text-xs space-y-1">
                       <div>
-                        <span className="text-neutral-500">
+                        <span className="text-neutral-500 dark:text-neutral-400">
                           Flow fee {flowFee}
                         </span>
                       </div>
                       <div>
-                        <span className="text-neutral-500">
+                        <span className="text-neutral-500 dark:text-neutral-400">
                           Recipient receives{" "}
                         </span>
-                        <span className="font-bold text-neutral-950">
+                        <span className="font-bold text-neutral-950 dark:text-white">
                           {quote?.destinationDisplayAmount ??
                             request.displayAmount ??
                             "—"}{" "}
@@ -1627,41 +1653,43 @@ export function CheckoutView({
                   {commitError && (
                     <div
                       role="alert"
-                      className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-[#FF1A1A]"
+                      className="rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-[#FF1A1A] dark:text-red-400"
                     >
                       {commitError}
                     </div>
                   )}
 
                   {directVisible && isDirect && payerMode === "WALLET" && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-3 text-xs">
+                    <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-950/30 p-4 space-y-3 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-emerald-900">
+                        <span className="font-semibold text-emerald-900 dark:text-emerald-300">
                           Direct {request.destinationAssetSymbol} Payment
                         </span>
-                        <span className="text-[11px] text-emerald-700 font-medium">
+                        <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
                           {request.destinationNetwork}
                         </span>
                       </div>
                       <div className="flex justify-center py-2">
-                        <QrCode
-                          value={request.recipientAddress || ""}
-                          size={140}
-                        />
+                        <div className="p-2.5 bg-white rounded-2xl">
+                          <QrCode
+                            value={request.recipientAddress || ""}
+                            size={140}
+                          />
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 font-mono text-[11px]">
-                        <span className="truncate select-all text-neutral-800">
+                      <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-white dark:bg-[#141414] px-3 py-2 font-mono text-[11px]">
+                        <span className="truncate select-all text-neutral-800 dark:text-neutral-200">
                           {request.recipientAddress}
                         </span>
                         <button
                           type="button"
                           onClick={handleCopyRecipientAddress}
-                          className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline"
+                          className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline cursor-pointer"
                         >
                           {copiedRecipientAddress ? "Copied" : "Copy"}
                         </button>
                       </div>
-                      <p className="text-[11px] text-emerald-800">
+                      <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
                         Send exactly {quotedSendAmount ?? "—"}{" "}
                         {selectedSource?.symbol} on {request.destinationNetwork}
                         . Deposits to this verified address settle directly into
@@ -1740,7 +1768,7 @@ export function CheckoutView({
                         setCommitting(false);
                       }
                     }}
-                    className="w-full py-4 rounded-full text-xs sm:text-sm font-semibold bg-neutral-950 hover:bg-[#FF1A1A] disabled:bg-neutral-300 disabled:text-neutral-500 text-white transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    className="flow-liquid-btn-primary w-full py-4 rounded-full text-xs sm:text-sm font-semibold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {committing
                       ? "Generating Deposit Instructions…"
@@ -1753,17 +1781,17 @@ export function CheckoutView({
                 </div>
               ) : (
                 /* STATE B: Payment Instructions (After Authorized Payment Commitment) */
-                <div className="relative rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-sm space-y-5 overflow-hidden">
+                <div className="relative rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-sm space-y-5 overflow-hidden">
                   {/* Expired Overlay */}
                   {isDepositExpired && (
-                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[28px] bg-white/85 p-6 text-center backdrop-blur-xs">
-                      <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-800 shadow-xs">
+                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[28px] bg-white/85 dark:bg-[#0B0B0B]/85 p-6 text-center backdrop-blur-xs">
+                      <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 shadow-xs">
                         <IconAlertTriangle size={24} />
                       </div>
-                      <h3 className="font-serif text-2xl font-normal text-neutral-950">
+                      <h3 className="font-serif text-2xl font-normal text-neutral-950 dark:text-white">
                         Quote Expired
                       </h3>
-                      <p className="mt-1.5 max-w-sm text-xs text-neutral-600">
+                      <p className="mt-1.5 max-w-sm text-xs text-neutral-600 dark:text-neutral-400">
                         The deposit deadline for this payment has expired. Do
                         not send funds to the previous deposit address.
                       </p>
@@ -1783,22 +1811,22 @@ export function CheckoutView({
                       <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#FF1A1A]">
                         PAYMENT INSTRUCTIONS
                       </span>
-                      <h2 className="font-serif text-xl text-neutral-950">
+                      <h2 className="font-serif text-xl text-neutral-950 dark:text-white">
                         Deposit Instructions
                       </h2>
                     </div>
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${
+                      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${
                         isFundedOrProcessing
-                          ? "bg-blue-50 border-blue-200 text-blue-700"
+                          ? "text-blue-700 dark:text-blue-400"
                           : isUnderReview
-                            ? "bg-purple-50 border-purple-200 text-purple-700"
+                            ? "text-purple-700 dark:text-purple-400"
                             : instructions.status === "FAILED" ||
                                 instructions.status ===
                                   "EXCEPTION_REFUND_REQUIRED" ||
                                 isDepositExpired
-                              ? "bg-red-50 border-red-200 text-[#FF1A1A]"
-                              : "bg-amber-50 border-amber-200 text-amber-800"
+                              ? "text-[#FF1A1A]"
+                              : "text-amber-800 dark:text-amber-400"
                       }`}
                     >
                       <span
@@ -1833,16 +1861,18 @@ export function CheckoutView({
 
                   {canShowDeposit && (
                     <>
-                      <div className="flex flex-col items-center justify-center rounded-[22px] border border-neutral-200/70 bg-neutral-50 p-6">
-                        <QrCode
-                          value={
-                            instructions.qrData || instructions.depositAddress
-                          }
-                          size={156}
-                        />
-                        <p className="mt-3 text-xs font-medium text-neutral-600 text-center">
+                      <div className="flex flex-col items-center justify-center rounded-[22px] border border-neutral-200/70 dark:border-white/[0.08] bg-neutral-50 dark:bg-[#1A1A1A] p-6">
+                        <div className="p-2.5 bg-white rounded-2xl">
+                          <QrCode
+                            value={
+                              instructions.qrData || instructions.depositAddress
+                            }
+                            size={156}
+                          />
+                        </div>
+                        <p className="mt-3 text-xs font-medium text-neutral-600 dark:text-neutral-400 text-center">
                           Deposit address for this payment on{" "}
-                          <strong className="text-neutral-900">
+                          <strong className="text-neutral-900 dark:text-white">
                             {instructions.sourceNetwork}
                           </strong>
                         </p>
@@ -1850,11 +1880,11 @@ export function CheckoutView({
 
                       <div className="space-y-3 text-xs">
                         <div>
-                          <span className="text-[11px] font-medium text-neutral-500 block mb-1">
+                          <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 block mb-1">
                             Amount to Send
                           </span>
-                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-neutral-50 px-3.5 py-2.5">
-                            <span className="font-display text-base font-bold text-neutral-950">
+                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 dark:border-white/[0.08] bg-neutral-50 dark:bg-[#1A1A1A] px-3.5 py-2.5">
+                            <span className="font-display text-base font-bold text-neutral-950 dark:text-white">
                               {instructions.requiredDisplayAmount}{" "}
                               <span className="text-[#FF1A1A]">
                                 {instructions.sourceAssetSymbol}
@@ -1864,7 +1894,7 @@ export function CheckoutView({
                               type="button"
                               onClick={handleCopyAmount}
                               disabled={isDepositExpired}
-                              className="shrink-0 font-sans text-xs font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
+                              className="shrink-0 font-sans text-xs font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40 cursor-pointer"
                             >
                               {copiedAmount ? "Copied" : "Copy Amount"}
                             </button>
@@ -1872,18 +1902,18 @@ export function CheckoutView({
                         </div>
 
                         <div>
-                          <span className="text-[11px] font-medium text-neutral-500 block mb-1">
+                          <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 block mb-1">
                             Deposit Address
                           </span>
-                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 font-mono text-xs">
-                            <span className="truncate select-all text-neutral-800">
+                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 dark:border-white/[0.08] bg-neutral-50 dark:bg-[#1A1A1A] px-3.5 py-2.5 font-mono text-xs">
+                            <span className="truncate select-all text-neutral-800 dark:text-neutral-200">
                               {instructions.depositAddress}
                             </span>
                             <button
                               type="button"
                               onClick={handleCopyDepositAddress}
                               disabled={isDepositExpired}
-                              className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40"
+                              className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40 cursor-pointer"
                             >
                               {copiedAddress ? "Copied" : "Copy Address"}
                             </button>
@@ -1892,18 +1922,18 @@ export function CheckoutView({
 
                         {instructions.depositMemo && (
                           <div>
-                            <span className="text-[11px] font-semibold text-amber-800 block mb-1">
+                            <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 block mb-1">
                               Required Memo / Tag
                             </span>
-                            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 font-mono text-xs">
-                              <span className="truncate select-all text-neutral-800">
+                            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 px-3.5 py-2.5 font-mono text-xs">
+                              <span className="truncate select-all text-neutral-800 dark:text-amber-200">
                                 {instructions.depositMemo}
                               </span>
                               <button
                                 type="button"
                                 onClick={handleCopyMemo}
                                 disabled={isDepositExpired}
-                                className="shrink-0 font-sans font-semibold text-amber-900 hover:underline disabled:opacity-40"
+                                className="shrink-0 font-sans font-semibold text-amber-900 dark:text-amber-300 hover:underline disabled:opacity-40 cursor-pointer"
                               >
                                 {copiedMemo ? "Copied" : "Copy Memo"}
                               </button>
@@ -1914,13 +1944,13 @@ export function CheckoutView({
                     </>
                   )}
                   <div className="space-y-3 text-xs">
-                    <div className="rounded-[14px] border border-neutral-200/80 bg-neutral-50/70 p-3.5 space-y-2 text-xs">
+                    <div className="rounded-[14px] border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-3.5 space-y-2 text-xs">
                       {isFundedOrProcessing ? (
                         <div className="flex justify-between items-center">
-                          <span className="text-neutral-500">
+                          <span className="text-neutral-500 dark:text-neutral-400">
                             Payment Status:
                           </span>
-                          <span className="font-semibold font-mono text-blue-700 flex items-center gap-1.5">
+                          <span className="font-semibold font-mono text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
                             <span className="h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse" />
                             {instructions.status === "DETECTED"
                               ? "Deposit Detected — Verifying"
@@ -1929,21 +1959,23 @@ export function CheckoutView({
                         </div>
                       ) : isUnderReview ? (
                         <div className="flex justify-between items-center">
-                          <span className="text-neutral-500">Status:</span>
-                          <span className="font-semibold text-purple-700">
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            Status:
+                          </span>
+                          <span className="font-semibold text-purple-700 dark:text-purple-400">
                             Payment Under Review
                           </span>
                         </div>
                       ) : canShowDeposit ? (
                         <div className="flex justify-between items-center">
-                          <span className="text-neutral-500">
+                          <span className="text-neutral-500 dark:text-neutral-400">
                             Deposit Deadline:
                           </span>
                           <span
                             className={`font-mono font-bold ${
                               depositSecondsRemaining <= 60
                                 ? "text-[#FF1A1A]"
-                                : "text-neutral-950"
+                                : "text-neutral-950 dark:text-white"
                             }`}
                           >
                             {Math.floor(depositSecondsRemaining / 60)}:
@@ -1956,10 +1988,12 @@ export function CheckoutView({
                       ) : null}
 
                       {instructions.sourceTxHash && (
-                        <div className="flex justify-between items-center pt-1 border-t border-neutral-200/70">
-                          <span className="text-neutral-500">Source Tx:</span>
+                        <div className="flex justify-between items-center pt-1 border-t border-neutral-200/70 dark:border-white/[0.08]">
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            Source Tx:
+                          </span>
                           <span
-                            className="font-mono text-neutral-800 text-[11px] truncate max-w-[180px]"
+                            className="font-mono text-neutral-800 dark:text-neutral-200 text-[11px] truncate max-w-[180px]"
                             title={instructions.sourceTxHash}
                           >
                             {instructions.sourceTxHash.slice(0, 8)}...
@@ -1969,12 +2003,12 @@ export function CheckoutView({
                       )}
 
                       {(instructions.payerRefundAddress || refundAddress) && (
-                        <div className="flex justify-between items-start gap-2 pt-1 border-t border-neutral-200/70">
-                          <span className="text-neutral-500 shrink-0">
+                        <div className="flex justify-between items-start gap-2 pt-1 border-t border-neutral-200/70 dark:border-white/[0.08]">
+                          <span className="text-neutral-500 dark:text-neutral-400 shrink-0">
                             Refund destination:
                           </span>
                           <span
-                            className="font-mono text-[11px] text-right truncate text-neutral-800 max-w-[200px]"
+                            className="font-mono text-[11px] text-right truncate text-neutral-800 dark:text-neutral-200 max-w-[200px]"
                             title={
                               instructions.payerRefundAddress || refundAddress
                             }
@@ -1987,17 +2021,17 @@ export function CheckoutView({
 
                     {/* Expiration and Exception Warnings */}
                     {!isFundedOrProcessing && !isUnderReview && (
-                      <div className="rounded-[14px] border border-red-200/80 bg-red-50/60 p-3.5 text-xs text-neutral-800 space-y-1.5">
+                      <div className="rounded-[14px] border border-red-200/80 dark:border-red-900/40 bg-red-50/60 dark:bg-red-950/30 p-3.5 text-xs text-neutral-800 dark:text-neutral-200 space-y-1.5">
                         <p className="font-bold text-[#FF1A1A]">
                           Safety Instructions
                         </p>
-                        <p className="text-[11px] leading-relaxed text-neutral-700">
+                        <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
                           Send only{" "}
                           <strong>{instructions.sourceAssetSymbol}</strong> on{" "}
                           <strong>{instructions.sourceNetwork}</strong>. Other
                           assets or networks cannot be recovered.
                         </p>
-                        <p className="text-[11px] leading-relaxed text-neutral-700">
+                        <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
                           This deposit address is valid for{" "}
                           <strong>
                             {Math.floor(depositSecondsRemaining / 60)}m{" "}
@@ -2009,7 +2043,7 @@ export function CheckoutView({
                     )}
 
                     {instructions.status === "EXCEPTION_REFUND_REQUIRED" && (
-                      <div className="rounded-[14px] border border-red-200 bg-red-50 p-3.5 text-xs text-[#FF1A1A] space-y-1">
+                      <div className="rounded-[14px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3.5 text-xs text-[#FF1A1A] dark:text-red-400 space-y-1">
                         <div className="flex items-center gap-1.5 font-bold">
                           <IconAlertTriangle
                             size={14}
@@ -2017,7 +2051,7 @@ export function CheckoutView({
                           />
                           <span>Refund Pending:</span>
                         </div>
-                        <p className="text-[11px] leading-relaxed text-red-900">
+                        <p className="text-[11px] leading-relaxed text-red-900 dark:text-red-300">
                           This attempt requires refund reconciliation. Check the
                           payment status for a confirmed refund.
                         </p>
@@ -2025,11 +2059,11 @@ export function CheckoutView({
                     )}
 
                     {isUnderReview && (
-                      <div className="rounded-[14px] border border-purple-200 bg-purple-50 p-3.5 text-xs text-purple-950 space-y-1">
-                        <p className="font-semibold text-purple-900">
+                      <div className="rounded-[14px] border border-purple-200 dark:border-purple-800/40 bg-purple-50 dark:bg-purple-950/30 p-3.5 text-xs text-purple-950 dark:text-purple-200 space-y-1">
+                        <p className="font-semibold text-purple-900 dark:text-purple-300">
                           Payment Under Review:
                         </p>
-                        <p className="text-[11px] leading-relaxed text-purple-900/80">
+                        <p className="text-[11px] leading-relaxed text-purple-900/80 dark:text-purple-200/80">
                           Your deposit was received and is currently undergoing
                           automated reconciliation. Do not initiate another
                           payment.
@@ -2041,7 +2075,7 @@ export function CheckoutView({
                       !isFundedOrProcessing &&
                       !isUnderReview && (
                         <div className="space-y-2">
-                          <div className="rounded-[14px] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                          <div className="rounded-[14px] border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">
                             <strong>Deposit Window Expired:</strong> Do not send
                             funds to this expired deposit address.
                           </div>
@@ -2049,7 +2083,7 @@ export function CheckoutView({
                             type="button"
                             onClick={handleGenerateNewQuote}
                             disabled={isReadOnly}
-                            className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515]"
+                            className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515] cursor-pointer"
                           >
                             Generate New Quote
                           </button>
@@ -2060,7 +2094,7 @@ export function CheckoutView({
                       !isFundedOrProcessing &&
                       !isUnderReview && (
                         <div className="space-y-2">
-                          <div className="rounded-[14px] border border-red-200 bg-red-50 p-3 text-xs text-[#FF1A1A]">
+                          <div className="rounded-[14px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-[#FF1A1A] dark:text-red-400">
                             <strong>Route Execution Failed:</strong> This
                             payment attempt could not be completed.
                           </div>
@@ -2068,7 +2102,7 @@ export function CheckoutView({
                             type="button"
                             onClick={handleGenerateNewQuote}
                             disabled={isReadOnly}
-                            className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515]"
+                            className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515] cursor-pointer"
                           >
                             Generate New Quote
                           </button>
@@ -2079,28 +2113,28 @@ export function CheckoutView({
               )}
 
               {/* Security & Settlement Highlights */}
-              <div className="rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-sm space-y-4">
-                <h3 className="font-serif text-lg text-neutral-950">
+              <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-sm space-y-4">
+                <h3 className="font-serif text-lg text-neutral-950 dark:text-white">
                   How Flow settles your payment
                 </h3>
-                <ul className="space-y-3 text-xs text-neutral-600">
+                <ul className="space-y-3 text-xs text-neutral-600 dark:text-neutral-400">
                   <li className="flex items-start gap-2.5">
-                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 text-[11px] font-bold text-[#FF1A1A]">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/50 text-[11px] font-bold text-[#FF1A1A]">
                       1
                     </span>
                     <span>
-                      <strong className="text-neutral-950">
+                      <strong className="text-neutral-950 dark:text-white">
                         Pay with what you hold:
                       </strong>{" "}
                       Select a source asset and network to check the route.
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5">
-                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 text-[11px] font-bold text-[#FF1A1A]">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/50 text-[11px] font-bold text-[#FF1A1A]">
                       2
                     </span>
                     <span>
-                      <strong className="text-neutral-950">
+                      <strong className="text-neutral-950 dark:text-white">
                         Automatic routing:
                       </strong>{" "}
                       The provider previews settlement in{" "}
@@ -2109,11 +2143,11 @@ export function CheckoutView({
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5">
-                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 text-[11px] font-bold text-[#FF1A1A]">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/50 text-[11px] font-bold text-[#FF1A1A]">
                       3
                     </span>
                     <span>
-                      <strong className="text-neutral-950">
+                      <strong className="text-neutral-950 dark:text-white">
                         Verified on-chain proof:
                       </strong>{" "}
                       Every transfer is independently verified on-chain before
@@ -2127,7 +2161,7 @@ export function CheckoutView({
         )}
       </main>
 
-      {/* Any Token Discovery Modal (Matches media_1794490079482_a5d66b1d.jpg) */}
+      {/* Any Token Discovery Modal */}
       <UnifiedAssetSelectorModal
         isOpen={isAnyTokenModalOpen}
         onClose={() => setIsAnyTokenModalOpen(false)}

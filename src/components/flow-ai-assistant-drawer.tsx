@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AssistantMessage } from "../server/ai-assistant-service.ts";
+import { FlowAiMascot } from "./icons.tsx";
 
 export interface FlowAIAssistantDrawerProps {
   isOpen: boolean;
@@ -119,15 +120,15 @@ export function FlowAIAssistantDrawer({
           {/* Header */}
           <div className="p-5 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center font-bold shadow-xs">
-                ✨
+              <div className="h-10 w-10 rounded-full flow-liquid-btn text-neutral-900 dark:text-white flex items-center justify-center shrink-0">
+                <FlowAiMascot size={22} />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-bold text-neutral-950 dark:text-white">
                     Flow AI Assistant
                   </h2>
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     Online
                   </span>

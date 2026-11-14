@@ -12,6 +12,11 @@ import {
   AssetsHeldModal,
   type HeldAssetItem,
 } from "../../../../components/assets-held-modal.tsx";
+import {
+  BALANCE_VISIBILITY_EVENT,
+  readBalanceHidden,
+  writeBalanceHidden,
+} from "../../../../components/profile-preferences.ts";
 import { UnifiedAssetSelectorModal } from "../../../../components/unified-asset-selector-modal.tsx";
 import type { DiscoveredToken } from "../../../../server/providers/near-intents-discovery.ts";
 import { QrCode } from "../../../../components/qr-code.tsx";
@@ -314,38 +319,48 @@ function OutgoingQuoteDetails({
   const { quote, loading, error } = preview;
   return (
     <div
-      className="rounded-2xl border border-neutral-200/60 bg-neutral-50/60 p-4 text-left"
+      className="rounded-2xl border border-neutral-200/60 dark:border-white/[0.08] bg-neutral-50/60 dark:bg-white/[0.03] p-4 text-left"
       role="status"
     >
       {quote ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div>
-            <p className="text-neutral-500">Estimated to receive</p>
-            <p className="mt-1 font-bold">
+            <p className="text-neutral-500 dark:text-neutral-400">
+              Estimated to receive
+            </p>
+            <p className="mt-1 font-bold text-neutral-950 dark:text-white">
               {quote.recipientDisplayAmount} {symbol}
             </p>
             {quote.minimumRecipientDisplayAmount && (
-              <p className="mt-1 text-neutral-600">
+              <p className="mt-1 text-neutral-600 dark:text-neutral-400">
                 Quoted minimum {quote.minimumRecipientDisplayAmount} {symbol}
               </p>
             )}
           </div>
           <div>
-            <p className="text-neutral-500">Provider fees</p>
-            <p className="mt-1">{quote.fees.description}</p>
+            <p className="text-neutral-500 dark:text-neutral-400">
+              Provider fees
+            </p>
+            <p className="mt-1 text-neutral-900 dark:text-neutral-200">
+              {quote.fees.description}
+            </p>
           </div>
           <div>
-            <p className="text-neutral-500">Exchange rate</p>
-            <p className="mt-1 font-semibold">{quote.rateDescription}</p>
+            <p className="text-neutral-500 dark:text-neutral-400">
+              Exchange rate
+            </p>
+            <p className="mt-1 font-semibold text-neutral-950 dark:text-white">
+              {quote.rateDescription}
+            </p>
             {quote.estimatedTimeSeconds !== null && (
-              <p className="mt-1 text-neutral-600">
+              <p className="mt-1 text-neutral-600 dark:text-neutral-400">
                 Provider estimate {quote.estimatedTimeSeconds} seconds
               </p>
             )}
           </div>
         </div>
       ) : (
-        <div className="text-xs text-neutral-600">
+        <div className="text-xs text-neutral-600 dark:text-neutral-400">
           <p>{loading ? "Checking route…" : "Quote unavailable"}</p>
           {error && <p>{error}</p>}
         </div>
@@ -390,8 +405,21 @@ export function PortfolioView({
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-  // Hide balance toggle
+  // Hide balance toggle (synced & persisted across tabs and pages)
   const [hideBalance, setHideBalance] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setHideBalance(readBalanceHidden());
+    sync();
+    window.addEventListener(BALANCE_VISIBILITY_EVENT, sync);
+    return () => window.removeEventListener(BALANCE_VISIBILITY_EVENT, sync);
+  }, []);
+
+  const toggleBalanceVisibility = useCallback(() => {
+    const next = !hideBalance;
+    setHideBalance(next);
+    writeBalanceHidden(next);
+  }, [hideBalance]);
 
   // Carousel state (Matches FLOW Dashboard Overview-2.png)
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -447,8 +475,6 @@ export function PortfolioView({
       MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => d.id === "base-mainnet:USDC") ??
         MAINNET_SUPPORTED_DEPLOYMENTS[0]!,
     );
-  const [isReceiveAssetSelectorOpen, setIsReceiveAssetSelectorOpen] =
-    useState(false);
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const [ledgerMovements, setLedgerMovements] = useState<
     LedgerMovement[] | null
@@ -573,6 +599,11 @@ export function PortfolioView({
   const nearAddr = getMainnetWalletAddress(wallet, "near-mainnet") ?? "";
   const receiveOptions = MAINNET_SUPPORTED_DEPLOYMENTS.filter((deployment) =>
     getMainnetWalletAddress(wallet, deployment.networkKey),
+  );
+  const networkReceiveAssets = receiveOptions.filter(
+    (deployment) =>
+      canonicalizeNetworkId(deployment.networkKey) ===
+      canonicalizeNetworkId(depositDeployment.networkKey),
   );
   const activeDepositAddress =
     getMainnetWalletAddress(wallet, depositDeployment.networkKey) ?? "";
@@ -1120,22 +1151,22 @@ export function PortfolioView({
       <div
         className={`mt-4 rounded-2xl border p-4 space-y-2 text-xs ${
           isDone
-            ? "border-emerald-200 bg-emerald-50/70"
+            ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-950/30"
             : isBad
-              ? "border-red-200 bg-red-50/70"
-              : "border-amber-200 bg-amber-50/60"
+              ? "border-red-200 dark:border-red-900/50 bg-red-50/70 dark:bg-red-950/30"
+              : "border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/25"
         }`}
       >
         <div className="flex items-center justify-between">
-          <span className="font-bold text-neutral-950">
+          <span className="font-bold text-neutral-950 dark:text-white">
             {kind === "SEND" ? "Transfer Receipt" : "Conversion Receipt"} ·{" "}
             {activeOutgoingTransfer.publicId}
           </span>
-          <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-white border border-neutral-200 text-neutral-800">
+          <span className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">
             {activeOutgoingTransfer.status}
           </span>
         </div>
-        <p className="text-neutral-700">
+        <p className="text-neutral-700 dark:text-neutral-300">
           {activeOutgoingTransfer.sourceDisplayAmount}{" "}
           {activeOutgoingTransfer.sourceAssetSymbol} (
           {activeOutgoingTransfer.sourceNetwork}) →{" "}
@@ -1145,12 +1176,12 @@ export function PortfolioView({
           {activeOutgoingTransfer.destinationNetwork})
         </p>
         {activeOutgoingTransfer.sourceTxHash && (
-          <p className="font-mono text-[11px] break-all text-neutral-600">
+          <p className="font-mono text-[11px] break-all text-neutral-600 dark:text-neutral-400">
             Source tx: {activeOutgoingTransfer.sourceTxHash}
           </p>
         )}
         {activeOutgoingTransfer.destinationTxHash && (
-          <p className="font-mono text-[11px] break-all text-neutral-600">
+          <p className="font-mono text-[11px] break-all text-neutral-600 dark:text-neutral-400">
             Destination tx: {activeOutgoingTransfer.destinationTxHash}
           </p>
         )}
@@ -1164,7 +1195,7 @@ export function PortfolioView({
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-neutral-900 transition-colors duration-200">
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0B0B] text-neutral-900 dark:text-neutral-100 transition-colors duration-200">
       {/* Floating Top Navigation */}
       <FloatingNav
         activeTab={activeTab}
@@ -1181,15 +1212,15 @@ export function PortfolioView({
       />
 
       {/* Main Content Area */}
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-24 pb-16">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-12 pb-16">
         {/* Global Feedback Alert */}
         {message && (
-          <div className="mb-6 p-4 rounded-2xl bg-neutral-900 text-white text-xs flex items-center justify-between shadow-lg animate-in fade-in">
+          <div className="mb-6 p-4 rounded-2xl bg-neutral-900 dark:bg-[#1B1B1E] border border-transparent dark:border-white/10 text-white text-xs flex items-center justify-between shadow-lg animate-in fade-in">
             <span>{message}</span>
             <button
               type="button"
               onClick={() => setMessage("")}
-              className="ml-4 text-neutral-400 hover:text-white"
+              className="ml-4 text-neutral-400 hover:text-white cursor-pointer"
             >
               ✕
             </button>
@@ -1197,57 +1228,21 @@ export function PortfolioView({
         )}
 
         {/* ===================================================================
-            TAB 1: HOME / DASHBOARD (Matches FLOW Dashboard Overview-2.png)
+            TAB 1: HOME / DASHBOARD
            =================================================================== */}
         {activeTab === "dashboard" && (
           <div className="space-y-8">
-            {/* Dashboard Welcome Header & Security Badge */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pt-1 pb-1">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#FF1A1A]">
-                  {isBusiness ? "BUSINESS WORKSPACE" : "YOUR FLOW"}
-                </p>
-                <h1 className="font-serif text-2xl sm:text-3xl font-medium tracking-tight text-neutral-950">
-                  Welcome back.
-                </h1>
-                <p className="text-xs text-neutral-500">
-                  Move money, get paid, and manage your assets — all in one
-                  place.{" "}
-                  {account?.name && (
-                    <span className="font-semibold text-neutral-900">
-                      ({account.name} · {account.role.toLowerCase()})
-                    </span>
-                  )}
-                </p>
+            {canManageTeam && (
+              <div className="flex justify-end">
+                <Link
+                  prefetch={false}
+                  href={`/accounts/${accountId}/team`}
+                  className="flow-liquid-btn inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-neutral-900 dark:text-white"
+                >
+                  Manage team
+                </Link>
               </div>
-              <div className="flex items-center gap-2">
-                {canManageTeam && (
-                  <Link
-                    prefetch={false}
-                    href={`/accounts/${accountId}/team`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-neutral-950 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors"
-                  >
-                    Manage team
-                  </Link>
-                )}
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-700 border border-neutral-200">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      (account?.walletStatus ?? "setup_pending") === "active" ||
-                      portfolio.wallet
-                        ? "bg-emerald-500"
-                        : "bg-amber-500"
-                    }`}
-                  />
-                  <span>
-                    {(account?.walletStatus ?? "setup_pending") === "active" ||
-                    portfolio.wallet
-                      ? "Wallet active"
-                      : "Wallet setup pending"}
-                  </span>
-                </span>
-              </div>
-            </div>
+            )}
 
             {/* Centered Hero Total Balance */}
             <section
@@ -1255,14 +1250,14 @@ export function PortfolioView({
               className="text-center pt-2 pb-2"
             >
               <div className="inline-flex items-center justify-center gap-3">
-                <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-neutral-950 select-none">
+                <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-neutral-950 dark:text-white select-none">
                   {hideBalance ? "$••••••" : totalBalanceUsd}
                 </span>
                 <button
                   type="button"
-                  onClick={() => setHideBalance((prev) => !prev)}
+                  onClick={toggleBalanceVisibility}
                   aria-label={hideBalance ? "Show balance" : "Hide balance"}
-                  className="p-2 rounded-full text-neutral-400 hover:text-neutral-950 hover:bg-neutral-100 transition-colors"
+                  className="flow-liquid-btn p-2.5 rounded-full text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white cursor-pointer"
                 >
                   {hideBalance ? (
                     <svg
@@ -1298,31 +1293,31 @@ export function PortfolioView({
                 </button>
               </div>
 
-              {/* Sub-balance Badges & Holdings Pill */}
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                  P&L unavailable
+              {/* Clean Sub-balance Meta & Refresh */}
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-xs text-neutral-500 dark:text-neutral-400">
+                <span className="font-medium">P&L unavailable</span>
+                <span aria-hidden="true" className="text-neutral-300 dark:text-neutral-700">
+                  ·
                 </span>
-
                 <button
                   type="button"
                   data-testid="manage-assets-pill"
                   onClick={() => setIsHeldAssetsOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white text-neutral-800 border border-neutral-200/80 shadow-2xs hover:border-neutral-300 transition-all hover:scale-[1.02]"
+                  className="inline-flex items-center gap-1 font-semibold text-neutral-800 dark:text-neutral-200 hover:text-neutral-950 dark:hover:text-white transition-colors cursor-pointer"
                 >
                   <span>
                     {heldAssets.length} asset
-                    {heldAssets.length === 1 ? "" : "s"} • {totalBalanceUsd}
+                    {heldAssets.length === 1 ? "" : "s"} •{" "}
+                    {hideBalance ? "$••••••" : totalBalanceUsd}
                   </span>
                   <span className="text-neutral-400">&gt;</span>
                 </button>
-
                 <button
                   type="button"
                   onClick={handleRefresh}
                   disabled={refreshing || cooldown > 0}
                   aria-label="Refresh on-chain balance"
-                  className="p-1.5 rounded-full text-neutral-400 hover:text-neutral-950 transition-colors disabled:opacity-40"
+                  className="p-1.5 rounded-full text-neutral-400 hover:text-neutral-950 dark:hover:text-white transition-colors disabled:opacity-40 cursor-pointer"
                 >
                   <IconRefresh
                     size={14}
@@ -1331,7 +1326,7 @@ export function PortfolioView({
                 </button>
               </div>
 
-              {/* Primary Action Buttons (+ Add Money, Send) */}
+              {/* Primary Liquid Glass Action Buttons (+ Add Money, Send) */}
               <div className="mt-6 flex items-center justify-center gap-3">
                 <button
                   type="button"
@@ -1339,7 +1334,7 @@ export function PortfolioView({
                     setDepositMode("DEPOSIT");
                     setActiveTab("receive");
                   }}
-                  className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full text-sm font-semibold bg-neutral-950 text-white shadow-md hover:bg-neutral-800 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  className="flow-liquid-btn-primary inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full text-sm font-semibold cursor-pointer"
                 >
                   <span className="text-base font-bold">+</span>
                   <span>Add Money</span>
@@ -1348,7 +1343,7 @@ export function PortfolioView({
                 <button
                   type="button"
                   onClick={() => setActiveTab("send")}
-                  className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full text-sm font-semibold bg-white text-neutral-900 border border-neutral-200/90 shadow-xs hover:bg-neutral-50 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  className="flow-liquid-btn inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full text-sm font-semibold text-neutral-900 dark:text-white cursor-pointer"
                 >
                   <span>↗</span>
                   <span>Send</span>
@@ -1356,28 +1351,28 @@ export function PortfolioView({
               </div>
             </section>
 
-            {/* Feature Carousel Banner (Matches FLOW Dashboard Overview-2.png) */}
+            {/* Feature Carousel Banner */}
             <section
               aria-label="Platform highlights"
-              className="relative overflow-hidden rounded-[28px] border border-neutral-200/80 bg-white p-6 sm:p-7 shadow-xs"
+              className="relative overflow-hidden rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs"
             >
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div className="space-y-2 max-w-xl">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neutral-100 text-neutral-600">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#FF1A1A]">
                     {currentSlide.badge}
-                  </span>
-                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-950">
+                  </p>
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-950 dark:text-white">
                     {currentSlide.title}
                   </h2>
-                  <p className="text-xs sm:text-sm text-neutral-600 leading-relaxed">
+                  <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                     {currentSlide.description}
                   </p>
                 </div>
 
                 {/* Stacked Cards Illustration */}
                 <div className="relative shrink-0 w-36 h-24 hidden sm:flex items-center justify-center">
-                  <div className="absolute w-28 h-16 rounded-xl bg-gradient-to-tr from-neutral-200 to-neutral-300 transform -rotate-6 shadow-sm border border-neutral-300/60" />
-                  <div className="absolute w-28 h-16 rounded-xl bg-gradient-to-tr from-neutral-800 to-neutral-950 text-white p-2.5 transform rotate-3 shadow-md flex flex-col justify-between">
+                  <div className="absolute w-28 h-16 rounded-xl bg-gradient-to-tr from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 transform -rotate-6 shadow-sm border border-neutral-300/60 dark:border-white/10" />
+                  <div className="absolute w-28 h-16 rounded-xl bg-gradient-to-tr from-neutral-800 to-neutral-950 text-white p-2.5 transform rotate-3 shadow-md flex flex-col justify-between border border-white/10">
                     <span className="text-[9px] font-mono tracking-wider text-neutral-400">
                       FLOW CARD
                     </span>
@@ -1386,7 +1381,7 @@ export function PortfolioView({
               </div>
 
               {/* Dots and Navigation Arrows */}
-              <div className="mt-5 pt-4 border-t border-neutral-100 flex items-center justify-between">
+              <div className="mt-5 pt-4 border-t border-neutral-100 dark:border-white/[0.06] flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   {carouselSlides.map((_, i) => (
                     <button
@@ -1394,10 +1389,10 @@ export function PortfolioView({
                       type="button"
                       onClick={() => setCarouselIndex(i)}
                       aria-label={`Slide ${i + 1}`}
-                      className={`h-2 rounded-full transition-all ${
+                      className={`h-2 rounded-full transition-all cursor-pointer ${
                         carouselIndex === i
-                          ? "w-6 bg-neutral-950"
-                          : "w-2 bg-neutral-200 hover:bg-neutral-300"
+                          ? "w-6 bg-neutral-950 dark:bg-white"
+                          : "w-2 bg-neutral-200 hover:bg-neutral-300 dark:bg-white/20 dark:hover:bg-white/35"
                       }`}
                     />
                   ))}
@@ -1412,7 +1407,7 @@ export function PortfolioView({
                       )
                     }
                     aria-label="Previous slide"
-                    className="p-1.5 rounded-full text-neutral-500 hover:text-neutral-950 hover:bg-neutral-100 transition-colors"
+                    className="p-1.5 rounded-full text-neutral-500 hover:text-neutral-950 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-white/10 transition-colors cursor-pointer"
                   >
                     ←
                   </button>
@@ -1424,7 +1419,7 @@ export function PortfolioView({
                       )
                     }
                     aria-label="Next slide"
-                    className="p-1.5 rounded-full text-neutral-500 hover:text-neutral-950 hover:bg-neutral-100 transition-colors"
+                    className="p-1.5 rounded-full text-neutral-500 hover:text-neutral-950 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-white/10 transition-colors cursor-pointer"
                   >
                     →
                   </button>
@@ -1432,62 +1427,92 @@ export function PortfolioView({
               </div>
             </section>
 
-            {/* Assets Held Card (Matches FLOW Dashboard Overview-2.png) */}
+            {/* Assets Held Card (Slim/Thin Rows + Empty Action CTAs) */}
             <section
               aria-label="Assets held"
-              className="rounded-[28px] border border-neutral-200/80 bg-white p-6 shadow-xs space-y-4"
+              className="rounded-[24px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] px-5 py-4 shadow-xs space-y-2.5"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
-                <h3 className="text-sm font-bold text-neutral-950">
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
+                <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
                   Assets held
                 </h3>
-                <span className="text-xs text-neutral-500">
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
                   {heldAssets.length} asset
                   {heldAssets.length === 1 ? "" : "s"}
                 </span>
               </div>
 
-              <div className="space-y-3">
-                {heldAssets.map((item) => (
-                  <div
-                    key={item.deployment.id}
-                    onClick={() => setIsHeldAssetsOpen(true)}
-                    className="flex items-center justify-between p-3 rounded-2xl hover:bg-neutral-50/80 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <AssetAvatar
-                          symbol={item.deployment.symbol}
-                          size={36}
-                        />
-                        <span className="absolute -bottom-1 -right-1">
-                          <ChainBadge
-                            chainKey={item.deployment.networkKey}
-                            size={14}
-                          />
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-neutral-950">
-                          {item.deployment.symbol}
-                        </div>
-                        <div className="text-xs text-neutral-500">
-                          on {item.deployment.networkName}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-neutral-950">
-                        {item.displayBalance} {item.deployment.symbol}
-                      </div>
-                      <div className="text-xs text-neutral-500">
-                        {item.usdValue}
-                      </div>
-                    </div>
+              {heldAssets.length === 0 ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    No assets held yet. Deposit crypto or create a payment link
+                    to receive funds.
+                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDepositMode("DEPOSIT");
+                        setActiveTab("receive");
+                      }}
+                      className="flow-liquid-btn-primary px-4 py-2 rounded-full text-xs font-semibold cursor-pointer"
+                    >
+                      Add Money
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("request")}
+                      className="flow-liquid-btn px-4 py-2 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
+                    >
+                      Request
+                    </button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {heldAssets.map((item) => (
+                    <div
+                      key={item.deployment.id}
+                      onClick={() => setIsHeldAssetsOpen(true)}
+                      className="flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-neutral-50/90 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative">
+                          <AssetAvatar
+                            symbol={item.deployment.symbol}
+                            size={28}
+                          />
+                          <span className="absolute -bottom-0.5 -right-0.5">
+                            <ChainBadge
+                              chainKey={item.deployment.networkKey}
+                              size={12}
+                            />
+                          </span>
+                        </div>
+                        <div className="leading-tight">
+                          <div className="text-[13px] font-bold text-neutral-950 dark:text-white">
+                            {item.deployment.symbol}
+                          </div>
+                          <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                            {item.deployment.networkName}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right leading-tight">
+                        <div className="text-[13px] font-bold font-mono text-neutral-950 dark:text-white">
+                          {hideBalance
+                            ? "••••••"
+                            : `${item.displayBalance} ${item.deployment.symbol}`}
+                        </div>
+                        <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                          {hideBalance ? "$••••••" : item.usdValue}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
 
             {/* 2-Column Bottom Grid: Recent Activity & Monthly Stats */}
@@ -1495,16 +1520,16 @@ export function PortfolioView({
               {/* Left: Recent Activity Card */}
               <section
                 aria-label="Recent activity"
-                className="md:col-span-7 rounded-[28px] border border-neutral-200/80 bg-white p-6 shadow-xs space-y-4"
+                className="md:col-span-7 rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4"
               >
-                <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
-                  <h3 className="text-sm font-bold text-neutral-950">
+                <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
+                  <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
                     Recent activity
                   </h3>
                   <button
                     type="button"
                     onClick={() => setActiveTab("activity")}
-                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950"
+                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white cursor-pointer"
                   >
                     View all →
                   </button>
@@ -1518,11 +1543,11 @@ export function PortfolioView({
                         className="flex items-center justify-between p-2 rounded-xl"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                          <div className="h-9 w-9 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
                             {act.direction === "OUTGOING" ? "↑" : "↓"}
                           </div>
                           <div>
-                            <div className="text-xs font-bold text-neutral-950">
+                            <div className="text-xs font-bold text-neutral-950 dark:text-white">
                               {act.activityType ===
                               "FLOW_CROSS_CHAIN_SETTLEMENT"
                                 ? "Payment settled"
@@ -1530,7 +1555,7 @@ export function PortfolioView({
                                   ? "Transfer sent"
                                   : "Transfer received"}
                             </div>
-                            <div className="text-[10px] text-neutral-500">
+                            <div className="text-[10px] text-neutral-500 dark:text-neutral-400">
                               {formatTimestamp(
                                 act.blockTimestamp || act.observedAt,
                               )}
@@ -1539,11 +1564,12 @@ export function PortfolioView({
                         </div>
 
                         <div className="text-right">
-                          <span className="text-xs font-bold text-emerald-600">
-                            {act.direction === "OUTGOING" ? "−" : "+"}
-                            {act.displayAmount} {act.assetSymbol}
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                            {hideBalance
+                              ? "••••••"
+                              : `${act.direction === "OUTGOING" ? "−" : "+"}${act.displayAmount} ${act.assetSymbol}`}
                           </span>
-                          <div className="text-[10px] text-emerald-700 font-semibold">
+                          <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
                             {act.reorgStatus === "CANONICAL"
                               ? act.finality
                               : act.reorgStatus}
@@ -1552,7 +1578,7 @@ export function PortfolioView({
                       </div>
                     ))
                   ) : (
-                    <p className="text-xs text-neutral-600">
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400">
                       No activity to display.
                     </p>
                   )}
@@ -1562,13 +1588,13 @@ export function PortfolioView({
               {/* Right: This Month Stat Card */}
               <section
                 aria-label="Monthly statistics"
-                className="md:col-span-5 rounded-[28px] border border-neutral-200/80 bg-white p-6 shadow-xs space-y-4"
+                className="md:col-span-5 rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4"
               >
-                <div className="pb-2 border-b border-neutral-100">
-                  <h3 className="text-sm font-bold text-neutral-950">
+                <div className="pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
+                  <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
                     This month
                   </h3>
-                  <p className="mt-1 text-[11px] text-neutral-500">
+                  <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
                     Posted payment ledger · UTC
                   </p>
                 </div>
@@ -1576,34 +1602,44 @@ export function PortfolioView({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="h-7 w-7 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold">
+                      <div className="h-7 w-7 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold">
                         ↓
                       </div>
-                      <span className="text-xs text-neutral-600">Inflow</span>
+                      <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                        Inflow
+                      </span>
                     </div>
-                    <span className="text-sm font-bold text-emerald-600">
-                      {ledgerMovementLabel(ledgerMovements, "inflow")}
+                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      {hideBalance
+                        ? "••••••"
+                        : ledgerMovementLabel(ledgerMovements, "inflow")}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="h-7 w-7 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-xs font-bold">
+                      <div className="h-7 w-7 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs font-bold">
                         ↑
                       </div>
-                      <span className="text-xs text-neutral-600">Outflow</span>
+                      <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                        Outflow
+                      </span>
                     </div>
-                    <span className="text-sm font-bold text-neutral-950">
-                      {ledgerMovementLabel(ledgerMovements, "outflow")}
+                    <span className="text-sm font-bold text-neutral-950 dark:text-white">
+                      {hideBalance
+                        ? "••••••"
+                        : ledgerMovementLabel(ledgerMovements, "outflow")}
                     </span>
                   </div>
 
-                  <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
-                    <span className="text-xs font-medium text-neutral-500">
+                  <div className="pt-3 border-t border-neutral-100 dark:border-white/[0.06] flex items-center justify-between">
+                    <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
                       Net movement
                     </span>
-                    <span className="text-sm font-bold text-emerald-600">
-                      {ledgerMovementLabel(ledgerMovements, "net")}
+                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      {hideBalance
+                        ? "••••••"
+                        : ledgerMovementLabel(ledgerMovements, "net")}
                     </span>
                   </div>
                 </div>
@@ -1618,10 +1654,10 @@ export function PortfolioView({
         {activeTab === "send" && (
           <div className="max-w-2xl mx-auto space-y-6">
             <div>
-              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950">
+              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
                 Send &amp; Convert
               </h1>
-              <p className="mt-1 text-xs sm:text-sm text-neutral-600">
+              <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
                 Review transfer and conversion quotes from NEAR Intents.
               </p>
               <div className="mt-2.5">
@@ -1629,15 +1665,15 @@ export function PortfolioView({
               </div>
             </div>
 
-            {/* Segmented Mode Switcher: Send vs Convert (Priority 3) */}
-            <div className="flex items-center gap-1.5 p-1 rounded-full bg-neutral-100 border border-neutral-200/60 w-fit">
+            {/* Segmented Mode Switcher: Send vs Convert */}
+            <div className="flow-nav-glass flex items-center gap-1 p-1 rounded-full w-fit">
               <button
                 type="button"
                 onClick={() => setSendMode("SEND")}
                 className={`px-5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                   sendMode === "SEND"
-                    ? "bg-neutral-950 text-white shadow-xs"
-                    : "text-neutral-600 hover:text-neutral-950"
+                    ? "flow-nav-active-pill text-neutral-950"
+                    : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
                 }`}
               >
                 Send
@@ -1647,33 +1683,36 @@ export function PortfolioView({
                 onClick={() => setSendMode("CONVERT")}
                 className={`px-5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                   sendMode === "CONVERT"
-                    ? "bg-neutral-950 text-white shadow-xs"
-                    : "text-neutral-600 hover:text-neutral-950"
+                    ? "flow-nav-active-pill text-neutral-950"
+                    : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
                 }`}
               >
                 Convert
               </button>
             </div>
 
-            <div className="rounded-[28px] border border-neutral-200/90 bg-white p-6 sm:p-7 shadow-xs space-y-5">
+            <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
               {sendMode === "SEND" ? (
                 <>
                   {/* You Send Card */}
-                  <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-4 space-y-3">
+                  <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-neutral-800">
+                      <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                         You send
                       </label>
-                      <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
                         <span>
-                          Available: {sendSourceBalance ?? "Unavailable"}{" "}
+                          Available:{" "}
+                          {hideBalance
+                            ? "••••••"
+                            : (sendSourceBalance ?? "Unavailable")}{" "}
                           {sendSource?.deployment.symbol}
                         </span>
                         <button
                           type="button"
                           disabled={!sendSourceBalance}
                           onClick={() => setSendAmount(sendSourceBalance ?? "")}
-                          className="text-xs font-bold text-neutral-950 hover:underline cursor-pointer"
+                          className="text-xs font-bold text-neutral-950 dark:text-white hover:underline cursor-pointer"
                         >
                           Max
                         </button>
@@ -1688,7 +1727,7 @@ export function PortfolioView({
                         value={sendAmount}
                         onChange={(e) => setSendAmount(e.target.value)}
                         placeholder="1.00"
-                        className="w-full text-2xl font-bold bg-transparent text-neutral-950 focus:outline-hidden"
+                        className="w-full text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden"
                       />
                       <div className="shrink-0 w-60">
                         <CombinedAssetNetworkPicker
@@ -1704,7 +1743,7 @@ export function PortfolioView({
                   <div className="space-y-1.5">
                     <label
                       htmlFor="recipient-address-input"
-                      className="block text-xs font-semibold text-neutral-800"
+                      className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200"
                     >
                       Recipient {sendDestDeployment.networkName} address
                     </label>
@@ -1719,7 +1758,7 @@ export function PortfolioView({
                         placeholder={
                           "Address on " + sendDestDeployment.networkName
                         }
-                        className="w-full pl-4 pr-10 py-3 rounded-2xl text-xs bg-neutral-50/50 border border-neutral-200 text-neutral-950 font-mono focus:outline-hidden"
+                        className="w-full pl-4 pr-10 py-3 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 font-mono focus:outline-hidden"
                       />
                       {sendRecipientAddress.trim().length > 0 &&
                         sendAddressValidation.valid && (
@@ -1732,7 +1771,7 @@ export function PortfolioView({
                       <p
                         className={`mt-1 text-xs font-medium ${
                           sendAddressValidation.valid
-                            ? "text-emerald-600"
+                            ? "text-emerald-600 dark:text-emerald-400"
                             : "text-[#FF1A1A]"
                         }`}
                       >
@@ -1741,7 +1780,7 @@ export function PortfolioView({
                           : sendAddressValidation.reason}
                       </p>
                     ) : (
-                      <p className="text-[11px] text-neutral-500">
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
                         ⓘ This address will be checked against{" "}
                         {sendDestDeployment.networkName} (
                         {sendDestDeployment.symbol}) to ensure it&apos;s valid.
@@ -1751,7 +1790,7 @@ export function PortfolioView({
 
                   {/* Recipient Receives */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-800">
+                    <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                       Recipient receives
                     </label>
                     <CombinedAssetNetworkPicker
@@ -1781,7 +1820,7 @@ export function PortfolioView({
                       type="button"
                       onClick={sendPreview.review}
                       disabled={!sendPreview.canReview || sendPreview.loading}
-                      className="w-full py-3.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors disabled:opacity-40 cursor-pointer"
+                      className="flow-liquid-btn w-full py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
                     >
                       {sendPreview.loading
                         ? "Fetching NEAR Intents Quote..."
@@ -1805,7 +1844,7 @@ export function PortfolioView({
                         setOutgoingIdempotencyKey(crypto.randomUUID());
                         setOutgoingProofOpenFor("SEND");
                       }}
-                      className="w-full py-4 rounded-full text-sm font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                      className="flow-liquid-btn-primary w-full py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                     >
                       {executionDisabled
                         ? "Outgoing Execution Disabled (Preview Only)"
@@ -1818,7 +1857,7 @@ export function PortfolioView({
                   {outgoingError && outgoingProofOpenFor !== "CONVERT" && (
                     <p
                       role="alert"
-                      className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-[#FF1A1A]"
+                      className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3.5 py-2.5 text-xs text-[#FF1A1A] dark:text-red-400"
                     >
                       {outgoingError}
                     </p>
@@ -1844,14 +1883,17 @@ export function PortfolioView({
               ) : (
                 <>
                   {/* CONVERT MODE (Priority 3) */}
-                  <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-4 space-y-3">
+                  <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-neutral-800">
+                      <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                         You convert
                       </label>
-                      <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
                         <span>
-                          Available: {convertSourceBalance ?? "Unavailable"}{" "}
+                          Available:{" "}
+                          {hideBalance
+                            ? "••••••"
+                            : (convertSourceBalance ?? "Unavailable")}{" "}
                           {convertSource?.deployment.symbol}
                         </span>
                         <button
@@ -1860,7 +1902,7 @@ export function PortfolioView({
                           onClick={() =>
                             setConvertAmount(convertSourceBalance ?? "")
                           }
-                          className="text-xs font-bold text-neutral-950 hover:underline cursor-pointer"
+                          className="text-xs font-bold text-neutral-950 dark:text-white hover:underline cursor-pointer"
                         >
                           Max
                         </button>
@@ -1875,7 +1917,7 @@ export function PortfolioView({
                         value={convertAmount}
                         onChange={(e) => setConvertAmount(e.target.value)}
                         placeholder="1.00"
-                        className="w-full text-2xl font-bold bg-transparent text-neutral-950 focus:outline-hidden"
+                        className="w-full text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden"
                       />
                       <div className="shrink-0">
                         <select
@@ -1883,7 +1925,7 @@ export function PortfolioView({
                           onChange={(e) =>
                             setConvertSourceDeploymentId(e.target.value)
                           }
-                          className="px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-white border border-neutral-200 text-neutral-900 focus:outline-hidden shadow-2xs cursor-pointer"
+                          className="px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.1] text-neutral-900 dark:text-white focus:outline-hidden shadow-2xs cursor-pointer"
                         >
                           {heldAssets.map((h) => (
                             <option
@@ -1891,7 +1933,7 @@ export function PortfolioView({
                               value={h.deployment.id}
                             >
                               {h.deployment.symbol} ({h.deployment.networkName})
-                              — {h.displayBalance}
+                              — {hideBalance ? "••••••" : h.displayBalance}
                             </option>
                           ))}
                         </select>
@@ -1901,17 +1943,17 @@ export function PortfolioView({
 
                   {/* You Receive (Convert Destination) */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-800">
+                    <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                       You receive
                     </label>
                     <CombinedAssetNetworkPicker
                       selectedId={convertDestDeploymentId}
                       onSelect={(dep) => setConvertDestDeploymentId(dep.id)}
                     />
-                    <p className="text-[11px] text-neutral-500 pt-1 font-mono">
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 pt-1 font-mono">
                       ⓘ Auto-deposits into your registered{" "}
                       {convertDestDeployment.networkName} wallet:{" "}
-                      <span className="font-bold text-neutral-800">
+                      <span className="font-bold text-neutral-800 dark:text-neutral-200">
                         {truncateMiddle(convertDestAddress, 8, 6) ||
                           "Wallet address unavailable"}
                       </span>
@@ -1931,7 +1973,7 @@ export function PortfolioView({
                       disabled={
                         !convertPreview.canReview || convertPreview.loading
                       }
-                      className="w-full py-3.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors disabled:opacity-40 cursor-pointer"
+                      className="flow-liquid-btn w-full py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
                     >
                       {convertPreview.loading
                         ? "Calculating Convert Quote..."
@@ -1956,7 +1998,7 @@ export function PortfolioView({
                         setOutgoingIdempotencyKey(crypto.randomUUID());
                         setOutgoingProofOpenFor("CONVERT");
                       }}
-                      className="w-full py-4 rounded-full text-sm font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                      className="flow-liquid-btn-primary w-full py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                     >
                       {executionDisabled
                         ? "Swap Execution Disabled (Preview Only)"
@@ -1969,7 +2011,7 @@ export function PortfolioView({
                   {outgoingError && outgoingProofOpenFor !== "SEND" && (
                     <p
                       role="alert"
-                      className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-[#FF1A1A]"
+                      className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3.5 py-2.5 text-xs text-[#FF1A1A] dark:text-red-400"
                     >
                       {outgoingError}
                     </p>
@@ -2004,24 +2046,24 @@ export function PortfolioView({
         {activeTab === "receive" && (
           <div className="max-w-4xl mx-auto space-y-6">
             <div>
-              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950">
+              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
                 Receive
               </h1>
-              <p className="mt-1 text-xs sm:text-sm text-neutral-600">
+              <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
                 Bring supported assets from other chains directly into Flow.
               </p>
             </div>
 
             {/* Segmented Top Selector: Direct receive vs Deposit from another chain */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-1.5 p-1 rounded-full bg-neutral-100 border border-neutral-200/60 w-fit">
+              <div className="flow-nav-glass flex items-center gap-1 p-1 rounded-full w-fit">
                 <button
                   type="button"
                   onClick={() => setDepositMode("DIRECT")}
                   className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                     depositMode === "DIRECT"
-                      ? "bg-neutral-950 text-white shadow-xs"
-                      : "text-neutral-600 hover:text-neutral-950"
+                      ? "flow-nav-active-pill text-neutral-950"
+                      : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
                   }`}
                 >
                   Direct receive
@@ -2031,26 +2073,26 @@ export function PortfolioView({
                   onClick={() => setDepositMode("DEPOSIT")}
                   className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                     depositMode === "DEPOSIT"
-                      ? "bg-neutral-950 text-white shadow-xs"
-                      : "text-neutral-600 hover:text-neutral-950"
+                      ? "flow-nav-active-pill text-neutral-950"
+                      : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
                   }`}
                 >
                   Deposit from another chain
                 </button>
               </div>
 
-              <span className="text-xs font-medium text-neutral-400">
+              <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
                 🔗 Connect a wallet (coming later)
               </span>
             </div>
 
             {depositMode === "DIRECT" ? (
-              /* 2-Column Direct Receive Layout (Matches media_1794490079680_0a50f095.jpg) */
+              /* 2-Column Direct Receive Layout */
               <div className="grid grid-cols-1 md:grid-cols-12 gap-7 items-start">
-                {/* Left Column: Unified Picker + Supported Assets Row */}
-                <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-xs space-y-5">
+                {/* Left Column: Unified Picker + Dynamic Network Supported Assets */}
+                <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-5">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-800 mb-2">
+                    <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-2">
                       Select asset
                     </label>
                     <CombinedAssetNetworkPicker
@@ -2060,60 +2102,41 @@ export function PortfolioView({
                     />
                   </div>
 
-                  {/* Supported Assets Row of Pills */}
+                  {/* Supported Assets populated dynamically from selected network */}
                   <div className="pt-2">
-                    <label className="block text-xs font-semibold text-neutral-800 mb-2.5">
-                      Supported assets
+                    <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-2.5">
+                      Supported assets on {depositDeployment.networkName}
                     </label>
                     <div className="flex flex-wrap items-center gap-2">
-                      {[
-                        { sym: "USDC", net: "base-mainnet", label: "USDC" },
-                        { sym: "USDT", net: "ethereum-mainnet", label: "USDT" },
-                        { sym: "ETH", net: "ethereum-mainnet", label: "ETH" },
-                      ].map((pill) => {
-                        const dep = receiveOptions.find(
-                          (d) =>
-                            d.symbol === pill.sym && d.networkKey === pill.net,
-                        );
-                        if (!dep) return null;
+                      {networkReceiveAssets.map((dep) => {
                         const isSelected = depositDeployment.id === dep.id;
                         return (
                           <button
-                            key={pill.sym + pill.net}
+                            key={dep.id}
                             type="button"
-                            onClick={() => {
-                              if (dep) setDepositDeployment(dep);
-                            }}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all cursor-pointer ${
+                            onClick={() => setDepositDeployment(dep)}
+                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                               isSelected
-                                ? "border-neutral-950 bg-neutral-100 text-neutral-950 shadow-2xs"
-                                : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
+                                ? "flow-liquid-btn-primary"
+                                : "flow-liquid-btn text-neutral-700 dark:text-neutral-200"
                             }`}
                           >
-                            <AssetAvatar symbol={pill.sym} size={18} />
-                            <span>{pill.label}</span>
+                            <AssetAvatar symbol={dep.symbol} size={18} />
+                            <span>{dep.symbol}</span>
                           </button>
                         );
                       })}
-                      <button
-                        type="button"
-                        onClick={() => setIsReceiveAssetSelectorOpen(true)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-neutral-200 bg-white text-xs font-semibold text-neutral-600 hover:border-neutral-400 hover:text-neutral-950 transition-colors cursor-pointer"
-                      >
-                        <span>+</span>
-                        <span>More</span>
-                      </button>
                     </div>
                   </div>
 
-                  <div className="pt-2 text-[11px] text-neutral-500">
+                  <div className="pt-2 text-[11px] text-neutral-500 dark:text-neutral-400">
                     ⓘ Minimums depend on selected asset and route.
                   </div>
                 </div>
 
                 {/* Right Column: Permanent Deposit Address Card with QR Code */}
-                <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-xs text-center space-y-4">
-                  <h3 className="text-sm font-bold text-neutral-950">
+                <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs text-center space-y-4">
+                  <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
                     Receive {depositDeployment.symbol} on{" "}
                     {depositDeployment.networkName}
                   </h3>
@@ -2131,10 +2154,10 @@ export function PortfolioView({
                   </div>
 
                   <div>
-                    <span className="text-[11px] font-semibold text-neutral-500">
+                    <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
                       Your permanent deposit address
                     </span>
-                    <div className="mt-1 font-mono text-xs font-bold text-neutral-950 break-all bg-neutral-50 p-2.5 rounded-xl border border-neutral-200/80 flex items-center justify-between gap-2">
+                    <div className="mt-1 font-mono text-xs font-bold text-neutral-950 dark:text-white break-all bg-neutral-50 dark:bg-[#1A1A1A] p-2.5 rounded-xl border border-neutral-200/80 dark:border-white/[0.08] flex items-center justify-between gap-2">
                       <span className="truncate">{activeDepositAddress}</span>
                       <button
                         type="button"
@@ -2143,10 +2166,10 @@ export function PortfolioView({
                           copyText("depositAddr", activeDepositAddress)
                         }
                         aria-label="Copy deposit address"
-                        className="shrink-0 p-1 rounded-lg text-neutral-500 hover:text-neutral-950 hover:bg-neutral-200 transition-colors cursor-pointer"
+                        className="shrink-0 p-1 rounded-lg text-neutral-500 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
                       >
                         {copiedKey === "depositAddr" ? (
-                          <IconCheck size={14} className="text-emerald-600" />
+                          <IconCheck size={14} className="text-emerald-500" />
                         ) : (
                           <IconCopy size={14} />
                         )}
@@ -2154,7 +2177,7 @@ export function PortfolioView({
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/70 text-left text-[11px] text-amber-900 leading-relaxed">
+                  <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/40 text-left text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
                     ⚠️ Send only <strong>{depositDeployment.symbol}</strong> on{" "}
                     <strong>{depositDeployment.networkName}</strong> to this
                     address. Sending any other asset or from another network may
@@ -2166,15 +2189,15 @@ export function PortfolioView({
               /* 2-Column Deposit from Another Chain (Priority 1) */
               <div className="grid grid-cols-1 md:grid-cols-12 gap-7 items-start">
                 {/* Left Column: Combined Asset Picker + Amount + Refund Address */}
-                <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-xs space-y-5">
+                <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-5">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-800 mb-2">
+                    <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-2">
                       Deposit source token &amp; network
                     </label>
                     <button
                       type="button"
                       onClick={() => setIsCrossChainTokenSelectorOpen(true)}
-                      className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-neutral-200/90 bg-neutral-50/50 hover:bg-neutral-100/70 transition-colors cursor-pointer text-left"
+                      className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-neutral-200/90 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] hover:bg-neutral-100/70 dark:hover:bg-white/[0.06] transition-colors cursor-pointer text-left"
                     >
                       {crossChainSourceToken ? (
                         <div className="flex items-center gap-3">
@@ -2191,17 +2214,17 @@ export function PortfolioView({
                             </span>
                           </div>
                           <div>
-                            <div className="text-xs font-bold text-neutral-950">
+                            <div className="text-xs font-bold text-neutral-950 dark:text-white">
                               {crossChainSourceToken.name} (
                               {crossChainSourceToken.symbol})
                             </div>
-                            <div className="text-[11px] text-neutral-500">
+                            <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
                               on {crossChainSourceToken.networkName}
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 text-xs text-neutral-500 font-medium">
+                        <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 font-medium">
                           <IconSearch size={16} className="text-neutral-400" />
                           <span>
                             Select any asset &amp; chain (e.g. SOL, ETH,
@@ -2209,14 +2232,14 @@ export function PortfolioView({
                           </span>
                         </div>
                       )}
-                      <span className="text-xs font-semibold text-neutral-500">
+                      <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">
                         Select ▾
                       </span>
                     </button>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-800 mb-1.5">
+                    <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                       Deposit amount
                     </label>
                     <input
@@ -2227,16 +2250,16 @@ export function PortfolioView({
                         setCrossChainDepositAmount(e.target.value)
                       }
                       placeholder="10"
-                      className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 border border-neutral-200 text-neutral-950 focus:outline-hidden"
+                      className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
                     />
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-semibold text-neutral-800">
+                      <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                         Payer refund address
                       </label>
-                      <span className="text-[10px] text-neutral-400 font-medium">
+                      <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-medium">
                         Required for cross-chain safety
                       </span>
                     </div>
@@ -2252,7 +2275,7 @@ export function PortfolioView({
                             ? `Address on ${crossChainSourceToken.networkName}`
                             : "Enter refund address"
                         }
-                        className="w-full pl-4 pr-10 py-2.5 rounded-2xl text-xs bg-neutral-50/50 border border-neutral-200 text-neutral-950 font-mono focus:outline-hidden"
+                        className="w-full pl-4 pr-10 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 font-mono focus:outline-hidden"
                       />
                       {crossChainRefundValidation.valid && (
                         <span className="absolute right-3.5 text-emerald-500 font-bold text-sm">
@@ -2264,7 +2287,7 @@ export function PortfolioView({
                       <p
                         className={`mt-1 text-[11px] font-medium ${
                           crossChainRefundValidation.valid
-                            ? "text-emerald-600"
+                            ? "text-emerald-600 dark:text-emerald-400"
                             : "text-[#FF1A1A]"
                         }`}
                       >
@@ -2274,36 +2297,37 @@ export function PortfolioView({
                   </div>
 
                   {/* Destination Info Box */}
-                  <div className="p-3.5 rounded-2xl bg-neutral-50 border border-neutral-200/80 space-y-1">
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-[#1A1A1A] border border-neutral-200/80 dark:border-white/[0.08] space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-neutral-800">
+                      <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                         Settles into native NEAR
                       </span>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                         NEAR Mainnet
                       </span>
                     </div>
                     <div className="flex items-center gap-2 pt-1">
                       <ChainBadge chainKey="near-mainnet" size={20} />
-                      <span className="font-mono text-xs font-bold text-neutral-950 truncate">
+                      <span className="font-mono text-xs font-bold text-neutral-950 dark:text-white truncate">
                         {truncateMiddle(nearAddr, 10, 8) ||
                           "NEAR wallet address unavailable"}
                       </span>
                     </div>
-                    <p className="text-[10px] text-neutral-500 pt-0.5">
+                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 pt-0.5">
                       Directly arrives in your registered FLOW NEAR wallet.
                     </p>
                   </div>
 
-                  <div className="pt-1 text-[11px] text-neutral-500">
+                  <div className="pt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
                     ⓘ Minimums depend on selected asset and route.
                   </div>
                 </div>
 
                 {/* Right Column: Dry Quote & Commitment Card */}
-                <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
-                    <h3 className="text-sm font-bold text-neutral-950">
+                <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
+                    <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
                       Cross-chain deposit quote
                     </h3>
                     <NearIntentsBadge />
@@ -2311,8 +2335,10 @@ export function PortfolioView({
 
                   <dl className="space-y-3.5 py-1 text-xs">
                     <div className="flex justify-between gap-4">
-                      <dt className="text-neutral-500">You send</dt>
-                      <dd className="min-w-0 break-all text-right font-semibold">
+                      <dt className="text-neutral-500 dark:text-neutral-400">
+                        You send
+                      </dt>
+                      <dd className="min-w-0 break-all text-right font-semibold text-neutral-950 dark:text-white">
                         {crossChainQuote
                           ? crossChainQuote.sourceDisplayAmount +
                             " " +
@@ -2321,10 +2347,10 @@ export function PortfolioView({
                       </dd>
                     </div>
                     <div className="flex justify-between gap-4">
-                      <dt className="text-neutral-500">
+                      <dt className="text-neutral-500 dark:text-neutral-400">
                         Estimated native NEAR
                       </dt>
-                      <dd className="min-w-0 text-right font-semibold text-emerald-700">
+                      <dd className="min-w-0 text-right font-semibold text-emerald-700 dark:text-emerald-400">
                         {crossChainQuote ? (
                           <>
                             <span className="break-all">
@@ -2339,8 +2365,10 @@ export function PortfolioView({
                     </div>
                     {crossChainQuote?.minimumRecipientDisplayAmount && (
                       <div className="flex justify-between gap-4">
-                        <dt className="text-neutral-500">Quoted minimum</dt>
-                        <dd className="min-w-0 text-right font-semibold">
+                        <dt className="text-neutral-500 dark:text-neutral-400">
+                          Quoted minimum
+                        </dt>
+                        <dd className="min-w-0 text-right font-semibold text-neutral-950 dark:text-white">
                           <span className="break-all">
                             {crossChainQuote.minimumRecipientDisplayAmount}
                           </span>{" "}
@@ -2349,24 +2377,28 @@ export function PortfolioView({
                       </div>
                     )}
                     <div className="flex justify-between gap-4">
-                      <dt className="shrink-0 text-neutral-500">
+                      <dt className="shrink-0 text-neutral-500 dark:text-neutral-400">
                         Solver / network fee
                       </dt>
-                      <dd className="text-right font-semibold">
+                      <dd className="text-right font-semibold text-neutral-950 dark:text-white">
                         {crossChainQuote?.fees.description ?? "Unavailable"}
                       </dd>
                     </div>
                     <div className="flex justify-between gap-4">
-                      <dt className="text-neutral-500">Est. Arrival</dt>
-                      <dd className="font-semibold">
+                      <dt className="text-neutral-500 dark:text-neutral-400">
+                        Est. Arrival
+                      </dt>
+                      <dd className="font-semibold text-neutral-950 dark:text-white">
                         {crossChainQuote?.estimatedTimeSeconds == null
                           ? "—"
                           : crossChainQuote.estimatedTimeSeconds + "s"}
                       </dd>
                     </div>
-                    <div className="flex justify-between gap-4 border-t border-neutral-100 pt-3">
-                      <dt className="text-neutral-500">Route</dt>
-                      <dd className="text-right font-semibold">
+                    <div className="flex justify-between gap-4 border-t border-neutral-100 dark:border-white/[0.06] pt-3">
+                      <dt className="text-neutral-500 dark:text-neutral-400">
+                        Route
+                      </dt>
+                      <dd className="text-right font-semibold text-neutral-950 dark:text-white">
                         {crossChainQuote
                           ? "1Click Cross-Chain Solver"
                           : crossChainQuoteLoading
@@ -2380,7 +2412,10 @@ export function PortfolioView({
                   </dl>
                   {crossChainQuoteError &&
                     crossChainQuoteError !== "Route unavailable" && (
-                      <p role="status" className="text-xs text-neutral-600">
+                      <p
+                        role="status"
+                        className="text-xs text-neutral-600 dark:text-neutral-400"
+                      >
                         {crossChainQuoteError}
                       </p>
                     )}
@@ -2389,7 +2424,7 @@ export function PortfolioView({
                     type="button"
                     onClick={handleReviewCrossChainQuote}
                     disabled={!addMoneyKey || crossChainQuoteLoading}
-                    className="w-full py-3 rounded-full text-xs font-bold bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors disabled:opacity-40 cursor-pointer"
+                    className="flow-liquid-btn w-full py-3 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
                   >
                     {crossChainQuoteLoading
                       ? "Fetching dry quote…"
@@ -2449,7 +2484,7 @@ export function PortfolioView({
                         setAddMoneyCommitting(false);
                       }
                     }}
-                    className="w-full py-3.5 rounded-full text-xs font-bold bg-neutral-950 text-white shadow-md hover:bg-[#FF1A1A] transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                    className="flow-liquid-btn-primary w-full py-3.5 rounded-full text-xs font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {executionDisabled
                       ? "Continue to Deposit (Execution Disabled)"
@@ -2461,20 +2496,20 @@ export function PortfolioView({
                   {addMoneyError && (
                     <p
                       role="alert"
-                      className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-[#FF1A1A]"
+                      className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3.5 py-2.5 text-xs text-[#FF1A1A] dark:text-red-400"
                     >
                       {addMoneyError}
                     </p>
                   )}
 
                   {addMoneyIntent && (
-                    <div className="mt-2 rounded-2xl border border-neutral-200 bg-neutral-50/70 p-4 space-y-3 text-xs">
+                    <div className="mt-2 rounded-2xl border border-neutral-200 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-4 space-y-3 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-neutral-950">
+                        <span className="font-bold text-neutral-950 dark:text-white">
                           Deposit {addMoneyIntent.quotedSourceDisplayAmount}{" "}
                           {addMoneyIntent.sourceAssetSymbol}
                         </span>
-                        <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-white border border-neutral-200 text-neutral-800">
+                        <span className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
                           {addMoneyIntent.status}
                         </span>
                       </div>
@@ -2483,17 +2518,19 @@ export function PortfolioView({
                         addMoneyIntent.status === "DEPOSIT_COMMITTED" && (
                           <>
                             <div className="flex justify-center py-2">
-                              <QrCode
-                                value={addMoneyIntent.depositAddress}
-                                size={136}
-                              />
+                              <div className="p-2.5 bg-white rounded-2xl">
+                                <QrCode
+                                  value={addMoneyIntent.depositAddress}
+                                  size={136}
+                                />
+                              </div>
                             </div>
                             <div className="space-y-1.5">
-                              <span className="text-[11px] font-semibold text-neutral-600 block">
+                              <span className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-400 block">
                                 Deposit Address ({addMoneyIntent.sourceNetwork})
                               </span>
-                              <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-[11px]">
-                                <span className="truncate select-all text-neutral-800">
+                              <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#141414] px-3 py-2 font-mono text-[11px]">
+                                <span className="truncate select-all text-neutral-800 dark:text-neutral-200">
                                   {addMoneyIntent.depositAddress}
                                 </span>
                                 <button
@@ -2514,11 +2551,11 @@ export function PortfolioView({
                             </div>
                             {addMoneyIntent.depositMemo && (
                               <div className="space-y-1">
-                                <span className="text-[11px] font-semibold text-neutral-600 block">
+                                <span className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-400 block">
                                   Required Memo
                                 </span>
-                                <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-[11px]">
-                                  <span className="truncate select-all text-neutral-800">
+                                <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#141414] px-3 py-2 font-mono text-[11px]">
+                                  <span className="truncate select-all text-neutral-800 dark:text-neutral-200">
                                     {addMoneyIntent.depositMemo}
                                   </span>
                                   <button
@@ -2539,7 +2576,7 @@ export function PortfolioView({
                                 </div>
                               </div>
                             )}
-                            <p className="text-[11px] text-neutral-600">
+                            <p className="text-[11px] text-neutral-600 dark:text-neutral-400">
                               Settles ~
                               {addMoneyIntent.quotedDestinationDisplayAmount}{" "}
                               NEAR to{" "}
@@ -2556,7 +2593,7 @@ export function PortfolioView({
                         )}
 
                       {addMoneyIntent.destinationTxHash && (
-                        <p className="font-mono text-[11px] break-all text-emerald-700">
+                        <p className="font-mono text-[11px] break-all text-emerald-700 dark:text-emerald-400">
                           NEAR settlement tx: {addMoneyIntent.destinationTxHash}
                         </p>
                       )}
@@ -2579,23 +2616,23 @@ export function PortfolioView({
         {activeTab === "request" && (
           <div className="max-w-4xl mx-auto space-y-8">
             <div>
-              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950">
+              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
                 Request Payment
               </h1>
-              <p className="mt-1 text-xs sm:text-sm text-neutral-600">
+              <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
                 Create shareable checkout links with 1Click route previews.
               </p>
             </div>
 
             {/* Create Payment Link Form */}
-            <div className="rounded-[28px] border border-neutral-200/90 bg-white p-6 sm:p-7 shadow-xs space-y-5">
-              <h2 className="text-base font-bold text-neutral-950">
+            <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
+              <h2 className="text-base font-bold text-neutral-950 dark:text-white">
                 Create a payment link
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                 <div className="sm:col-span-8">
-                  <label className="block text-xs font-semibold text-neutral-800 mb-1.5">
+                  <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                     Title
                   </label>
                   <input
@@ -2603,12 +2640,12 @@ export function PortfolioView({
                     value={prTitle}
                     onChange={(e) => setPrTitle(e.target.value)}
                     placeholder="e.g., Project design deposit"
-                    className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 border border-neutral-200 text-neutral-950 focus:outline-hidden"
+                    className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
                   />
                 </div>
 
                 <div className="sm:col-span-4">
-                  <label className="block text-xs font-semibold text-neutral-800 mb-1.5">
+                  <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                     Amount
                   </label>
                   <div className="flex gap-2">
@@ -2620,14 +2657,14 @@ export function PortfolioView({
                       value={prAmount}
                       onChange={(e) => setPrAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 border border-neutral-200 text-neutral-950 focus:outline-hidden disabled:opacity-40"
+                      className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden disabled:opacity-40"
                     />
                     <select
                       value={prAmountMode}
                       onChange={(e) =>
                         setPrAmountMode(e.target.value as "FIXED" | "OPTIONAL")
                       }
-                      className="px-3 py-2 rounded-2xl text-xs font-semibold bg-neutral-100 border border-neutral-200 text-neutral-900 focus:outline-hidden cursor-pointer"
+                      className="px-3 py-2 rounded-2xl text-xs font-semibold bg-neutral-100 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-900 dark:text-white focus:outline-hidden cursor-pointer"
                     >
                       <option value="FIXED">Fixed</option>
                       <option value="OPTIONAL">Open</option>
@@ -2637,7 +2674,7 @@ export function PortfolioView({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-800 mb-1.5">
+                <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                   Description (Optional)
                 </label>
                 <input
@@ -2645,30 +2682,30 @@ export function PortfolioView({
                   value={prDescription}
                   onChange={(e) => setPrDescription(e.target.value)}
                   placeholder="Add details for the payer (e.g., scope, timeline, invoice #)"
-                  className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 border border-neutral-200 text-neutral-950 focus:outline-hidden"
+                  className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
                 />
               </div>
 
               {/* Recipient Receives: Unified Picker */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-neutral-800">
+                <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                   Recipient receives
                 </label>
                 <CombinedAssetNetworkPicker
                   selectedId={prDestinationDeployment.id}
                   onSelect={(dep) => setPrDestinationDeployment(dep)}
                 />
-                <p className="text-[11px] text-neutral-500 font-mono">
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-mono">
                   Settles directly to your {prDestinationDeployment.networkName}{" "}
                   wallet:{" "}
-                  <span className="font-bold text-neutral-800">
+                  <span className="font-bold text-neutral-800 dark:text-neutral-200">
                     {truncateMiddle(prRecipientAddress, 8, 6)}
                   </span>
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-                <p className="text-[11px] text-neutral-500">
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
                   ⓘ Payer source options (tokens and networks) are chosen later
                   at guest checkout.
                 </p>
@@ -2677,19 +2714,19 @@ export function PortfolioView({
                   type="button"
                   onClick={handleCreatePaymentRequest}
                   disabled={prCreating || !prTitle}
-                  className="px-6 py-3 rounded-full text-xs font-semibold bg-neutral-950 text-white shadow-xs hover:bg-neutral-800 transition-all disabled:opacity-40 cursor-pointer shrink-0"
+                  className="flow-liquid-btn-primary px-6 py-3 rounded-full text-xs font-semibold disabled:opacity-40 cursor-pointer shrink-0"
                 >
                   {prCreating ? "Creating Link..." : "Create Payment Link"}
                 </button>
               </div>
 
               {prSuccessUrl && (
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3 animate-in fade-in">
+                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between gap-3 animate-in fade-in">
                   <div className="truncate">
-                    <p className="text-xs font-bold text-emerald-800">
+                    <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
                       Payment Link Ready!
                     </p>
-                    <p className="text-[11px] font-mono text-emerald-600 truncate mt-0.5">
+                    <p className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 truncate mt-0.5">
                       {prSuccessUrl}
                     </p>
                   </div>
@@ -2704,16 +2741,16 @@ export function PortfolioView({
               )}
             </div>
 
-            {/* 2-Column Links: Active Links vs Past Links (Matches media_1794481849816_2576ee33.jpg) */}
+            {/* 2-Column Links: Active Links vs Past Links */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Left Column: Active Links */}
-              <div className="rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-xs space-y-4">
+              <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-neutral-950">
+                    <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
                       Active Links
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-100 text-neutral-600">
+                    <span className="text-xs font-semibold tabular-nums text-neutral-400 dark:text-neutral-500">
                       {
                         paymentRequests.filter((r) => r.status === "ACTIVE")
                           .length
@@ -2723,7 +2760,7 @@ export function PortfolioView({
                   <button
                     type="button"
                     onClick={() => setPaymentLinksModalFilter("ACTIVE")}
-                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950 cursor-pointer"
+                    className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
                   >
                     View all →
                   </button>
@@ -2737,35 +2774,36 @@ export function PortfolioView({
                       .map((req) => (
                         <div
                           key={req.id}
-                          className="p-3.5 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 flex flex-col gap-2.5"
+                          className="p-3.5 rounded-2xl border border-neutral-200/70 dark:border-white/[0.06] bg-neutral-50/50 dark:bg-[#1A1A1A] flex flex-col gap-2.5"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <div className="text-xs font-bold text-neutral-950">
+                              <div className="text-xs font-bold text-neutral-950 dark:text-white">
                                 {req.title}
                               </div>
-                              <div className="text-[11px] text-neutral-500">
+                              <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
                                 {req.amountMode === "FIXED"
                                   ? `${req.displayAmount} ${req.destinationAssetSymbol} • ${req.destinationNetwork}`
                                   : `Open amount • ${req.destinationNetwork}`}
                               </div>
                             </div>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
-                              ● Active
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 shrink-0">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              Active
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 pt-1 border-t border-neutral-200/50">
+                          <div className="flex items-center gap-2 pt-1 border-t border-neutral-200/50 dark:border-white/[0.06]">
                             <Link
                               href={`/pay/${req.publicId}`}
                               target="_blank"
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-800 hover:bg-neutral-100"
+                              className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200"
                             >
                               View
                             </Link>
                             <button
                               type="button"
                               onClick={() => copyText(req.id, req.shareUrl)}
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-800 hover:bg-neutral-100 cursor-pointer"
+                              className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
                             >
                               {copiedKey === req.id ? "Copied!" : "Copy Link"}
                             </button>
@@ -2778,7 +2816,7 @@ export function PortfolioView({
                                   "DISABLED",
                                 )
                               }
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-500 hover:text-neutral-950 ml-auto disabled:opacity-40 cursor-pointer"
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white ml-auto disabled:opacity-40 cursor-pointer"
                             >
                               {togglingPaymentRequestId === req.id
                                 ? "Updating…"
@@ -2788,7 +2826,7 @@ export function PortfolioView({
                         </div>
                       ))
                   ) : (
-                    <div className="py-6 text-center text-xs text-neutral-400">
+                    <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500">
                       No active payment links.
                     </div>
                   )}
@@ -2796,13 +2834,13 @@ export function PortfolioView({
               </div>
 
               {/* Right Column: Past Links */}
-              <div className="rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-xs space-y-4">
+              <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-neutral-950">
+                    <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
                       Past Links
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-100 text-neutral-600">
+                    <span className="text-xs font-semibold tabular-nums text-neutral-400 dark:text-neutral-500">
                       {
                         paymentRequests.filter((r) => r.status !== "ACTIVE")
                           .length
@@ -2812,7 +2850,7 @@ export function PortfolioView({
                   <button
                     type="button"
                     onClick={() => setPaymentLinksModalFilter("PAST")}
-                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950 cursor-pointer"
+                    className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
                   >
                     View all →
                   </button>
@@ -2826,21 +2864,21 @@ export function PortfolioView({
                       .map((req) => (
                         <div
                           key={req.id}
-                          className="p-3.5 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 flex flex-col gap-2.5"
+                          className="p-3.5 rounded-2xl border border-neutral-200/70 dark:border-white/[0.06] bg-neutral-50/50 dark:bg-[#1A1A1A] flex flex-col gap-2.5"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <div className="text-xs font-bold text-neutral-950">
+                              <div className="text-xs font-bold text-neutral-950 dark:text-white">
                                 {req.title}
                               </div>
-                              <div className="text-[11px] text-neutral-500">
+                              <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
                                 {req.amountMode === "FIXED"
                                   ? `${req.displayAmount} ${req.destinationAssetSymbol} • ${req.destinationNetwork}`
                                   : `Open amount • ${req.destinationNetwork}`}
                               </div>
                             </div>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-200 text-neutral-700">
-                              ●{" "}
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-600 dark:text-neutral-400 shrink-0">
+                              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 dark:bg-neutral-500" />
                               {req.status === "COMPLETED"
                                 ? "Completed"
                                 : req.status === "DISABLED"
@@ -2848,18 +2886,18 @@ export function PortfolioView({
                                   : "Expired"}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 pt-1 border-t border-neutral-200/50">
+                          <div className="flex items-center gap-2 pt-1 border-t border-neutral-200/50 dark:border-white/[0.06]">
                             <Link
                               href={`/pay/${req.publicId}`}
                               target="_blank"
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-800 hover:bg-neutral-100"
+                              className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200"
                             >
                               View
                             </Link>
                             <button
                               type="button"
                               onClick={() => copyText(req.id, req.shareUrl)}
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-800 hover:bg-neutral-100 cursor-pointer"
+                              className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
                             >
                               {copiedKey === req.id ? "Copied!" : "Copy Link"}
                             </button>
@@ -2884,7 +2922,7 @@ export function PortfolioView({
                         </div>
                       ))
                   ) : (
-                    <div className="py-6 text-center text-xs text-neutral-400">
+                    <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500">
                       No past payment links.
                     </div>
                   )}
@@ -2901,10 +2939,10 @@ export function PortfolioView({
           <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950">
+                <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
                   Activity
                 </h1>
-                <p className="mt-1 text-xs sm:text-sm text-neutral-600">
+                <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
                   Real-time ledger events, cross-chain settlements, and
                   transfers
                 </p>
@@ -2914,23 +2952,23 @@ export function PortfolioView({
                 type="button"
                 onClick={handleSyncActivities}
                 disabled={activityLoading}
-                className="px-4 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white hover:bg-neutral-800 transition-colors shrink-0"
+                className="flow-liquid-btn-primary px-4 py-2 rounded-full text-xs font-semibold shrink-0 cursor-pointer disabled:opacity-50"
               >
                 {activityLoading ? "Syncing..." : "Sync Activity"}
               </button>
             </div>
 
             {/* Filter Tabs */}
-            <div className="flex items-center gap-2">
+            <div className="flow-nav-glass flex items-center gap-1 p-1 rounded-full w-fit">
               {(["ALL", "INCOMING", "OUTGOING"] as const).map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setActivityFilter(cat)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                     activityFilter === cat
-                      ? "bg-neutral-950 text-white shadow-2xs"
-                      : "bg-white text-neutral-600 hover:bg-neutral-100 border border-neutral-200/80"
+                      ? "flow-nav-active-pill text-neutral-950"
+                      : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
                   }`}
                 >
                   {cat.charAt(0) + cat.slice(1).toLowerCase()}
@@ -2939,7 +2977,7 @@ export function PortfolioView({
             </div>
 
             {/* Activity List */}
-            <div className="rounded-[28px] border border-neutral-200/90 bg-white p-6 shadow-xs space-y-3">
+            <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-3">
               {displayActivities.length > 0 ? (
                 displayActivities
                   .filter((act) => {
@@ -2952,20 +2990,20 @@ export function PortfolioView({
                   .map((act) => (
                     <div
                       key={act.id}
-                      className="p-3 rounded-2xl border border-neutral-100 hover:bg-neutral-50/60 transition-colors flex items-center justify-between gap-4"
+                      className="p-3 rounded-2xl border border-neutral-100 dark:border-white/[0.06] hover:bg-neutral-50/60 dark:hover:bg-white/[0.03] transition-colors flex items-center justify-between gap-4"
                     >
                       <div className="flex items-center gap-3">
                         <div
                           className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs ${
                             act.direction === "INCOMING"
-                              ? "bg-emerald-50 text-emerald-600"
-                              : "bg-rose-50 text-rose-600"
+                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
+                              : "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400"
                           }`}
                         >
                           {act.direction === "INCOMING" ? "↓" : "↑"}
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-neutral-950">
+                          <div className="text-xs font-bold text-neutral-950 dark:text-white">
                             {act.activityType === "FLOW_PAYMENT"
                               ? "Controlled Rehearsal"
                               : act.activityType ===
@@ -2973,7 +3011,7 @@ export function PortfolioView({
                                 ? "Payment Settled"
                                 : act.activityType}
                           </div>
-                          <div className="text-[10px] text-neutral-500 font-mono">
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
                             {truncateMiddle(act.txHash, 10, 8)} •{" "}
                             {formatTimestamp(
                               act.blockTimestamp || act.observedAt,
@@ -2984,20 +3022,22 @@ export function PortfolioView({
 
                       <div className="text-right">
                         <div
-                          className={`text-xs font-bold ${
+                          className={`text-xs font-bold tabular-nums ${
                             act.direction === "INCOMING"
-                              ? "text-emerald-600"
-                              : "text-neutral-950"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-neutral-950 dark:text-white"
                           }`}
                         >
-                          {act.direction === "INCOMING" ? "+" : "-"}
-                          {act.displayAmount} {act.assetSymbol}
+                          {hideBalance
+                            ? "••••••"
+                            : `${act.direction === "INCOMING" ? "+" : "-"}${act.displayAmount}`}{" "}
+                          {act.assetSymbol}
                         </div>
                         <a
                           href={act.explorerUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[10px] text-neutral-400 hover:text-neutral-950"
+                          className="text-[10px] text-neutral-400 dark:text-neutral-500 hover:text-neutral-950 dark:hover:text-white"
                         >
                           View tx ↗
                         </a>
@@ -3005,7 +3045,7 @@ export function PortfolioView({
                     </div>
                   ))
               ) : (
-                <div className="py-8 text-center text-xs text-neutral-400">
+                <div className="py-8 text-center text-xs text-neutral-400 dark:text-neutral-500">
                   No activity found for this account.
                 </div>
               )}
@@ -3014,12 +3054,13 @@ export function PortfolioView({
         )}
       </main>
 
-      {/* Held Assets Modal (ChatGPT Image Nov 12, 2026, 05_23_23 AM-2.png) */}
+      {/* Held Assets Modal */}
       <AssetsHeldModal
         isOpen={isHeldAssetsOpen}
         onClose={() => setIsHeldAssetsOpen(false)}
         heldAssets={heldAssets}
         totalBalanceUsd={totalBalanceUsd}
+        hideBalance={hideBalance}
         onSelectAction={(action, deployment) => {
           setIsHeldAssetsOpen(false);
           if (action === "receive") {
@@ -3077,21 +3118,6 @@ export function PortfolioView({
         }}
       />
 
-      {/* Unified Asset Selector Modal for Direct Receive */}
-      <UnifiedAssetSelectorModal
-        isOpen={isReceiveAssetSelectorOpen}
-        onClose={() => setIsReceiveAssetSelectorOpen(false)}
-        filterCapability="CAN_RECEIVE_TO"
-        selectableIds={receiveOptions.map((deployment) => deployment.id)}
-        onSelectToken={(t) => {
-          setIsReceiveAssetSelectorOpen(false);
-          const match = receiveOptions.find((d) => d.id === t.id);
-          if (match) {
-            setDepositDeployment(match);
-          }
-        }}
-      />
-
       {/* Unified Asset Selector Modal for Cross-Chain Deposit */}
       <UnifiedAssetSelectorModal
         isOpen={isCrossChainTokenSelectorOpen}
@@ -3111,11 +3137,11 @@ export function PortfolioView({
           role="dialog"
           aria-modal="true"
           aria-label="Payment links"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
         >
-          <div className="w-full max-w-xl rounded-[28px] border border-neutral-200 bg-white p-6 shadow-xl space-y-4 max-h-[80vh] flex flex-col">
+          <div className="w-full max-w-xl rounded-[28px] border border-neutral-200 dark:border-white/[0.1] bg-white dark:bg-[#141414] p-6 shadow-xl space-y-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between">
-              <h2 className="font-serif text-xl text-neutral-950">
+              <h2 className="font-serif text-xl text-neutral-950 dark:text-white">
                 {paymentLinksModalFilter === "ACTIVE"
                   ? "Active Payment Links"
                   : "Past Payment Links"}
@@ -3123,7 +3149,7 @@ export function PortfolioView({
               <button
                 type="button"
                 onClick={() => setPaymentLinksModalFilter(null)}
-                className="rounded-full px-3 py-1 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-800 cursor-pointer"
+                className="flow-liquid-btn rounded-full px-3 py-1 text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
               >
                 Close
               </button>
@@ -3138,20 +3164,33 @@ export function PortfolioView({
                 .map((req) => (
                   <div
                     key={req.id}
-                    className="p-3.5 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 flex flex-col gap-2"
+                    className="p-3.5 rounded-2xl border border-neutral-200/70 dark:border-white/[0.06] bg-neutral-50/50 dark:bg-[#1A1A1A] flex flex-col gap-2"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="text-xs font-bold text-neutral-950">
+                        <div className="text-xs font-bold text-neutral-950 dark:text-white">
                           {req.title}
                         </div>
-                        <div className="text-[11px] text-neutral-500">
+                        <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
                           {req.amountMode === "FIXED"
                             ? `${req.displayAmount} ${req.destinationAssetSymbol} • ${req.destinationNetwork}`
                             : `Open amount • ${req.destinationNetwork}`}
                         </div>
                       </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-neutral-200 text-neutral-700">
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-[11px] font-medium shrink-0 ${
+                          req.status === "ACTIVE"
+                            ? "text-emerald-700 dark:text-emerald-400"
+                            : "text-neutral-600 dark:text-neutral-400"
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            req.status === "ACTIVE"
+                              ? "bg-emerald-500"
+                              : "bg-neutral-400 dark:bg-neutral-500"
+                          }`}
+                        />
                         {req.status === "ACTIVE"
                           ? "Active"
                           : req.status === "DISABLED"
@@ -3165,14 +3204,14 @@ export function PortfolioView({
                       <Link
                         href={`/pay/${req.publicId}`}
                         target="_blank"
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-800 hover:bg-neutral-100"
+                        className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200"
                       >
                         View
                       </Link>
                       <button
                         type="button"
                         onClick={() => copyText(req.id, req.shareUrl)}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-800 hover:bg-neutral-100 cursor-pointer"
+                        className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
                       >
                         {copiedKey === req.id ? "Copied!" : "Copy Link"}
                       </button>
@@ -3187,7 +3226,7 @@ export function PortfolioView({
                               req.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
                             )
                           }
-                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-600 hover:text-neutral-950 ml-auto cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white ml-auto cursor-pointer"
                         >
                           {req.status === "ACTIVE" ? "Pause" : "Resume"}
                         </button>

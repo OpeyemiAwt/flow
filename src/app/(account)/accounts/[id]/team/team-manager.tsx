@@ -156,7 +156,8 @@ export function TeamManager({
               <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
                 Members
               </h2>
-              <span className="rounded-[4px] bg-emerald-400/15 px-2.5 py-0.5 text-[11px] font-bold text-[#0F9F80]">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#0F9F80] dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 {members.length} Active
               </span>
             </div>

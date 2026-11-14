@@ -166,20 +166,20 @@ export function CompleteOnboarding({
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] px-5 py-8 text-[#0B0B0B] sm:px-8 sm:py-12">
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0B0B] px-5 py-8 text-[#0B0B0B] dark:text-neutral-100 sm:px-8 sm:py-12 transition-colors duration-200">
       <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
         <Link href="/" aria-label="FLOW Home">
           <FlowLogo className="h-8 w-auto" />
         </Link>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-[#E8E4DC] bg-white px-4 py-2 text-sm text-[#555]">
+          <span className="text-sm text-[#555] dark:text-neutral-400 px-2">
             {userEmail ? `Signed in: ${userEmail}` : "Personal account"}
           </span>
           <button
             type="button"
             disabled={busy}
             onClick={() => void leaveToSignIn("switch-account")}
-            className="rounded-full border border-[#E8E4DC] bg-white px-4 py-2 text-sm font-medium text-[#0B0B0B] transition hover:border-[#0B0B0B] disabled:opacity-50"
+            className="flow-liquid-btn rounded-full px-4 py-2 text-sm font-medium text-[#0B0B0B] dark:text-white disabled:opacity-50 cursor-pointer"
           >
             Switch account
           </button>
@@ -187,7 +187,7 @@ export function CompleteOnboarding({
             type="button"
             disabled={busy}
             onClick={() => void leaveToSignIn("signed-out")}
-            className="rounded-full border border-[#E8E4DC] bg-white px-4 py-2 text-sm font-medium text-[#555] transition hover:border-[#0B0B0B] hover:text-[#0B0B0B] disabled:opacity-50"
+            className="flow-liquid-btn rounded-full px-4 py-2 text-sm font-medium text-[#555] dark:text-neutral-300 disabled:opacity-50 cursor-pointer"
           >
             Sign out
           </button>
@@ -199,7 +199,7 @@ export function CompleteOnboarding({
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#E92935]">
             FLOW WALLET SETUP
           </p>
-          <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">
+          <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl dark:text-white">
             {step === "status"
               ? status?.title
               : step === "welcome"
@@ -216,7 +216,7 @@ export function CompleteOnboarding({
                           ? "Enter your FLOW dashboard"
                           : "Wallet setup status"}
           </h1>
-          <p className="mt-4 text-base leading-7 text-[#5A5A5A]">
+          <p className="mt-4 text-base leading-7 text-[#5A5A5A] dark:text-neutral-400">
             {step === "status"
               ? status?.detail
               : step === "details"
@@ -238,7 +238,13 @@ export function CompleteOnboarding({
               return (
                 <span
                   key={label}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${index === current ? "bg-[#0B0B0B] text-white" : passed ? "bg-[#E9F8F1] text-[#137A50]" : "border border-[#E3DED7] bg-white text-[#777]"}`}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                    index === current
+                      ? "bg-[#0B0B0B] dark:bg-white text-white dark:text-[#0B0B0B]"
+                      : passed
+                        ? "bg-[#E9F8F1] dark:bg-emerald-950/50 text-[#137A50] dark:text-emerald-300"
+                        : "border border-[#E3DED7] dark:border-white/[0.1] bg-white dark:bg-[#141414] text-[#777] dark:text-neutral-400"
+                  }`}
                 >
                   {label}
                 </span>
@@ -247,16 +253,18 @@ export function CompleteOnboarding({
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-[#E8E4DC] bg-white p-6 shadow-[0_12px_36px_rgba(20,15,10,0.05)] sm:p-10">
-          <div className="flex items-start justify-between gap-4 border-b border-[#F0EDE6] pb-6">
+        <section className="rounded-[28px] border border-[#E8E4DC] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-[0_12px_36px_rgba(20,15,10,0.05)] sm:p-10">
+          <div className="flex items-start justify-between gap-4 border-b border-[#F0EDE6] dark:border-white/[0.08] pb-6">
             <div>
-              <p className="text-sm font-semibold">
+              <p className="text-sm font-semibold dark:text-white">
                 {userName.trim() || "Your FLOW profile"}
               </p>
-              <p className="mt-1 text-sm text-[#777]">{userEmail}</p>
+              <p className="mt-1 text-sm text-[#777] dark:text-neutral-400">
+                {userEmail}
+              </p>
             </div>
             {account && (
-              <span className="rounded-full bg-[#F7F5F1] px-3 py-1 text-xs text-[#555]">
+              <span className="text-xs font-medium text-[#555] dark:text-neutral-400 capitalize">
                 {account.walletStatus.replaceAll("_", " ")}
               </span>
             )}
@@ -264,10 +272,10 @@ export function CompleteOnboarding({
 
           {step === "welcome" && (
             <div className="pt-6">
-              <h2 className="font-serif text-2xl">
+              <h2 className="font-serif text-2xl dark:text-white">
                 One account for your FLOW wallet
               </h2>
-              <p className="mt-3 leading-6 text-[#5A5A5A]">
+              <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
                 FLOW will create or resume one Personal account for this
                 signed-in identity. You can return here later without creating
                 another wallet.
@@ -275,7 +283,7 @@ export function CompleteOnboarding({
               <button
                 type="button"
                 onClick={() => setStep("details")}
-                className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+                className="flow-liquid-btn-primary mt-8 h-12 w-full rounded-full font-semibold cursor-pointer"
               >
                 Continue
               </button>
@@ -284,40 +292,44 @@ export function CompleteOnboarding({
 
           {step === "details" && (
             <div className="pt-6">
-              <h2 className="font-serif text-2xl">Signed-in identity</h2>
-              <dl className="mt-5 space-y-3 rounded-2xl bg-[#F7F5F1] p-5 text-sm">
+              <h2 className="font-serif text-2xl dark:text-white">
+                Signed-in identity
+              </h2>
+              <dl className="mt-5 space-y-3 rounded-2xl bg-[#F7F5F1] dark:bg-[#1A1A1A] p-5 text-sm">
                 <div className="flex justify-between gap-4">
-                  <dt className="text-[#777]">Name</dt>
-                  <dd className="font-medium">
+                  <dt className="text-[#777] dark:text-neutral-400">Name</dt>
+                  <dd className="font-medium dark:text-white">
                     {userName.trim() || "Not provided"}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-[#777]">Email</dt>
-                  <dd className="break-all text-right font-medium">
+                  <dt className="text-[#777] dark:text-neutral-400">Email</dt>
+                  <dd className="break-all text-right font-medium dark:text-white">
                     {userEmail}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-[#777]">Account type</dt>
-                  <dd className="font-medium">Personal</dd>
+                  <dt className="text-[#777] dark:text-neutral-400">
+                    Account type
+                  </dt>
+                  <dd className="font-medium dark:text-white">Personal</dd>
                 </div>
               </dl>
-              <p className="mt-4 text-sm leading-6 text-[#5A5A5A]">
+              <p className="mt-4 text-sm leading-6 text-[#5A5A5A] dark:text-neutral-400">
                 FLOW keeps this account connected to the identity you used to
                 sign in. Returning to FLOW restores the same account.
               </p>
               <button
                 type="button"
                 onClick={() => setStep("security")}
-                className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+                className="flow-liquid-btn-primary mt-8 h-12 w-full rounded-full font-semibold cursor-pointer"
               >
                 Continue
               </button>
               <button
                 type="button"
                 onClick={() => setStep("welcome")}
-                className="mt-3 w-full py-2 text-sm text-[#666]"
+                className="mt-3 w-full py-2 text-sm text-[#666] dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
               >
                 Back
               </button>
@@ -326,15 +338,15 @@ export function CompleteOnboarding({
 
           {step === "security" && (
             <div className="pt-6">
-              <h2 className="font-serif text-2xl">
+              <h2 className="font-serif text-2xl dark:text-white">
                 Provider-managed wallet setup
               </h2>
-              <p className="mt-3 leading-6 text-[#5A5A5A]">
+              <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
                 FLOW requests wallet registration through its custody provider.
                 The app will show addresses only after the provider returns them
                 and FLOW verifies their association.
               </p>
-              <p className="mt-4 rounded-2xl bg-[#FFF8E8] p-4 text-sm leading-6 text-[#76521A]">
+              <p className="mt-4 rounded-2xl bg-[#FFF8E8] dark:bg-amber-950/30 p-4 text-sm leading-6 text-[#76521A] dark:text-amber-200 border border-transparent dark:border-amber-800/40">
                 Wallet recovery depends on the provider configuration. Do not
                 assume a recovery method is available until FLOW confirms it for
                 your account.
@@ -342,14 +354,14 @@ export function CompleteOnboarding({
               <button
                 type="button"
                 onClick={() => setStep("confirm")}
-                className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+                className="flow-liquid-btn-primary mt-8 h-12 w-full rounded-full font-semibold cursor-pointer"
               >
                 Continue
               </button>
               <button
                 type="button"
                 onClick={() => setStep("welcome")}
-                className="mt-3 w-full py-2 text-sm text-[#666]"
+                className="mt-3 w-full py-2 text-sm text-[#666] dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
               >
                 Back
               </button>
@@ -358,13 +370,15 @@ export function CompleteOnboarding({
 
           {step === "confirm" && (
             <div className="pt-6">
-              <h2 className="font-serif text-2xl">Start wallet setup?</h2>
-              <p className="mt-3 leading-6 text-[#5A5A5A]">
+              <h2 className="font-serif text-2xl dark:text-white">
+                Start wallet setup?
+              </h2>
+              <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
                 This saves a Personal account and an idempotent provisioning
                 request. It does not guarantee a wallet is active; setup remains
                 pending until the custody worker completes verification.
               </p>
-              <label className="mt-6 flex items-start gap-3 rounded-2xl border border-[#E8E4DC] p-4 text-sm leading-6">
+              <label className="mt-6 flex items-start gap-3 rounded-2xl border border-[#E8E4DC] dark:border-white/[0.1] bg-transparent dark:bg-[#1A1A1A] p-4 text-sm leading-6 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={confirmed}
@@ -380,14 +394,14 @@ export function CompleteOnboarding({
                 type="button"
                 disabled={!confirmed || busy}
                 onClick={beginProvisioning}
-                className="mt-6 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#9B9B9B]"
+                className="flow-liquid-btn-primary mt-6 h-12 w-full rounded-full font-semibold disabled:cursor-not-allowed disabled:opacity-45 cursor-pointer"
               >
                 {busy ? "Saving request…" : "Confirm and continue"}
               </button>
               <button
                 type="button"
                 onClick={() => setStep("security")}
-                className="mt-3 w-full py-2 text-sm text-[#666]"
+                className="mt-3 w-full py-2 text-sm text-[#666] dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
               >
                 Back
               </button>
@@ -398,11 +412,13 @@ export function CompleteOnboarding({
             <div className="pt-6">
               {status ? (
                 <>
-                  <h2 className="font-serif text-2xl">{status.title}</h2>
-                  <p className="mt-3 leading-6 text-[#5A5A5A]">
+                  <h2 className="font-serif text-2xl dark:text-white">
+                    {status.title}
+                  </h2>
+                  <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
                     {status.detail}
                   </p>
-                  <p className="mt-5 rounded-2xl bg-[#F7F5F1] p-4 text-sm leading-6 text-[#555]">
+                  <p className="mt-5 rounded-2xl bg-[#F7F5F1] dark:bg-[#1A1A1A] p-4 text-sm leading-6 text-[#555] dark:text-neutral-300">
                     This status comes from FLOW&apos;s saved account and custody
                     job records. No wallet address or balance is shown until it
                     has been returned and verified.
@@ -415,7 +431,7 @@ export function CompleteOnboarding({
                           "The existing provisioning job requires support review. No replacement wallet was requested.",
                         )
                       }
-                      className="mt-5 h-12 w-full rounded-full border border-[#E8E4DC] font-semibold"
+                      className="flow-liquid-btn mt-5 h-12 w-full rounded-full font-semibold cursor-pointer"
                     >
                       Review recovery options
                     </button>
@@ -428,12 +444,12 @@ export function CompleteOnboarding({
                           type="button"
                           disabled={busy}
                           onClick={beginProvisioning}
-                          className="mt-5 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white disabled:bg-[#999]"
+                          className="flow-liquid-btn-primary mt-5 h-12 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
                         >
                           {busy ? "Resuming…" : "Resume wallet setup"}
                         </button>
                       )}
-                      <p className="mt-3 text-center text-xs text-[#777]">
+                      <p className="mt-3 text-center text-xs text-[#777] dark:text-neutral-400">
                         Status refreshes automatically while this page is open.
                       </p>
                     </>
@@ -441,10 +457,10 @@ export function CompleteOnboarding({
                 </>
               ) : (
                 <>
-                  <h2 className="font-serif text-2xl">
+                  <h2 className="font-serif text-2xl dark:text-white">
                     Continue your wallet setup
                   </h2>
-                  <p className="mt-3 leading-6 text-[#5A5A5A]">
+                  <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
                     Your Personal account and wallet state will be reused.
                     Review the custody information, then confirm to start or
                     resume setup.
@@ -452,7 +468,7 @@ export function CompleteOnboarding({
                   <button
                     type="button"
                     onClick={() => setStep("security")}
-                    className="mt-6 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+                    className="flow-liquid-btn-primary mt-6 h-12 w-full rounded-full font-semibold cursor-pointer"
                   >
                     Review setup
                   </button>
@@ -464,8 +480,10 @@ export function CompleteOnboarding({
             account?.provisioningComplete &&
             account.addresses && (
               <div className="pt-6">
-                <h2 className="font-serif text-2xl">Four verified networks</h2>
-                <p className="mt-3 text-sm leading-6 text-[#5A5A5A]">
+                <h2 className="font-serif text-2xl dark:text-white">
+                  Four verified networks
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-[#5A5A5A] dark:text-neutral-400">
                   These public addresses were returned by OutLayer and checked
                   by FLOW.
                 </p>
@@ -473,15 +491,15 @@ export function CompleteOnboarding({
                   {account.addresses.map((address) => (
                     <li
                       key={address.network}
-                      className="rounded-2xl border border-[#E8E4DC] p-4"
+                      className="rounded-2xl border border-[#E8E4DC] dark:border-white/[0.08] bg-transparent dark:bg-[#1A1A1A] p-4"
                     >
-                      <div className="text-sm font-semibold capitalize">
+                      <div className="text-sm font-semibold capitalize dark:text-white">
                         {address.network}{" "}
-                        <span className="font-normal text-[#777]">
+                        <span className="font-normal text-[#777] dark:text-neutral-400">
                           · {address.chainId}
                         </span>
                       </div>
-                      <code className="mt-2 block break-all text-xs text-[#444]">
+                      <code className="mt-2 block break-all text-xs text-[#444] dark:text-neutral-300">
                         {address.address}
                       </code>
                     </li>
@@ -490,7 +508,7 @@ export function CompleteOnboarding({
                 <button
                   type="button"
                   onClick={() => setStep("dashboard")}
-                  className="mt-6 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+                  className="flow-liquid-btn-primary mt-6 h-12 w-full rounded-full font-semibold cursor-pointer"
                 >
                   Continue
                 </button>
@@ -498,15 +516,17 @@ export function CompleteOnboarding({
             )}
           {step === "dashboard" && account?.provisioningComplete && (
             <div className="pt-6">
-              <h2 className="font-serif text-2xl">Wallet verified and ready</h2>
-              <p className="mt-3 leading-6 text-[#5A5A5A]">
+              <h2 className="font-serif text-2xl dark:text-white">
+                Wallet verified and ready
+              </h2>
+              <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
                 Your account and network addresses are verified. Financial
                 execution remains disabled behind its separate safety gates.
               </p>
               <button
                 type="button"
                 onClick={() => router.replace(`/accounts/${account.id}`)}
-                className="mt-8 h-12 w-full rounded-full bg-[#0B0B0B] font-semibold text-white"
+                className="flow-liquid-btn-primary mt-8 h-12 w-full rounded-full font-semibold cursor-pointer"
               >
                 Enter dashboard
               </button>

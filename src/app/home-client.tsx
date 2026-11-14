@@ -50,15 +50,15 @@ export function HomePageClient() {
   const activeTestimonial = TESTIMONIALS[testimonialIdx] ?? TESTIMONIALS[0]!;
 
   return (
-    <div className="min-h-screen bg-[#F8F6F3] text-[#0B0B0B] selection:bg-[#FF1A1A] selection:text-white">
+    <div className="min-h-screen bg-[#F8F6F3] dark:bg-[#0B0B0B] text-[#0B0B0B] dark:text-neutral-100 selection:bg-[#FF1A1A] selection:text-white transition-colors duration-200">
       {/* 1. NAVBAR */}
-      <header className="sticky top-0 z-50 bg-[#F8F6F3]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-50 bg-[#F8F6F3]/95 dark:bg-[#0B0B0B]/90 backdrop-blur-md border-b border-transparent dark:border-white/[0.06]">
         <div className="mx-auto flex h-20 max-w-[1200px] items-center justify-between px-5 sm:px-8">
           <Link href="/" aria-label="FLOW Home" className="shrink-0">
             <FlowLogo className="h-7 w-auto sm:h-8" />
           </Link>
 
-          <nav className="hidden items-center gap-9 text-[14px] font-medium text-[#1F1F1F] md:flex">
+          <nav className="hidden items-center gap-9 text-[14px] font-medium text-[#1F1F1F] dark:text-neutral-300 md:flex">
             <a
               href="#experience"
               className="transition-colors hover:text-[#FF1A1A]"
@@ -85,13 +85,13 @@ export function HomePageClient() {
           <div className="hidden items-center gap-3 md:flex">
             <Link
               href="/sign-in"
-              className="inline-flex h-10 items-center justify-center rounded-full bg-[#0B0B0B] px-5 text-[13px] font-semibold text-white transition hover:bg-[#1F1F1F]"
+              className="flow-liquid-btn-primary inline-flex h-10 items-center justify-center rounded-full px-5 text-[13px] font-semibold"
             >
               Get Started
             </Link>
             <Link
               href="/sign-in"
-              className="inline-flex h-10 items-center justify-center rounded-full border border-[#DCD8D0] bg-white px-5 text-[13px] font-semibold text-[#0B0B0B] transition hover:border-[#0B0B0B]"
+              className="flow-liquid-btn inline-flex h-10 items-center justify-center rounded-full px-5 text-[13px] font-semibold text-[#0B0B0B] dark:text-white"
             >
               Sign In
             </Link>
@@ -102,7 +102,7 @@ export function HomePageClient() {
             type="button"
             onClick={() => setMobileMenuOpen((v) => !v)}
             aria-label="Toggle navigation menu"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-[#0B0B0B] md:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-[#0B0B0B] dark:text-white md:hidden"
           >
             <svg
               viewBox="0 0 24 24"
@@ -120,8 +120,8 @@ export function HomePageClient() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="border-b border-[#E6E2DA] bg-[#F8F6F3] px-5 pb-6 pt-2 md:hidden">
-            <div className="flex flex-col gap-3 text-[15px] font-medium text-[#1F1F1F]">
+          <div className="border-b border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3] dark:bg-[#0B0B0B] px-5 pb-6 pt-2 md:hidden">
+            <div className="flex flex-col gap-3 text-[15px] font-medium text-[#1F1F1F] dark:text-neutral-200">
               <a
                 href="#experience"
                 onClick={() => setMobileMenuOpen(false)}
@@ -153,13 +153,13 @@ export function HomePageClient() {
               <div className="mt-2 flex flex-col gap-2.5">
                 <Link
                   href="/sign-in"
-                  className="inline-flex h-11 items-center justify-center rounded-full bg-[#0B0B0B] text-[14px] font-semibold text-white"
+                  className="flow-liquid-btn-primary inline-flex h-11 items-center justify-center rounded-full text-[14px] font-semibold"
                 >
                   Get Started
                 </Link>
                 <Link
                   href="/sign-in"
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-[#DCD8D0] bg-white text-[14px] font-semibold text-[#0B0B0B]"
+                  className="flow-liquid-btn inline-flex h-11 items-center justify-center rounded-full text-[14px] font-semibold text-[#0B0B0B] dark:text-white"
                 >
                   Sign In
                 </Link>
@@ -174,7 +174,7 @@ export function HomePageClient() {
         <section className="mx-auto max-w-[1200px] px-5 pb-14 pt-6 sm:px-8 lg:pb-20 lg:pt-12">
           <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-6">
             <div className="lg:col-span-5">
-              <h1 className="font-serif text-[44px] font-normal leading-[1.06] tracking-[-0.025em] text-[#0B0B0B] sm:text-[54px] lg:text-[60px]">
+              <h1 className="font-serif text-[44px] font-normal leading-[1.06] tracking-[-0.025em] text-[#0B0B0B] dark:text-white sm:text-[54px] lg:text-[60px]">
                 Get paid in
                 <br />
                 what you want
@@ -199,7 +199,7 @@ export function HomePageClient() {
                 </span>
               </h1>
 
-              <p className="mt-5 max-w-[420px] text-[15px] leading-[1.6] text-[#4A4A4A] sm:text-[16px]">
+              <p className="mt-5 max-w-[420px] text-[15px] leading-[1.6] text-[#4A4A4A] dark:text-neutral-400 sm:text-[16px]">
                 A more flexible way to receive payments, so you can get paid on
                 your terms, from anyone, anywhere.
               </p>
@@ -207,14 +207,14 @@ export function HomePageClient() {
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
                   href="/sign-in"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#0B0B0B] px-7 text-[14px] font-semibold text-white transition hover:bg-[#1F1F1F]"
+                  className="flow-liquid-btn-primary inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-[14px] font-semibold"
                 >
                   <span>Get Started</span>
                   <span aria-hidden="true">→</span>
                 </Link>
                 <a
                   href="#experience"
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-[#D8D4CC] bg-white px-7 text-[14px] font-semibold text-[#0B0B0B] transition hover:border-[#0B0B0B]"
+                  className="flow-liquid-btn inline-flex h-12 items-center justify-center rounded-full px-7 text-[14px] font-semibold text-[#0B0B0B] dark:text-white"
                 >
                   See How It Works
                 </a>
@@ -226,7 +226,7 @@ export function HomePageClient() {
                 <img
                   src="/assets/hero-phones.png"
                   alt="FLOW payment received, brand screen, and QR code scan on three smartphones"
-                  className="h-auto w-full object-contain"
+                  className="h-auto w-full object-contain rounded-3xl"
                 />
               </div>
             </div>
@@ -234,37 +234,37 @@ export function HomePageClient() {
         </section>
 
         {/* 3. STATS STRIP */}
-        <section className="border-y border-[#E6E2DA] bg-[#FAF8F5]">
-          <div className="mx-auto grid max-w-[1200px] grid-cols-2 divide-x divide-y divide-[#E6E2DA] px-5 sm:px-8 lg:grid-cols-4 lg:divide-y-0">
+        <section className="border-y border-[#E6E2DA] dark:border-white/[0.08] bg-[#FAF8F5] dark:bg-[#111111]">
+          <div className="mx-auto grid max-w-[1200px] grid-cols-2 divide-x divide-y divide-[#E6E2DA] dark:divide-white/[0.08] px-5 sm:px-8 lg:grid-cols-4 lg:divide-y-0">
             <div className="py-6 pr-4 text-center sm:py-8">
-              <div className="text-[22px] font-bold tracking-tight text-[#0B0B0B] sm:text-[26px]">
+              <div className="text-[22px] font-bold tracking-tight text-[#0B0B0B] dark:text-white sm:text-[26px]">
                 500K+
               </div>
-              <div className="mt-1 text-[12px] text-[#666666] sm:text-[13px]">
+              <div className="mt-1 text-[12px] text-[#666666] dark:text-neutral-400 sm:text-[13px]">
                 People and businesses
               </div>
             </div>
             <div className="px-4 py-6 text-center sm:py-8">
-              <div className="text-[22px] font-bold tracking-tight text-[#0B0B0B] sm:text-[26px]">
+              <div className="text-[22px] font-bold tracking-tight text-[#0B0B0B] dark:text-white sm:text-[26px]">
                 100+
               </div>
-              <div className="mt-1 text-[12px] text-[#666666] sm:text-[13px]">
+              <div className="mt-1 text-[12px] text-[#666666] dark:text-neutral-400 sm:text-[13px]">
                 Countries
               </div>
             </div>
             <div className="px-4 py-6 text-center sm:py-8">
-              <div className="text-[16px] font-semibold tracking-tight text-[#0B0B0B] sm:text-[20px]">
+              <div className="text-[16px] font-semibold tracking-tight text-[#0B0B0B] dark:text-white sm:text-[20px]">
                 Multiple ways to pay
               </div>
-              <div className="mt-1 text-[12px] text-[#666666] sm:text-[13px]">
+              <div className="mt-1 text-[12px] text-[#666666] dark:text-neutral-400 sm:text-[13px]">
                 Cards, wallets, and more
               </div>
             </div>
             <div className="py-6 pl-4 text-center sm:py-8">
-              <div className="text-[16px] font-semibold tracking-tight text-[#0B0B0B] sm:text-[20px]">
+              <div className="text-[16px] font-semibold tracking-tight text-[#0B0B0B] dark:text-white sm:text-[20px]">
                 Get paid your way
               </div>
-              <div className="mt-1 text-[12px] text-[#666666] sm:text-[13px]">
+              <div className="mt-1 text-[12px] text-[#666666] dark:text-neutral-400 sm:text-[13px]">
                 In the value you prefer
               </div>
             </div>
@@ -279,12 +279,12 @@ export function HomePageClient() {
           <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
             THE FLOW EXPERIENCE
           </div>
-          <h2 className="mx-auto mt-3 max-w-[540px] font-serif text-[36px] font-normal leading-[1.1] tracking-[-0.02em] text-[#0B0B0B] sm:text-[48px]">
+          <h2 className="mx-auto mt-3 max-w-[540px] font-serif text-[36px] font-normal leading-[1.1] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[48px]">
             Payments that work
             <br />
             on your terms.
           </h2>
-          <p className="mx-auto mt-4 max-w-[500px] text-[15px] leading-[1.6] text-[#555555] sm:text-[16px]">
+          <p className="mx-auto mt-4 max-w-[500px] text-[15px] leading-[1.6] text-[#555555] dark:text-neutral-400 sm:text-[16px]">
             Receive money the way you want, from the people, platforms, and
             markets you work with.
           </p>
@@ -293,7 +293,7 @@ export function HomePageClient() {
             <img
               src="/assets/phone-pedestal.png"
               alt="FLOW mobile screen showing You're getting paid $249.00 and Receive in USDC"
-              className="h-auto w-full object-contain"
+              className="h-auto w-full object-contain rounded-3xl"
             />
           </div>
         </section>
@@ -309,7 +309,7 @@ export function HomePageClient() {
                 <img
                   src="/assets/phone-hand.png"
                   alt="Hand holding smartphone running FLOW app"
-                  className="h-auto w-full object-contain"
+                  className="h-auto w-full object-contain rounded-3xl"
                 />
               </div>
             </div>
@@ -318,20 +318,20 @@ export function HomePageClient() {
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                 BUILT FOR REAL LIFE
               </div>
-              <h2 className="mt-3 font-serif text-[34px] font-normal leading-[1.1] tracking-[-0.02em] text-[#0B0B0B] sm:text-[44px]">
+              <h2 className="mt-3 font-serif text-[34px] font-normal leading-[1.1] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[44px]">
                 A simpler, more
                 <br />
                 flexible way to get paid.
               </h2>
-              <p className="mt-4 max-w-[460px] text-[15px] leading-[1.65] text-[#555555]">
+              <p className="mt-4 max-w-[460px] text-[15px] leading-[1.65] text-[#555555] dark:text-neutral-400">
                 Whether you&apos;re a creator, freelancer, business, or a global
                 team, FLOW makes it easy to receive payments and use your money,
                 your way.
               </p>
 
               <ul className="mt-8 space-y-4">
-                <li className="flex items-center gap-3.5 text-[15px] font-medium text-[#1F1F1F]">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EFECE6] text-[#0B0B0B]">
+                <li className="flex items-center gap-3.5 text-[15px] font-medium text-[#1F1F1F] dark:text-neutral-200">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EFECE6] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -346,8 +346,8 @@ export function HomePageClient() {
                   </span>
                   <span>Receive in the value you prefer</span>
                 </li>
-                <li className="flex items-center gap-3.5 text-[15px] font-medium text-[#1F1F1F]">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EFECE6] text-[#0B0B0B]">
+                <li className="flex items-center gap-3.5 text-[15px] font-medium text-[#1F1F1F] dark:text-neutral-200">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EFECE6] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -360,8 +360,8 @@ export function HomePageClient() {
                   </span>
                   <span>A smooth, modern payment experience</span>
                 </li>
-                <li className="flex items-center gap-3.5 text-[15px] font-medium text-[#1F1F1F]">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EFECE6] text-[#0B0B0B]">
+                <li className="flex items-center gap-3.5 text-[15px] font-medium text-[#1F1F1F] dark:text-neutral-200">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EFECE6] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -465,7 +465,7 @@ export function HomePageClient() {
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                 WHY FLOW
               </div>
-              <h2 className="mt-2.5 font-serif text-[32px] font-normal leading-[1.12] tracking-[-0.02em] text-[#0B0B0B] sm:text-[40px]">
+              <h2 className="mt-2.5 font-serif text-[32px] font-normal leading-[1.12] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[40px]">
                 More freedom
                 <br />
                 for the way you work.
@@ -473,7 +473,7 @@ export function HomePageClient() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3 lg:col-span-8">
-              <div className="rounded-[24px] bg-[#F1EEE8] p-6">
+              <div className="rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
                 <div className="text-[#FF1A1A]">
                   <svg
                     viewBox="0 0 24 24"
@@ -487,15 +487,15 @@ export function HomePageClient() {
                     <polyline points="2 17 12 22 22 17" />
                   </svg>
                 </div>
-                <h3 className="mt-5 text-[16px] font-semibold text-[#0B0B0B]">
+                <h3 className="mt-5 text-[16px] font-semibold text-[#0B0B0B] dark:text-white">
                   Flexibility
                 </h3>
-                <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A]">
+                <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A] dark:text-neutral-400">
                   Get paid in the value that suits you.
                 </p>
               </div>
 
-              <div className="rounded-[24px] bg-[#F1EEE8] p-6">
+              <div className="rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
                 <div className="text-[#FF1A1A]">
                   <svg
                     viewBox="0 0 24 24"
@@ -507,15 +507,15 @@ export function HomePageClient() {
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                   </svg>
                 </div>
-                <h3 className="mt-5 text-[16px] font-semibold text-[#0B0B0B]">
+                <h3 className="mt-5 text-[16px] font-semibold text-[#0B0B0B] dark:text-white">
                   A cleaner experience
                 </h3>
-                <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A]">
+                <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A] dark:text-neutral-400">
                   Simple, fast, and frictionless payments.
                 </p>
               </div>
 
-              <div className="rounded-[24px] bg-[#F1EEE8] p-6">
+              <div className="rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
                 <div className="text-[#FF1A1A]">
                   <svg
                     viewBox="0 0 24 24"
@@ -530,10 +530,10 @@ export function HomePageClient() {
                     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
                 </div>
-                <h3 className="mt-5 text-[16px] font-semibold text-[#0B0B0B]">
+                <h3 className="mt-5 text-[16px] font-semibold text-[#0B0B0B] dark:text-white">
                   For you and your business
                 </h3>
-                <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A]">
+                <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A] dark:text-neutral-400">
                   Built for individuals, creators, and growing businesses.
                 </p>
               </div>
@@ -546,19 +546,19 @@ export function HomePageClient() {
           id="get-paid-anywhere"
           className="mx-auto max-w-[1200px] px-5 pb-16 sm:px-8"
         >
-          <div className="grid items-center gap-8 rounded-[32px] bg-[#F1EEE8] p-7 sm:p-12 lg:grid-cols-12">
+          <div className="grid items-center gap-8 rounded-[32px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-7 sm:p-12 lg:grid-cols-12">
             <div className="lg:col-span-4">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                 GET PAID ANYWHERE
               </div>
-              <h2 className="mt-2.5 font-serif text-[32px] font-normal leading-[1.12] tracking-[-0.02em] text-[#0B0B0B] sm:text-[38px]">
+              <h2 className="mt-2.5 font-serif text-[32px] font-normal leading-[1.12] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[38px]">
                 Turn any payment
                 <br />
                 into a simple link
                 <br />
                 or QR.
               </h2>
-              <p className="mt-4 text-[14px] leading-[1.6] text-[#5A5A5A]">
+              <p className="mt-4 text-[14px] leading-[1.6] text-[#5A5A5A] dark:text-neutral-400">
                 Share a link, show your QR, or send an invoice — and get paid in
                 the value you prefer.
               </p>
@@ -568,13 +568,13 @@ export function HomePageClient() {
               <img
                 src="/assets/qr-standee.png"
                 alt="FLOW Scan to pay QR standee"
-                className="h-auto w-full max-w-[250px] object-contain"
+                className="h-auto w-full max-w-[250px] object-contain rounded-2xl"
               />
             </div>
 
             <div className="space-y-3 lg:col-span-4">
-              <div className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-2xs">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] text-[#0B0B0B]">
+              <div className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -587,17 +587,17 @@ export function HomePageClient() {
                   </svg>
                 </span>
                 <div>
-                  <div className="text-[14px] font-semibold text-[#0B0B0B]">
+                  <div className="text-[14px] font-semibold text-[#0B0B0B] dark:text-white">
                     Payment link
                   </div>
-                  <div className="text-[12px] text-[#666666]">
+                  <div className="text-[12px] text-[#666666] dark:text-neutral-400">
                     Share and get paid instantly.
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-2xs">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] text-[#0B0B0B]">
+              <div className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -613,17 +613,17 @@ export function HomePageClient() {
                   </svg>
                 </span>
                 <div>
-                  <div className="text-[14px] font-semibold text-[#0B0B0B]">
+                  <div className="text-[14px] font-semibold text-[#0B0B0B] dark:text-white">
                     QR payment
                   </div>
-                  <div className="text-[12px] text-[#666666]">
+                  <div className="text-[12px] text-[#666666] dark:text-neutral-400">
                     Accept in person or online.
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-2xs">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] text-[#0B0B0B]">
+              <div className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -638,10 +638,10 @@ export function HomePageClient() {
                   </svg>
                 </span>
                 <div>
-                  <div className="text-[14px] font-semibold text-[#0B0B0B]">
+                  <div className="text-[14px] font-semibold text-[#0B0B0B] dark:text-white">
                     Invoice
                   </div>
-                  <div className="text-[12px] text-[#666666]">
+                  <div className="text-[12px] text-[#666666] dark:text-neutral-400">
                     Send a professional invoice in seconds.
                   </div>
                 </div>
@@ -652,12 +652,12 @@ export function HomePageClient() {
 
         {/* 9. LOVED BY PEOPLE LIKE YOU */}
         <section className="mx-auto max-w-[1200px] px-5 py-12 sm:px-8 lg:py-16">
-          <div className="grid items-center gap-8 border-b border-[#E6E2DA] pb-14 lg:grid-cols-12">
+          <div className="grid items-center gap-8 border-b border-[#E6E2DA] dark:border-white/[0.08] pb-14 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                 LOVED BY PEOPLE LIKE YOU
               </div>
-              <h2 className="mt-2.5 font-serif text-[30px] font-normal leading-[1.15] tracking-[-0.02em] text-[#0B0B0B] sm:text-[36px]">
+              <h2 className="mt-2.5 font-serif text-[30px] font-normal leading-[1.15] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[36px]">
                 Trusted by creators,
                 <br />
                 freelancers, and
@@ -668,7 +668,7 @@ export function HomePageClient() {
 
             <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-center lg:col-span-7">
               <div className="max-w-[460px]">
-                <p className="text-[16px] leading-[1.6] text-[#1F1F1F] sm:text-[18px]">
+                <p className="text-[16px] leading-[1.6] text-[#1F1F1F] dark:text-neutral-200 sm:text-[18px]">
                   &ldquo;{activeTestimonial.quote}&rdquo;
                 </p>
                 <div className="mt-5 flex items-center gap-3">
@@ -678,10 +678,10 @@ export function HomePageClient() {
                     className="h-10 w-10 rounded-full object-cover"
                   />
                   <div>
-                    <div className="text-[14px] font-semibold text-[#0B0B0B]">
+                    <div className="text-[14px] font-semibold text-[#0B0B0B] dark:text-white">
                       {activeTestimonial.name}
                     </div>
-                    <div className="text-[12px] text-[#666666]">
+                    <div className="text-[12px] text-[#666666] dark:text-neutral-400">
                       {activeTestimonial.role}
                     </div>
                   </div>
@@ -698,7 +698,7 @@ export function HomePageClient() {
                         (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length,
                     )
                   }
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-[#DCD8D0] bg-white text-[#0B0B0B] transition hover:border-[#0B0B0B]"
+                  className="flow-liquid-btn flex h-10 w-10 items-center justify-center rounded-full text-[#0B0B0B] dark:text-white cursor-pointer"
                 >
                   ←
                 </button>
@@ -708,7 +708,7 @@ export function HomePageClient() {
                   onClick={() =>
                     setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length)
                   }
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0B0B0B] text-white transition hover:bg-[#1F1F1F]"
+                  className="flow-liquid-btn-primary flex h-10 w-10 items-center justify-center rounded-full cursor-pointer"
                 >
                   →
                 </button>
@@ -727,20 +727,20 @@ export function HomePageClient() {
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                 FAQ
               </div>
-              <h2 className="mt-2 font-serif text-[30px] font-normal leading-[1.15] text-[#0B0B0B] sm:text-[36px]">
+              <h2 className="mt-2 font-serif text-[30px] font-normal leading-[1.15] text-[#0B0B0B] dark:text-white sm:text-[36px]">
                 Frequently asked questions.
               </h2>
             </div>
             <a
               href="#faq"
-              className="hidden items-center gap-1.5 text-[13px] font-semibold text-[#0B0B0B] hover:text-[#FF1A1A] sm:inline-flex"
+              className="hidden items-center gap-1.5 text-[13px] font-semibold text-[#0B0B0B] dark:text-white hover:text-[#FF1A1A] sm:inline-flex"
             >
               <span>View all FAQs</span>
               <span aria-hidden="true">→</span>
             </a>
           </div>
 
-          <div className="divide-y divide-[#E4E0D8] border-y border-[#E4E0D8]">
+          <div className="divide-y divide-[#E4E0D8] dark:divide-white/[0.08] border-y border-[#E4E0D8] dark:border-white/[0.08]">
             {FAQS.map((item, idx) => {
               const isOpen = openFaq === idx;
               return (
@@ -748,15 +748,15 @@ export function HomePageClient() {
                   <button
                     type="button"
                     onClick={() => setOpenFaq(isOpen ? null : idx)}
-                    className="flex w-full items-center justify-between py-4 text-left text-[14px] font-semibold text-[#0B0B0B] transition hover:text-[#FF1A1A] sm:text-[15px]"
+                    className="flex w-full items-center justify-between py-4 text-left text-[14px] font-semibold text-[#0B0B0B] dark:text-white transition hover:text-[#FF1A1A] sm:text-[15px] cursor-pointer"
                   >
                     <span>{item.q}</span>
-                    <span className="ml-4 text-[18px] font-normal text-[#555555]">
+                    <span className="ml-4 text-[18px] font-normal text-[#555555] dark:text-neutral-400">
                       {isOpen ? "−" : "+"}
                     </span>
                   </button>
                   {isOpen && (
-                    <div className="pb-4 pr-8 text-[14px] leading-[1.6] text-[#555555]">
+                    <div className="pb-4 pr-8 text-[14px] leading-[1.6] text-[#555555] dark:text-neutral-400">
                       {item.a}
                     </div>
                   )}
@@ -768,7 +768,7 @@ export function HomePageClient() {
 
         {/* 11. FINAL CTA BANNER */}
         <section className="mx-auto max-w-[1200px] px-5 pb-16 sm:px-8">
-          <div className="grid items-center overflow-hidden rounded-[28px] bg-[#0B0B0B] text-white md:grid-cols-12">
+          <div className="grid items-center overflow-hidden rounded-[28px] bg-[#0B0B0B] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] text-white md:grid-cols-12">
             <div className="p-8 sm:p-12 md:col-span-6">
               <h2 className="font-serif text-[32px] font-normal leading-[1.1] text-white sm:text-[40px]">
                 Start getting paid
@@ -808,7 +808,7 @@ export function HomePageClient() {
       </main>
 
       {/* 12. FOOTER */}
-      <footer className="border-t border-[#E6E2DA] bg-[#F8F6F3] py-12">
+      <footer className="border-t border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3] dark:bg-[#0B0B0B] py-12">
         <div className="mx-auto flex max-w-[1200px] flex-col justify-between gap-8 px-5 sm:flex-row sm:items-start sm:px-8">
           <div>
             <FlowLogo className="h-6 w-auto" />
@@ -816,70 +816,109 @@ export function HomePageClient() {
 
           <div className="grid grid-cols-3 gap-10 text-[12px] sm:gap-16">
             <div>
-              <div className="font-semibold text-[#0B0B0B]">Product</div>
-              <ul className="mt-2.5 space-y-1.5 text-[#666666]">
+              <div className="font-semibold text-[#0B0B0B] dark:text-white">
+                Product
+              </div>
+              <ul className="mt-2.5 space-y-1.5 text-[#666666] dark:text-neutral-400">
                 <li>
-                  <a href="#experience" className="hover:text-[#0B0B0B]">
+                  <a
+                    href="#experience"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Overview
                   </a>
                 </li>
                 <li>
-                  <a href="#real-life" className="hover:text-[#0B0B0B]">
+                  <a
+                    href="#real-life"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Use Cases
                   </a>
                 </li>
                 <li>
-                  <a href="#faq" className="hover:text-[#0B0B0B]">
+                  <a
+                    href="#faq"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Pricing
                   </a>
                 </li>
               </ul>
             </div>
             <div>
-              <div className="font-semibold text-[#0B0B0B]">Resources</div>
-              <ul className="mt-2.5 space-y-1.5 text-[#666666]">
+              <div className="font-semibold text-[#0B0B0B] dark:text-white">
+                Resources
+              </div>
+              <ul className="mt-2.5 space-y-1.5 text-[#666666] dark:text-neutral-400">
                 <li>
-                  <a href="#get-paid-anywhere" className="hover:text-[#0B0B0B]">
+                  <a
+                    href="#get-paid-anywhere"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Blog
                   </a>
                 </li>
                 <li>
-                  <a href="#get-paid-anywhere" className="hover:text-[#0B0B0B]">
+                  <a
+                    href="#get-paid-anywhere"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Guides
                   </a>
                 </li>
                 <li>
-                  <a href="#faq" className="hover:text-[#0B0B0B]">
+                  <a
+                    href="#faq"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Help
                   </a>
                 </li>
               </ul>
             </div>
             <div>
-              <div className="font-semibold text-[#0B0B0B]">Company</div>
-              <ul className="mt-2.5 space-y-1.5 text-[#666666]">
+              <div className="font-semibold text-[#0B0B0B] dark:text-white">
+                Company
+              </div>
+              <ul className="mt-2.5 space-y-1.5 text-[#666666] dark:text-neutral-400">
                 <li>
-                  <a href="#experience" className="hover:text-[#0B0B0B]">
+                  <a
+                    href="#experience"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     About
                   </a>
                 </li>
                 <li>
-                  <a href="#real-life" className="hover:text-[#0B0B0B]">
+                  <a
+                    href="#real-life"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Careers
                   </a>
                 </li>
                 <li>
-                  <Link href="/sign-in" className="hover:text-[#0B0B0B]">
+                  <Link
+                    href="/sign-in"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Contact
                   </Link>
                 </li>
                 <li>
-                  <Link href="/privacy" className="hover:text-[#0B0B0B]">
+                  <Link
+                    href="/privacy"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Privacy
                   </Link>
                 </li>
                 <li>
-                  <Link href="/terms" className="hover:text-[#0B0B0B]">
+                  <Link
+                    href="/terms"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
                     Terms
                   </Link>
                 </li>
@@ -887,7 +926,7 @@ export function HomePageClient() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-[#0B0B0B]">
+          <div className="flex items-center gap-4 text-[#0B0B0B] dark:text-white">
             <a
               href="#top"
               aria-label="X"

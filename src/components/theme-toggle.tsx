@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { IconMoon, IconSun } from "./icons.tsx";
+import {
+  THEME_CHANGE_EVENT,
+  applyDarkTheme,
+  readIsDarkTheme,
+} from "./profile-preferences.ts";
 
 export function ThemeToggle({
   className = "",
@@ -14,27 +19,19 @@ export function ThemeToggle({
 
   useEffect(() => {
     const sync = () => {
-      const isDark =
-        document.documentElement.classList.contains("dark") ||
-        window.localStorage.getItem("flow-theme") === "dark";
+      const isDark = readIsDarkTheme();
       document.documentElement.classList.toggle("dark", isDark);
       setDark(isDark);
     };
     sync();
-    window.addEventListener("flow-theme-change", sync);
-    return () => window.removeEventListener("flow-theme-change", sync);
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, sync);
   }, []);
 
   function toggleTheme() {
     const next = !dark;
     setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    try {
-      window.localStorage.setItem("flow-theme", next ? "dark" : "light");
-    } catch {
-      // ignore storage errors
-    }
-    window.dispatchEvent(new Event("flow-theme-change"));
+    applyDarkTheme(next);
   }
 
   if (variant === "sidebar") {

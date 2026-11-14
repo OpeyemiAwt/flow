@@ -214,7 +214,7 @@ export function CombinedAssetNetworkPicker({
                     className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-colors cursor-pointer ${
                       isSelected
                         ? inline
-                          ? "bg-red-50 text-neutral-950"
+                          ? "bg-red-50 dark:bg-red-950/30 text-neutral-950 dark:text-white"
                           : "bg-neutral-100 dark:bg-neutral-800 text-neutral-950 dark:text-white"
                         : "hover:bg-neutral-50 dark:hover:bg-neutral-800/60 text-neutral-800 dark:text-neutral-200"
                     }`}

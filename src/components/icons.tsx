@@ -1094,13 +1094,68 @@ export function IconNearIntents({
   );
 }
 
+export function FlowAiMascot({
+  size = 24,
+  className = "",
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+    >
+      {/* Top signal spark */}
+      <circle cx="16" cy="4.2" r="2.1" fill="#FF1A1A" />
+      <path
+        d="M16 6.3V9.2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      {/* Head shell */}
+      <rect
+        x="5"
+        y="9"
+        width="22"
+        height="18"
+        rx="8.5"
+        fill="currentColor"
+      />
+      {/* Side ear accents */}
+      <rect x="2.5" y="15" width="2.5" height="6" rx="1.25" fill="#FF1A1A" />
+      <rect x="27" y="15" width="2.5" height="6" rx="1.25" fill="#FF1A1A" />
+      {/* Glossy dark visor */}
+      <rect x="8.2" y="12.5" width="15.6" height="9.2" rx="4.6" fill="#0B0B0D" />
+      {/* Expressive glowing FLOW eyes */}
+      <circle cx="12.8" cy="17.1" r="1.75" fill="#FF2E2E" />
+      <circle cx="19.2" cy="17.1" r="1.75" fill="#FF2E2E" />
+      <circle cx="12.3" cy="16.5" r="0.55" fill="#FFFFFF" />
+      <circle cx="18.7" cy="16.5" r="0.55" fill="#FFFFFF" />
+      {/* Subtle friendly smile */}
+      <path
+        d="M13.8 23.6C14.4 24.4 15.2 24.8 16 24.8C16.8 24.8 17.6 24.4 18.2 23.6"
+        stroke="#FFFFFF"
+        strokeOpacity="0.65"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function NearIntentsBadge({ className = "" }: { className?: string }) {
   return (
-    <div
-      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-[#FF1A1A] border border-red-200/60 shadow-2xs select-none ${className}`}
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 select-none ${className}`}
     >
-      <IconNearIntents size={13} className="shrink-0" />
-      <span>Powered by NEAR Intents</span>
-    </div>
+      <IconNearIntents size={13} className="shrink-0 text-[#FF1A1A]" />
+      <span>Routed via NEAR Intents</span>
+    </span>
   );
 }

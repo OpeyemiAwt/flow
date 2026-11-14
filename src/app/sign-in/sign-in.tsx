@@ -68,7 +68,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
 
   if (codeSent) {
     return (
-      <div className="relative h-screen max-h-screen w-full overflow-hidden bg-white text-[#0B0B0B] lg:grid lg:grid-cols-12">
+      <div className="relative h-screen max-h-screen w-full overflow-hidden bg-white dark:bg-[#0B0B0B] text-[#0B0B0B] dark:text-neutral-100 lg:grid lg:grid-cols-12 transition-colors duration-200">
         {/* Mobile Red Diagonal Wave Accent (Matches 08_56_15 PM-1.png) */}
         <div
           aria-hidden="true"
@@ -82,15 +82,15 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
               <FlowLogo className="h-8 w-auto sm:h-9" />
             </Link>
 
-            <h1 className="mt-6 font-serif text-[34px] sm:text-[44px] font-normal leading-[1.08] tracking-[-0.025em] text-[#0B0B0B]">
+            <h1 className="mt-6 font-serif text-[34px] sm:text-[44px] font-normal leading-[1.08] tracking-[-0.025em] text-[#0B0B0B] dark:text-white">
               Enter the <br />
               verification code
             </h1>
 
-            <p className="mt-3 max-w-[400px] text-[14px] leading-[1.5] text-[#5A5A5A] sm:text-[15px]">
+            <p className="mt-3 max-w-[400px] text-[14px] leading-[1.5] text-[#5A5A5A] dark:text-neutral-400 sm:text-[15px]">
               If email sign-in is available for this address, we&apos;ll send an
               8-digit code to{" "}
-              <span className="font-medium text-[#1F1F1F]">
+              <span className="font-medium text-[#1F1F1F] dark:text-white">
                 {email || "hello@flow.com"}
               </span>
               . Check your spam folder if it doesn&apos;t arrive. Enter the code
@@ -131,10 +131,10 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
                     return (
                       <div
                         key={idx}
-                        className={`flex h-14 items-center justify-center rounded-2xl bg-white text-[20px] font-semibold text-[#0B0B0B] shadow-2xs transition sm:h-16 sm:text-[22px] ${
+                        className={`flex h-14 items-center justify-center rounded-2xl bg-white dark:bg-[#161616] text-[20px] font-semibold text-[#0B0B0B] dark:text-white shadow-2xs transition sm:h-16 sm:text-[22px] ${
                           isActive
                             ? "border-2 border-[#FF1A1A]"
-                            : "border border-[#DCDCDC]"
+                            : "border border-[#DCDCDC] dark:border-white/[0.12]"
                         }`}
                       >
                         {digit}
@@ -145,7 +145,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
               </div>
 
               {/* Resend Countdown */}
-              <div className="mt-6 flex items-center justify-between text-[15px] text-[#5A5A5A]">
+              <div className="mt-6 flex items-center justify-between text-[15px] text-[#5A5A5A] dark:text-neutral-400">
                 {seconds > 0 ? (
                   <span>
                     Resend code in{" "}
@@ -172,7 +172,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
                     setCode("");
                     setMessage("");
                   }}
-                  className="text-[13px] text-[#777777] hover:text-[#0B0B0B]"
+                  className="text-[13px] text-[#777777] dark:text-neutral-400 hover:text-[#0B0B0B] dark:hover:text-white"
                 >
                   Change email
                 </button>
@@ -181,7 +181,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
               <button
                 type="submit"
                 disabled={busy || code.length !== 8}
-                className="mt-6 flex h-12 sm:h-13 w-full items-center justify-center gap-2.5 rounded-full bg-[#0B0B0B] text-[15px] font-semibold text-white transition hover:bg-[#1F1F1F] disabled:opacity-50"
+                className="flow-liquid-btn-primary mt-6 flex h-12 sm:h-13 w-full items-center justify-center gap-2.5 rounded-full text-[15px] font-semibold disabled:opacity-50"
               >
                 <span>Verify and continue</span>
                 <span aria-hidden="true">→</span>
@@ -195,24 +195,30 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
             </form>
             <nav
               aria-label="Legal"
-              className="mt-6 flex justify-center gap-5 text-xs text-[#777777]"
+              className="mt-6 flex justify-center gap-5 text-xs text-[#777777] dark:text-neutral-400"
             >
-              <Link href="/privacy" className="hover:text-[#0B0B0B]">
+              <Link
+                href="/privacy"
+                className="hover:text-[#0B0B0B] dark:hover:text-white"
+              >
                 Privacy
               </Link>
-              <Link href="/terms" className="hover:text-[#0B0B0B]">
+              <Link
+                href="/terms"
+                className="hover:text-[#0B0B0B] dark:hover:text-white"
+              >
                 Terms
               </Link>
             </nav>
           </div>
         </main>
 
-        {/* Right Column: 3D Smartphone on Rock with Red Arc (Matches 08_26_06 PM-1.png) */}
-        <aside className="relative hidden h-screen max-h-screen overflow-hidden bg-white lg:col-span-6 lg:flex lg:items-center lg:justify-center p-4 xl:p-8">
+        {/* Right Column: 3D Smartphone on Rock with Red Arc */}
+        <aside className="relative hidden h-screen max-h-screen overflow-hidden bg-white dark:bg-[#070505] lg:col-span-6 lg:flex lg:items-center lg:justify-center p-4 xl:p-8">
           <img
             src="/assets/otp-phone-rock.png"
             alt="FLOW mobile dashboard on smartphone"
-            className="max-h-full max-w-full w-auto h-auto object-contain"
+            className="max-h-full max-w-full w-auto h-auto object-contain rounded-3xl"
             style={{ maxHeight: "calc(100vh - 2rem)" }}
           />
         </aside>
@@ -221,25 +227,25 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
   }
 
   return (
-    <div className="h-screen max-h-screen w-full overflow-hidden bg-white text-[#0B0B0B] lg:grid lg:grid-cols-12">
-      {/* Left Column: Access Your Flow Account (Matches Flow Passwordless Authentication Mockup.png) */}
+    <div className="h-screen max-h-screen w-full overflow-hidden bg-white dark:bg-[#0B0B0B] text-[#0B0B0B] dark:text-neutral-100 lg:grid lg:grid-cols-12 transition-colors duration-200">
+      {/* Left Column: Access Your Flow Account */}
       <main className="flex h-full flex-col justify-center px-6 py-6 sm:px-12 lg:col-span-6 lg:px-16 overflow-y-auto">
         <div className="mx-auto w-full max-w-[440px]">
           <Link href="/" aria-label="FLOW Home" className="inline-block">
             <FlowLogo className="h-8 w-auto sm:h-9" />
           </Link>
 
-          <div className="mt-6 flex items-center gap-2 text-[11px] sm:text-[12px] font-semibold uppercase tracking-[0.16em] text-[#555555]">
+          <div className="mt-6 flex items-center gap-2 text-[11px] sm:text-[12px] font-semibold uppercase tracking-[0.16em] text-[#555555] dark:text-neutral-400">
             <span>GET STARTED</span>
             <span className="h-[2px] w-4 bg-[#FF1A1A]" />
           </div>
 
-          <h1 className="mt-2 font-serif text-[32px] sm:text-[42px] font-normal leading-[1.08] tracking-[-0.025em] text-[#0B0B0B]">
+          <h1 className="mt-2 font-serif text-[32px] sm:text-[42px] font-normal leading-[1.08] tracking-[-0.025em] text-[#0B0B0B] dark:text-white">
             Access your <br />
             Flow account
           </h1>
 
-          <p className="mt-2 text-[14px] leading-[1.5] text-[#5A5A5A] sm:text-[15px]">
+          <p className="mt-2 text-[14px] leading-[1.5] text-[#5A5A5A] dark:text-neutral-400 sm:text-[15px]">
             Continue with Google or enter your email to receive a verification
             code.
           </p>
@@ -247,7 +253,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           {issue === "signup-disabled" && (
             <p
               role="status"
-              className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-900"
+              className="mt-3 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-2.5 text-xs font-semibold text-amber-900 dark:text-amber-200"
             >
               New account sign-up is currently disabled in this environment.
               Existing users can sign in with their linked method.
@@ -256,7 +262,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           {issue === "authentication" && (
             <p
               role="status"
-              className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-900"
+              className="mt-3 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-2.5 text-xs font-semibold text-amber-900 dark:text-amber-200"
             >
               Google sign-in could not be completed. If you already use email,
               sign in with email and link Google from Security.
@@ -265,7 +271,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           {notice === "signed-out" && (
             <p
               role="status"
-              className="mt-3 rounded-xl border border-neutral-200 bg-neutral-100 px-4 py-2.5 text-xs font-semibold text-neutral-900"
+              className="mt-3 rounded-xl border border-neutral-200 dark:border-white/[0.1] bg-neutral-100 dark:bg-[#161616] px-4 py-2.5 text-xs font-semibold text-neutral-900 dark:text-neutral-100"
             >
               You have been signed out.
             </p>
@@ -273,7 +279,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           {notice === "switch-account" && (
             <p
               role="status"
-              className="mt-3 rounded-xl border border-neutral-200 bg-neutral-100 px-4 py-2.5 text-xs font-semibold text-neutral-900"
+              className="mt-3 rounded-xl border border-neutral-200 dark:border-white/[0.1] bg-neutral-100 dark:bg-[#161616] px-4 py-2.5 text-xs font-semibold text-neutral-900 dark:text-neutral-100"
             >
               Signed out. Choose Google or enter another email to switch
               accounts.
@@ -282,7 +288,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           {notice === "linked" && (
             <p
               role="status"
-              className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-900"
+              className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2.5 text-xs font-semibold text-emerald-900 dark:text-emerald-200"
             >
               Google is linked. Sign in again to continue.
             </p>
@@ -290,7 +296,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           {notice === "updated" && (
             <p
               role="status"
-              className="mt-3 rounded-xl border border-neutral-200 bg-neutral-100 px-4 py-2.5 text-xs font-semibold text-neutral-900"
+              className="mt-3 rounded-xl border border-neutral-200 dark:border-white/[0.1] bg-neutral-100 dark:bg-[#161616] px-4 py-2.5 text-xs font-semibold text-neutral-900 dark:text-neutral-100"
             >
               Your security settings were updated. Sign in again.
             </p>
@@ -301,7 +307,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
             type="button"
             onClick={google}
             disabled={busy}
-            className="mt-4 flex h-12 sm:h-13 w-full items-center justify-center gap-3 rounded-2xl border border-[#E2E2E2] bg-white px-5 text-[14px] sm:text-[15px] font-semibold text-[#0B0B0B] shadow-2xs transition hover:border-[#0B0B0B] disabled:opacity-50"
+            className="flow-liquid-btn mt-4 flex h-12 sm:h-13 w-full items-center justify-center gap-3 rounded-2xl px-5 text-[14px] sm:text-[15px] font-semibold text-[#0B0B0B] dark:text-white disabled:opacity-50 cursor-pointer"
           >
             <svg
               width="18"
@@ -332,9 +338,11 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
 
           {/* Divider */}
           <div className="my-3.5 flex items-center gap-4">
-            <div className="h-px flex-1 bg-[#EAEAEA]" />
-            <span className="text-[12px] text-[#777777]">or</span>
-            <div className="h-px flex-1 bg-[#EAEAEA]" />
+            <div className="h-px flex-1 bg-[#EAEAEA] dark:bg-white/[0.1]" />
+            <span className="text-[12px] text-[#777777] dark:text-neutral-500">
+              or
+            </span>
+            <div className="h-px flex-1 bg-[#EAEAEA] dark:bg-white/[0.1]" />
           </div>
 
           {/* Email Form */}
@@ -346,12 +354,12 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           >
             <label
               htmlFor="email-input"
-              className="block text-[13px] sm:text-[14px] font-semibold text-[#0B0B0B]"
+              className="block text-[13px] sm:text-[14px] font-semibold text-[#0B0B0B] dark:text-neutral-200"
             >
               Email address
             </label>
             <div className="relative mt-1.5">
-              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-[#666666]">
+              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-[#666666] dark:text-neutral-400">
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -372,17 +380,17 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
                 required
                 maxLength={254}
                 placeholder="Enter your email address"
-                className="h-12 sm:h-13 w-full rounded-2xl border border-[#E2E2E2] bg-white pl-11 pr-4 text-[14px] sm:text-[15px] text-[#0B0B0B] placeholder:text-[#888888] focus:border-[#0B0B0B] focus:outline-none"
+                className="h-12 sm:h-13 w-full rounded-2xl border border-[#E2E2E2] dark:border-white/[0.1] bg-white dark:bg-[#161616] pl-11 pr-4 text-[14px] sm:text-[15px] text-[#0B0B0B] dark:text-white placeholder:text-[#888888] dark:placeholder:text-neutral-500 focus:border-[#0B0B0B] dark:focus:border-white/40 focus:outline-none"
               />
             </div>
 
-            <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-[11px] sm:text-[12px] text-[#666666]">
+            <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-[11px] sm:text-[12px] text-[#666666] dark:text-neutral-400">
               <input
                 type="checkbox"
                 checked={recovery}
                 onChange={(event) => setRecovery(event.target.checked)}
                 disabled={busy}
-                className="rounded border-neutral-300 text-[#FF1A1A] focus:ring-[#FF1A1A]"
+                className="rounded border-neutral-300 dark:border-neutral-700 text-[#FF1A1A] focus:ring-[#FF1A1A]"
               />
               <span>Recover access and sign out other sessions</span>
             </label>
@@ -390,7 +398,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
             <button
               type="submit"
               disabled={busy || !email.trim()}
-              className="mt-4 flex h-12 sm:h-13 w-full items-center justify-center gap-2.5 rounded-full bg-[#0B0B0B] text-[14px] sm:text-[15px] font-semibold text-white transition hover:bg-[#1F1F1F] disabled:opacity-50"
+              className="flow-liquid-btn-primary mt-4 flex h-12 sm:h-13 w-full items-center justify-center gap-2.5 rounded-full text-[14px] sm:text-[15px] font-semibold disabled:opacity-50 cursor-pointer"
             >
               <span>Send verification code</span>
               <span aria-hidden="true">→</span>
@@ -403,7 +411,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
             </div>
           )}
 
-          <p className="mt-4 text-center text-[13px] sm:text-[14px] text-[#5A5A5A]">
+          <p className="mt-4 text-center text-[13px] sm:text-[14px] text-[#5A5A5A] dark:text-neutral-400">
             Already have an account?{" "}
             <button
               type="button"
@@ -415,12 +423,18 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           </p>
           <nav
             aria-label="Legal"
-            className="mt-6 flex justify-center gap-5 text-xs text-[#777777]"
+            className="mt-6 flex justify-center gap-5 text-xs text-[#777777] dark:text-neutral-400"
           >
-            <Link href="/privacy" className="hover:text-[#0B0B0B]">
+            <Link
+              href="/privacy"
+              className="hover:text-[#0B0B0B] dark:hover:text-white"
+            >
               Privacy
             </Link>
-            <Link href="/terms" className="hover:text-[#0B0B0B]">
+            <Link
+              href="/terms"
+              className="hover:text-[#0B0B0B] dark:hover:text-white"
+            >
               Terms
             </Link>
           </nav>

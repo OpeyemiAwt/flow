@@ -118,6 +118,25 @@ export function SecurityPanel({
 
   // Profile Customization state
   const primaryAccount = accounts[0];
+  const walletStatusInfo = (() => {
+    switch (primaryAccount?.walletStatus) {
+      case "active":
+        return { label: "Wallet active", dot: "bg-emerald-500" };
+      case "provisioning":
+        return {
+          label: "Wallet provisioning in progress",
+          dot: "bg-amber-500",
+        };
+      case "setup_failed":
+        return { label: "Wallet setup failed", dot: "bg-red-500" };
+      case "frozen":
+        return { label: "Wallet frozen", dot: "bg-red-500" };
+      case "recovery_pending":
+        return { label: "Wallet recovery pending", dot: "bg-amber-500" };
+      default:
+        return { label: "Wallet setup pending", dot: "bg-amber-500" };
+    }
+  })();
   const [displayName, setDisplayName] = useState(
     initialProfilePreference?.displayName ||
       primaryAccount?.name ||
@@ -350,6 +369,13 @@ export function SecurityPanel({
             <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
               Manage your profile ({email}), security, notifications, and
               preferences.
+            </p>
+            <p className="mt-2 inline-flex items-center gap-2 text-xs font-medium text-neutral-700 dark:text-neutral-300">
+              <span
+                className={`h-2 w-2 rounded-full ${walletStatusInfo.dot}`}
+                aria-hidden="true"
+              />
+              <span>{walletStatusInfo.label}</span>
             </p>
           </div>
           <ThemeToggle />
@@ -1084,8 +1110,18 @@ export function SecurityPanel({
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
+                    <span className="text-neutral-500">Wallet Status</span>
+                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-900 dark:text-white">
+                      <span
+                        className={`h-2 w-2 rounded-full ${walletStatusInfo.dot}`}
+                        aria-hidden="true"
+                      />
+                      <span>{walletStatusInfo.label}</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
                     <span className="text-neutral-500">Verification</span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                       Verified Owner
                     </span>

@@ -17,6 +17,7 @@ export interface AssetsHeldModalProps {
   onClose: () => void;
   heldAssets: HeldAssetItem[];
   totalBalanceUsd: string;
+  hideBalance?: boolean;
   onSelectAction: (
     action: "receive" | "send" | "swap_near",
     deployment: CatalogTokenDeployment,
@@ -28,6 +29,7 @@ export function AssetsHeldModal({
   onClose,
   heldAssets,
   totalBalanceUsd,
+  hideBalance = false,
   onSelectAction,
 }: AssetsHeldModalProps) {
   const [expandedAssetId, setExpandedAssetId] = useState<string | null>(
@@ -134,10 +136,12 @@ export function AssetsHeldModal({
                       <div className="flex items-center gap-2">
                         <div className="text-right">
                           <p className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
-                            {item.displayBalance} {item.deployment.symbol}
+                            {hideBalance
+                              ? "••••••"
+                              : `${item.displayBalance} ${item.deployment.symbol}`}
                           </p>
                           <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                            {item.usdValue}
+                            {hideBalance ? "$••••••" : item.usdValue}
                           </p>
                         </div>
                         <svg
@@ -165,7 +169,7 @@ export function AssetsHeldModal({
                             onSelectAction("receive", item.deployment);
                             onClose();
                           }}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-200/80 dark:bg-neutral-800 dark:text-white dark:border-neutral-700 shadow-2xs transition-colors"
+                          className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
                         >
                           <span>↓</span>
                           <span>Receive</span>
@@ -176,7 +180,7 @@ export function AssetsHeldModal({
                             onSelectAction("send", item.deployment);
                             onClose();
                           }}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-200/80 dark:bg-neutral-800 dark:text-white dark:border-neutral-700 shadow-2xs transition-colors"
+                          className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
                         >
                           <span>↗</span>
                           <span>Send</span>
@@ -187,7 +191,7 @@ export function AssetsHeldModal({
                             onSelectAction("swap_near", item.deployment);
                             onClose();
                           }}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity whitespace-nowrap"
+                          className="flow-liquid-btn-primary flex items-center justify-center gap-1.5 py-2 px-2 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer"
                         >
                           <span>⇄</span>
                           <span>Swap to NEAR</span>
@@ -207,7 +211,7 @@ export function AssetsHeldModal({
               <span>Wrapped assets are not shown.</span>
             </span>
             <span className="font-semibold text-neutral-600 dark:text-neutral-300">
-              Total: {totalBalanceUsd}
+              Total: {hideBalance ? "$••••••" : totalBalanceUsd}
             </span>
           </div>
         </div>

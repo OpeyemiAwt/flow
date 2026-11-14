@@ -1848,7 +1848,9 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
       .waitFor();
     await captureRecoveryScreen(page, "onboarding-07-dashboard-entry");
     await page.getByRole("button", { name: "Enter dashboard" }).click();
-    await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
+    await page
+      .getByRole("region", { name: "Account balance overview" })
+      .waitFor();
     const personalDashboardUrl = page.url();
     await snap(page, "04-personal-dashboard.png");
 
@@ -1861,7 +1863,9 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
       0,
     );
     await page.goto(personalDashboardUrl + "?view=assets");
-    await page.getByRole("heading", { name: /Welcome back\./i }).waitFor();
+    await page
+      .getByRole("region", { name: "Account balance overview" })
+      .waitFor();
     assert.equal(
       await page
         .getByRole("heading", { name: "Wallets & Supported Assets" })

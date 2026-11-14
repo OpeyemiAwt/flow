@@ -14,7 +14,7 @@ function LegalPage({
   sections: LegalSection[];
 }) {
   return (
-    <main className="min-h-screen bg-[#F8F6F3] px-5 py-8 text-[#0B0B0B] sm:px-8 sm:py-12">
+    <main className="min-h-screen bg-[#F8F6F3] dark:bg-[#0B0B0B] px-5 py-8 text-[#0B0B0B] dark:text-neutral-100 sm:px-8 sm:py-12 transition-colors duration-200">
       <div className="mx-auto max-w-4xl">
         <header className="flex items-center justify-between gap-4">
           <Link href="/" aria-label="FLOW home">
@@ -33,15 +33,17 @@ function LegalPage({
           </nav>
         </header>
 
-        <div className="mt-12 rounded-[28px] border border-[#E6E2DA] bg-white p-6 shadow-sm sm:mt-16 sm:p-10">
+        <div className="mt-12 rounded-[28px] border border-[#E6E2DA] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-sm sm:mt-16 sm:p-10">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#D51B24]">
             FLOW · Owner review required
           </p>
-          <h1 className="mt-3 font-serif text-4xl sm:text-5xl">{title}</h1>
-          <p className="mt-4 max-w-3xl text-base leading-7 text-[#555]">
+          <h1 className="mt-3 font-serif text-4xl sm:text-5xl dark:text-white">
+            {title}
+          </h1>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-[#555] dark:text-neutral-400">
             {intro}
           </p>
-          <aside className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <aside className="mt-6 rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm leading-6 text-amber-950 dark:text-amber-200">
             <strong>Draft, not an effective policy.</strong> FLOW&apos;s legal
             entity and operating jurisdiction, controller details, support
             contact, retention periods, eligibility rules, and final custody and
@@ -55,11 +57,11 @@ function LegalPage({
               <section key={section.title} aria-labelledby={`section-${index}`}>
                 <h2
                   id={`section-${index}`}
-                  className="font-serif text-2xl sm:text-[26px]"
+                  className="font-serif text-2xl sm:text-[26px] dark:text-white"
                 >
                   {section.title}
                 </h2>
-                <div className="mt-3 space-y-3 text-[15px] leading-7 text-[#444]">
+                <div className="mt-3 space-y-3 text-[15px] leading-7 text-[#444] dark:text-neutral-300">
                   {section.body}
                 </div>
               </section>
@@ -67,16 +69,25 @@ function LegalPage({
           </div>
         </div>
 
-        <footer className="flex flex-col gap-3 py-8 text-sm text-[#666] sm:flex-row sm:items-center sm:justify-between">
+        <footer className="flex flex-col gap-3 py-8 text-sm text-[#666] dark:text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
           <span>FLOW · Draft for owner and legal review</span>
           <div className="flex gap-5">
-            <Link className="hover:text-[#0B0B0B]" href="/privacy">
+            <Link
+              className="hover:text-[#0B0B0B] dark:hover:text-white"
+              href="/privacy"
+            >
               Privacy
             </Link>
-            <Link className="hover:text-[#0B0B0B]" href="/terms">
+            <Link
+              className="hover:text-[#0B0B0B] dark:hover:text-white"
+              href="/terms"
+            >
               Terms
             </Link>
-            <Link className="hover:text-[#0B0B0B]" href="/sign-in">
+            <Link
+              className="hover:text-[#0B0B0B] dark:hover:text-white"
+              href="/sign-in"
+            >
               Sign in
             </Link>
           </div>
