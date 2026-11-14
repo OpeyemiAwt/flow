@@ -751,6 +751,7 @@ export class OutLayerAdapter {
   async getPolicy(
     apiKey: string,
     expectedWalletId?: string,
+    options?: { readonly verifiedOnChainController?: string },
   ): Promise<OutLayerPolicyResult> {
     const response = await this.fetchWithTimeout("/wallet/v1/policy", {
       method: "GET",
@@ -803,9 +804,42 @@ export class OutLayerAdapter {
         )
       : undefined;
 
+    const rawController = parsed.data.controller?.trim() ?? "";
+    const normalizedRawController = /^ed25519:[0-9a-f]{64}$/i.test(
+      rawController,
+    )
+      ? rawController.slice("ed25519:".length).toLowerCase()
+      : /^[0-9a-f]{64}$/i.test(rawController)
+        ? rawController.toLowerCase()
+        : rawController;
+    const isUnsetController =
+      normalizedRawController.length === 0 ||
+      normalizedRawController.toLowerCase() === "none" ||
+      normalizedRawController.toLowerCase() === "null";
+    let effectiveController: string | undefined = isUnsetController
+      ? undefined
+      : normalizedRawController;
+    if (
+      !effectiveController &&
+      options?.verifiedOnChainController &&
+      isValidNearAddress(options.verifiedOnChainController)
+    ) {
+      effectiveController = options.verifiedOnChainController
+        .trim()
+        .toLowerCase();
+      log("info", "outlayer_policy_controller_bound_from_onchain_view", {
+        walletId: parsed.data.wallet_id,
+        rawControllerType:
+          parsed.data.controller === null
+            ? "null"
+            : typeof parsed.data.controller,
+        rawControllerPresent: rawController.length > 0,
+      });
+    }
+
     return mintTrustedAdapterPolicyEvidence({
       wallet_id: parsed.data.wallet_id,
-      controller: parsed.data.controller ?? undefined,
+      controller: effectiveController,
       frozen: parsed.data.frozen,
       policy: parsed.data.policy ?? undefined,
       rules: parsed.data.rules ?? undefined,

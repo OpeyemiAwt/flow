@@ -878,7 +878,11 @@ export class WalletProvisioningWorker {
         }
 
         for (let pollAttempt = 0; pollAttempt < 5; pollAttempt++) {
-          policyEvidence = await this.adapter.getPolicy(apiKey, providerWalletId);
+          policyEvidence = await this.adapter.getPolicy(
+            apiKey,
+            providerWalletId,
+            { verifiedOnChainController: sponsoredControllerAccountId },
+          );
           inspection = inspectCustodyPolicyEvidence(
             policyEvidence,
             providerWalletId,

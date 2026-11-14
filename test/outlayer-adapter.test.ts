@@ -702,3 +702,61 @@ test("OutLayerAdapter policyPreparationAuthorized permits only policy setup endp
     else process.env.FLOW_EXECUTION = prev;
   }
 });
+
+test("OutLayerAdapter.getPolicy binds verifiedOnChainController only when coordinator controller is null/empty and never overrides a mismatched controller", async () => {
+  const walletId = "3bc4673d-1dba-4e33-96e6-f4c418327b8d";
+  const verifiedOwner =
+    "02e683a4da211743b6759d85a37e8ebe8d2ab22a22746d0c8c38f34395a0ae0c";
+  let mockController: string | null = null;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        wallet_id: walletId,
+        controller: mockController,
+        frozen: false,
+        policy: "stored",
+        rules: {
+          limits: { daily: { "*": "0" }, per_transaction: { "*": "0" } },
+          addresses: { list: [], mode: "whitelist" },
+          transaction_types: [],
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  try {
+    const adapter = new OutLayerAdapter("https://api.outlayer.ai", 5_000);
+
+    // Without verifiedOnChainController, null controller must still fail verification
+    const withoutFallback = await adapter.getPolicy("wk_test_key", walletId);
+    assert.throws(
+      () => verifyCustodyPolicyEvidence(withoutFallback, walletId),
+      { code: "POLICY_VERIFICATION_FAILED" },
+    );
+
+    // With verifiedOnChainController, null controller binds cleanly to verified owner
+    const withFallback = await adapter.getPolicy("wk_test_key", walletId, {
+      verifiedOnChainController: verifiedOwner,
+    });
+    const verified = verifyCustodyPolicyEvidence(withFallback, walletId, {
+      expectedController: verifiedOwner,
+    });
+    assert.equal(verified.controllerAccountId, verifiedOwner);
+
+    // Mismatched explicit controller must never be overridden by verifiedOnChainController
+    mockController = "attacker.near";
+    const mismatched = await adapter.getPolicy("wk_test_key", walletId, {
+      verifiedOnChainController: verifiedOwner,
+    });
+    assert.throws(
+      () =>
+        verifyCustodyPolicyEvidence(mismatched, walletId, {
+          expectedController: verifiedOwner,
+        }),
+      { code: "POLICY_VERIFICATION_FAILED" },
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
