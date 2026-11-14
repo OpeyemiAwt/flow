@@ -5,7 +5,8 @@ import { resolve } from "node:path";
 const suite = process.argv[2] ?? "unit";
 const tests = readdirSync("test")
   .filter((file) => {
-    if (suite === "unit") return file.endsWith(".test.ts");
+    if (suite === "unit")
+      return file.endsWith(".test.ts") || file.endsWith(".test.mjs");
     if (suite === "database") return file === "database.integration.ts";
     if (suite === "security") return file === "security.integration.mjs";
     return false;
