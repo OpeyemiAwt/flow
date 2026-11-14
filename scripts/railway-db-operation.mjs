@@ -216,6 +216,14 @@ async function bootstrapProduction() {
         `CREATE ROLE "${role}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(password)}`,
       );
     }
+    const legacyWorker = await admin.query(
+      "SELECT 1 FROM pg_roles WHERE rolname = 'flow_production_worker'",
+    );
+    if (legacyWorker.rowCount)
+      fail("Role flow_production_worker already exists; refusing to alter it.");
+    await admin.query(
+      'CREATE ROLE "flow_production_worker" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
+    );
     await admin.query(
       'CREATE DATABASE "flow_production" OWNER "flow_production_migrator"',
     );
@@ -387,6 +395,328 @@ async function migrateProduction() {
       database: "flow_production",
     }),
   );
+}
+
+async function recoverProductionM6() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "production-empty-only" ||
+    process.env.FLOW_PRODUCTION_MIGRATION_RECOVERY_APPROVED !== "enabled" ||
+    process.env.FLOW_PUBLIC_SIGNUP_ENABLED !== "disabled" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled" ||
+    process.env.FLOW_WALLET_REGISTRATION_ENABLED !== "disabled"
+  )
+    fail(
+      "Production migration recovery is not explicitly gated and disabled-safe.",
+    );
+  const rawAdminUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  const rawMigrationUrl = process.env.FLOW_MIGRATION_DATABASE_URL;
+  if (!rawAdminUrl || !rawMigrationUrl)
+    fail("Production recovery credentials are required.");
+  const adminUrl = new URL(rawAdminUrl);
+  const migrationUrl = new URL(rawMigrationUrl);
+  if (
+    adminUrl.pathname !== "/railway" ||
+    decodeURIComponent(adminUrl.username) !== "postgres" ||
+    !adminUrl.hostname.endsWith(".railway.internal") ||
+    migrationUrl.pathname !== "/flow_production" ||
+    decodeURIComponent(migrationUrl.username) !== "flow_production_migrator"
+  )
+    fail(
+      "Production recovery URLs do not identify the isolated database and migrator role.",
+    );
+  const admin = new pg.Client({
+    connectionString: rawAdminUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    const identity = await admin.query(
+      "SELECT current_database() AS database, current_user AS role",
+    );
+    if (
+      identity.rows[0]?.database !== "railway" ||
+      identity.rows[0]?.role !== "postgres"
+    )
+      fail("Production recovery administrator identity is unexpected.");
+    const scopedAdminUrl = new URL(rawAdminUrl);
+    scopedAdminUrl.pathname = "/flow_production";
+    const scopedAdmin = new pg.Client({
+      connectionString: scopedAdminUrl.toString(),
+      connectionTimeoutMillis: 5000,
+    });
+    await scopedAdmin.connect();
+    try {
+      const scopedIdentity = await scopedAdmin.query(
+        "SELECT current_database() AS database, current_user AS role",
+      );
+      if (
+        scopedIdentity.rows[0]?.database !== "flow_production" ||
+        scopedIdentity.rows[0]?.role !== "postgres"
+      )
+        fail("Production recovery database identity is unexpected.");
+      const db = await admin.query(
+        "SELECT pg_get_userbyid(datdba) AS owner FROM pg_database WHERE datname = 'flow_production'",
+      );
+      if (db.rows[0]?.owner !== "flow_production_migrator")
+        fail("Production database ownership is unexpected; refusing recovery.");
+      const failed = await scopedAdmin.query(
+        "SELECT migration_name, finished_at, rolled_back_at FROM public._prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL",
+      );
+      if (
+        failed.rowCount !== 1 ||
+        failed.rows[0]?.migration_name !==
+          "20261110000000_m6_rehearsal_authorization"
+      )
+        fail(
+          "Production migration state is not the specifically reviewed M6 failure; refusing recovery.",
+        );
+      const role = await admin.query(
+        "SELECT oid, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname = 'flow_production_worker'",
+      );
+      if (!role.rowCount) {
+        await admin.query(
+          'CREATE ROLE "flow_production_worker" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
+        );
+      } else if (
+        role.rows[0].rolcanlogin ||
+        role.rows[0].rolsuper ||
+        role.rows[0].rolcreatedb ||
+        role.rows[0].rolcreaterole ||
+        role.rows[0].rolreplication ||
+        role.rows[0].rolbypassrls
+      ) {
+        fail(
+          "Existing legacy worker role is not a harmless NOLOGIN compatibility role; refusing recovery.",
+        );
+      }
+      const membership = await admin.query(
+        "SELECT 1 FROM pg_auth_members WHERE roleid = (SELECT oid FROM pg_roles WHERE rolname = 'flow_production_worker') OR member = (SELECT oid FROM pg_roles WHERE rolname = 'flow_production_worker') LIMIT 1",
+      );
+      if (membership.rowCount)
+        fail("Legacy worker role has memberships; refusing recovery.");
+      console.log(
+        JSON.stringify({
+          event: "production_m6_recovery_preflight_passed",
+          database: "flow_production",
+          failedMigration: "20261110000000_m6_rehearsal_authorization",
+          compatibilityRole: "NOLOGIN and no memberships",
+        }),
+      );
+    } finally {
+      await scopedAdmin.end();
+    }
+  } finally {
+    await admin.end();
+  }
+  const migrationEnv = {
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    NODE_ENV: "production",
+    FLOW_MIGRATION_DATABASE_URL: migrationUrl.toString(),
+  };
+  const runPrisma = (args) =>
+    new Promise((resolve, reject) => {
+      const child = spawn(
+        "node",
+        [
+          "node_modules/prisma/build/index.js",
+          ...args,
+          "--config",
+          "prisma.config.ts",
+        ],
+        { stdio: "inherit", env: migrationEnv },
+      );
+      child.once("error", reject);
+      child.once("exit", (code) => resolve(code ?? 1));
+    });
+  const resolveCode = await runPrisma([
+    "migrate",
+    "resolve",
+    "--rolled-back",
+    "20261110000000_m6_rehearsal_authorization",
+  ]);
+  if (resolveCode !== 0)
+    fail(
+      `Production migration recovery resolve failed with exit ${resolveCode}.`,
+    );
+  const deployCode = await runPrisma(["migrate", "deploy"]);
+  if (deployCode !== 0)
+    fail(`Production forward migrations failed with exit ${deployCode}.`);
+  console.log(
+    JSON.stringify({
+      event: "production_m6_recovery_and_forward_migrations_complete",
+      database: "flow_production",
+    }),
+  );
+}
+
+async function rehearseProductionMigrations() {
+  if (
+    process.env.FLOW_ENV !== "test" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== STAGING_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "qa-only" ||
+    process.env.FLOW_TEST_DATABASE_REMOTE !== "enabled" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail("Production-shaped migration rehearsal is restricted to isolated QA.");
+  }
+  const rawAdminUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawAdminUrl) fail("Isolated QA administrator URL is required.");
+  const adminUrl = new URL(rawAdminUrl);
+  if (
+    !adminUrl.hostname.endsWith(".railway.internal") ||
+    adminUrl.pathname !== "/railway" ||
+    decodeURIComponent(adminUrl.username) !== "postgres"
+  )
+    fail("QA admin URL does not identify the isolated Railway database.");
+
+  const deploymentId = process.env.RAILWAY_DEPLOYMENT_ID?.replaceAll("-", "");
+  if (!deploymentId || !/^[a-f0-9]{32}$/i.test(deploymentId))
+    fail(
+      "Railway deployment identity is required for isolated rehearsal names.",
+    );
+  const name = `flow_prodshape_${deploymentId.slice(0, 10).toLowerCase()}_${randomBytes(5).toString("hex")}`;
+  const suffixes = [
+    "app",
+    "auth_worker",
+    "custody_worker",
+    "payment_worker",
+    "indexer_worker",
+    "operator",
+    "migrator",
+  ];
+  const passwords = new Map(
+    suffixes.map((suffix) => [suffix, randomBytes(32).toString("hex")]),
+  );
+  const admin = new pg.Client({
+    connectionString: rawAdminUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    const identity = await admin.query(
+      "SELECT current_database() AS database, current_user AS role",
+    );
+    if (
+      identity.rows[0]?.database !== "railway" ||
+      identity.rows[0]?.role !== "postgres"
+    )
+      fail("QA administrator connection has an unexpected identity.");
+    const existing = await admin.query(
+      "SELECT 1 FROM pg_database WHERE datname = $1",
+      [name],
+    );
+    if (existing.rowCount)
+      fail(
+        "Generated rehearsal database already exists; refusing to reuse it.",
+      );
+    for (const suffix of [...suffixes, "worker"]) {
+      const role = `${name}_${suffix}`;
+      const found = await admin.query(
+        "SELECT 1 FROM pg_roles WHERE rolname = $1",
+        [role],
+      );
+      if (found.rowCount)
+        fail("Generated rehearsal role already exists; refusing to reuse it.");
+      if (suffix === "worker") {
+        await admin.query(
+          `CREATE ROLE "${role}" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`,
+        );
+      } else {
+        await admin.query(
+          `CREATE ROLE "${role}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${sqlLiteral(passwords.get(suffix))}`,
+        );
+      }
+    }
+    await admin.query(`CREATE DATABASE "${name}" OWNER "${name}_migrator"`);
+    await admin.query(`REVOKE CREATE ON DATABASE "${name}" FROM PUBLIC`);
+    await admin.query(
+      `GRANT CONNECT ON DATABASE "${name}" TO ${[...suffixes.filter((s) => s !== "migrator"), "worker"].map((s) => `"${name}_${s}"`).join(", ")}`,
+    );
+
+    const migrationUrl = new URL(process.env.FLOW_MIGRATION_DATABASE_URL ?? "");
+    if (
+      migrationUrl.pathname !== "/flow_test" ||
+      decodeURIComponent(migrationUrl.username) !== "flow_test_migrator"
+    )
+      fail("Rehearsal must derive from the isolated QA migration URL.");
+    migrationUrl.pathname = `/${name}`;
+    migrationUrl.username = `${name}_migrator`;
+    migrationUrl.password = passwords.get("migrator");
+    const migrationEnv = {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      NODE_ENV: "production",
+      FLOW_MIGRATION_DATABASE_URL: migrationUrl.toString(),
+    };
+    const child = spawn(
+      "node",
+      [
+        "node_modules/prisma/build/index.js",
+        "migrate",
+        "deploy",
+        "--config",
+        "prisma.config.ts",
+      ],
+      { stdio: "inherit", env: migrationEnv },
+    );
+    const code = await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", (status) => resolve(status ?? 1));
+    });
+    if (code !== 0)
+      fail(`Production-shaped forward migrations failed with exit ${code}.`);
+
+    const verifyUrl = new URL(rawAdminUrl);
+    verifyUrl.pathname = `/${name}`;
+    const verifier = new pg.Client({
+      connectionString: verifyUrl.toString(),
+      connectionTimeoutMillis: 5000,
+    });
+    await verifier.connect();
+    try {
+      const check = await verifier.query(
+        `SELECT r.rolcanlogin AS can_login,
+          EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.roleid = r.oid OR m.member = r.oid) AS has_memberships,
+          EXISTS (SELECT 1 FROM pg_namespace n CROSS JOIN LATERAL aclexplode(COALESCE(n.nspacl, acldefault('n', n.nspowner))) a WHERE n.nspname = 'flow' AND a.grantee = r.oid) AS has_schema_grant,
+          EXISTS (SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault(CASE WHEN c.relkind = 'S' THEN 'S'::"char" ELSE 'r'::"char" END, c.relowner))) a WHERE c.relnamespace = 'flow'::regnamespace AND a.grantee = r.oid) AS has_relation_grant,
+          EXISTS (SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a WHERE p.pronamespace = 'flow'::regnamespace AND a.grantee = r.oid) AS has_function_grant,
+          EXISTS (SELECT 1 FROM pg_database d CROSS JOIN LATERAL aclexplode(COALESCE(d.datacl, acldefault('d', d.datdba))) a WHERE d.datname = current_database() AND a.grantee = r.oid) AS has_database_grant
+        FROM pg_roles r WHERE r.rolname = $1`,
+        [`${name}_worker`],
+      );
+      const row = check.rows[0];
+      if (
+        !row ||
+        row.can_login ||
+        row.has_memberships ||
+        row.has_schema_grant ||
+        row.has_relation_grant ||
+        row.has_function_grant ||
+        row.has_database_grant
+      )
+        fail(
+          "Production-shaped legacy worker role retained login or database privileges.",
+        );
+      console.log(
+        JSON.stringify({
+          event: "production_shaped_migration_rehearsal_passed",
+          database: name,
+          migrations: "all forward migrations",
+          legacyWorkerLogin: false,
+          legacyWorkerPrivileges: "none",
+        }),
+      );
+    } finally {
+      await verifier.end();
+    }
+  } finally {
+    await admin.end();
+  }
 }
 
 async function migrate() {
@@ -1467,6 +1797,9 @@ if (operation === "bootstrap-staging-and-qa") await bootstrap();
 else if (operation === "bootstrap-production-empty")
   await bootstrapProduction();
 else if (operation === "migrate-production") await migrateProduction();
+else if (operation === "recover-production-m6") await recoverProductionM6();
+else if (operation === "rehearse-production-migrations")
+  await rehearseProductionMigrations();
 else if (operation === "export-production-postgres-ca")
   await exportProductionPostgresCa();
 else if (operation === "migrate-staging") await migrateStaging();
