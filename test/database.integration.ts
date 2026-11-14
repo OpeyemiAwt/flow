@@ -9412,18 +9412,23 @@ test("database integration: M36 settings RLS, Add Money worker lease lifecycle, 
   assert.ok(paymentPool, "FLOW_PAYMENT_DATABASE_URL required");
   assert.ok(custodyPool, "FLOW_CUSTODY_DATABASE_URL required");
 
-  const adminClient = await pool.connect();
-  const fixtureClient = await workerPool.connect();
-  const appClientA = await pool.connect();
-  const appClientB = await pool.connect();
-  const paymentClient = await paymentPool.connect();
-  const custodyClient = await custodyPool.connect();
+  let fixtureClient: pg.PoolClient | undefined;
+  let appClientA: pg.PoolClient | undefined;
+  let appClientB: pg.PoolClient | undefined;
+  let paymentClient: pg.PoolClient | undefined;
+  let custodyClient: pg.PoolClient | undefined;
 
   try {
-    const ownerA = await createTestAccount(adminClient, "PERSONAL", "m36-a");
-    const ownerB = await createTestAccount(adminClient, "PERSONAL", "m36-b");
-    const sessionA = await createTestSession(adminClient, ownerA.authUserId);
-    const sessionB = await createTestSession(adminClient, ownerB.authUserId);
+    fixtureClient = await workerPool.connect();
+    appClientA = await pool.connect();
+    appClientB = await pool.connect();
+    paymentClient = await paymentPool.connect();
+    custodyClient = await custodyPool.connect();
+
+    const ownerA = await createTestAccount(fixtureClient, "PERSONAL", "m36-a");
+    const ownerB = await createTestAccount(fixtureClient, "PERSONAL", "m36-b");
+    const sessionA = await createTestSession(fixtureClient, ownerA.authUserId);
+    const sessionB = await createTestSession(fixtureClient, ownerB.authUserId);
 
     const walletA = randomUUID();
     await fixtureClient.query(
@@ -9771,11 +9776,10 @@ test("database integration: M36 settings RLS, Add Money worker lease lifecycle, 
     assert.equal(finalOut.rows[0]?.destination_tx_hash, "near_dest_out_1");
     assert.ok(finalOut.rows[0]?.settled_at);
   } finally {
-    adminClient.release();
-    fixtureClient.release();
-    appClientA.release();
-    appClientB.release();
-    paymentClient.release();
-    custodyClient.release();
+    fixtureClient?.release();
+    appClientA?.release();
+    appClientB?.release();
+    paymentClient?.release();
+    custodyClient?.release();
   }
 });
