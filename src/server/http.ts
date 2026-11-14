@@ -71,9 +71,13 @@ export async function api(action: () => Promise<Response>): Promise<Response> {
       ...(typeof directCode === "string" && /^P\d{4}$/.test(directCode)
         ? { databaseCode: directCode }
         : {}),
-      ...(typeof directCode === "string" && /^[0-9A-Z]{5}$/.test(directCode)
+      ...(typeof directCode === "string" &&
+      /^[0-9A-Z]{5}$/.test(directCode) &&
+      !/^P\d{4}$/.test(directCode)
         ? { sqlState: directCode }
-        : typeof metaCode === "string" && /^[0-9A-Z]{5}$/.test(metaCode)
+        : typeof metaCode === "string" &&
+            /^[0-9A-Z]{5}$/.test(metaCode) &&
+            !/^P\d{4}$/.test(metaCode)
           ? { sqlState: metaCode }
           : {}),
     });
