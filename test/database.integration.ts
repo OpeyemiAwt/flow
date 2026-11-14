@@ -10367,7 +10367,7 @@ test("database integration: M38 canonical network matching across OutLayer short
         public_id, account_id, wallet_id, idempotency_key, job_kind,
         source_network, source_asset_id, source_asset_symbol, source_decimals, source_atomic_amount,
         recipient_address, destination_network, destination_asset_id, destination_asset_symbol,
-        destination_decimals, status, authorized_by_user_id
+        destination_decimals, status, created_by_user_id
       ) VALUES (
         $1, $2::uuid, $3::uuid, $4::uuid, 'SEND',
         'base-mainnet', '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 'USDC', 6, 100000,
