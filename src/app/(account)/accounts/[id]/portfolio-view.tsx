@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FloatingNav,
   type NavTabId,
@@ -25,6 +25,8 @@ import {
   ChainBadge,
   IconCheck,
   IconCopy,
+  IconLink,
+  IconPlus,
   IconRefresh,
   IconSearch,
   NearIntentsBadge,
@@ -838,6 +840,49 @@ export function PortfolioView({
     };
   }, [accountId, activeTab]);
 
+  const autoRefreshRequestedRef = useRef<string | null>(null);
+
+  // Trigger one initial background balance sync when an active mainnet wallet
+  // opens without synced balance rows yet so newly onboarded users do not stay
+  // on "Balance unavailable".
+  useEffect(() => {
+    if (
+      portfolio.wallet?.status !== "ACTIVE" ||
+      portfolio.wallet.environment !== "mainnet" ||
+      totalBalanceUsd !== "Balance unavailable" ||
+      (portfolio.cooldownRemainingSeconds ?? 0) > 0 ||
+      autoRefreshRequestedRef.current === accountId
+    ) {
+      return;
+    }
+    autoRefreshRequestedRef.current = accountId;
+    let active = true;
+    send<SerializedAccountPortfolio>(
+      `/api/accounts/${accountId}/portfolio/refresh`,
+      {},
+      "POST",
+    )
+      .then((updated) => {
+        if (!active) return;
+        setPortfolio(updated);
+        if (updated.cooldownRemainingSeconds) {
+          setCooldown(updated.cooldownRemainingSeconds);
+        }
+      })
+      .catch(() => {
+        // Silent background kickoff; user can always click Refresh manually.
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    accountId,
+    portfolio.wallet?.status,
+    portfolio.wallet?.environment,
+    portfolio.cooldownRemainingSeconds,
+    totalBalanceUsd,
+  ]);
+
   // Poll balances every 10s
   useEffect(() => {
     let active = true;
@@ -1443,28 +1488,30 @@ export function PortfolioView({
               </div>
 
               {heldAssets.length === 0 ? (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                <div className="flex min-h-[210px] flex-col items-center justify-center px-4 py-10 text-center sm:py-12 gap-5">
+                  <p className="max-w-md text-sm text-neutral-500 dark:text-neutral-400">
                     No assets held yet. Deposit crypto or create a payment link
                     to receive funds.
                   </p>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
                       type="button"
                       onClick={() => {
                         setDepositMode("DEPOSIT");
                         setActiveTab("receive");
                       }}
-                      className="flow-liquid-btn-primary px-4 py-2 rounded-full text-xs font-semibold cursor-pointer"
+                      className="flow-liquid-btn-primary inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold cursor-pointer"
                     >
-                      Add Money
+                      <IconPlus size={15} />
+                      <span>Add Money</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab("request")}
-                      className="flow-liquid-btn px-4 py-2 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
+                      className="flow-liquid-btn inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold text-neutral-900 dark:text-white cursor-pointer"
                     >
-                      Request
+                      <IconLink size={15} />
+                      <span>Request</span>
                     </button>
                   </div>
                 </div>
@@ -2406,7 +2453,11 @@ export function PortfolioView({
                             : addMoneyRouteUnavailable ||
                                 crossChainQuoteError === "Route unavailable"
                               ? "Route unavailable"
-                              : "Quote unavailable"}
+                              : crossChainQuoteError
+                                ? "Quote unavailable"
+                                : addMoneyKey
+                                  ? "Click Review Deposit Quote"
+                                  : "Enter amount & refund address"}
                       </dd>
                     </div>
                   </dl>

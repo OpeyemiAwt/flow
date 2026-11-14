@@ -1406,6 +1406,8 @@ test("Chromium follows the Google redirect, onboards accounts and enforces tenan
     await visitor
       .getByRole("heading", { name: /Access your\s*Flow account/i })
       .waitFor();
+    assert.equal(await visitor.getByLabel("Email address").count(), 0);
+    await visitor.getByRole("button", { name: "Sign in", exact: true }).click();
     await visitor.getByLabel("Email address").fill(inviteeEmail);
     const code = await codeFor(inviteeEmail, () =>
       visitor.getByRole("button", { name: /Send verification code/i }).click(),
@@ -1740,6 +1742,8 @@ test("FLOW desktop brand UI: multi-chain routing, curated asset registry, worksp
     await page.setViewportSize({ width: 1440, height: 900 });
 
     const uiEmail = "flow-ui-brand@example.test";
+    assert.equal(await page.getByLabel("Email address").count(), 0);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByLabel("Email address").fill(uiEmail);
     const otpCode = await codeFor(uiEmail, () =>
       page.getByRole("button", { name: /Send verification code/i }).click(),
@@ -3160,6 +3164,8 @@ test("phase 6 end-to-end acceptance scenarios A–G: queued wallet onboarding, p
   try {
     const page = await ctx.newPage();
     await page.goto(`${app.origin}/sign-in`);
+    assert.equal(await page.getByLabel("Email address").count(), 0);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByLabel("Email address").fill(ownerEmail);
     const otp = await codeFor(ownerEmail, () =>
       page.getByRole("button", { name: /Send verification code/i }).click(),

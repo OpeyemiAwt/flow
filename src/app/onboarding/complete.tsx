@@ -21,15 +21,18 @@ type OnboardingAccount = {
   addresses?: { network: string; chainId: string; address: string }[];
 };
 
-const onboardingSteps = [
-  "Welcome",
-  "Personal details",
-  "Security",
-  "Confirm",
-  "Provisioning",
-  "Wallet ready",
-  "Dashboard",
-] as const;
+const stepProgressPercent: Record<
+  "welcome" | "details" | "security" | "confirm" | "status" | "ready" | "dashboard",
+  number
+> = {
+  welcome: 14,
+  details: 28,
+  security: 42,
+  confirm: 58,
+  status: 72,
+  ready: 92,
+  dashboard: 100,
+};
 
 const statusCopy: Record<WalletStatus, { title: string; detail: string }> = {
   active: { title: "Wallet verified", detail: "Your wallet is ready." },
@@ -88,11 +91,12 @@ export function CompleteOnboarding({
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    const accountId = account?.id;
+    const walletStatus = account?.walletStatus;
     if (
       step !== "status" ||
-      !account ||
-      (account.walletStatus !== "setup_pending" &&
-        account.walletStatus !== "provisioning")
+      !accountId ||
+      (walletStatus !== "setup_pending" && walletStatus !== "provisioning")
     )
       return;
     let active = true;
@@ -102,7 +106,7 @@ export function CompleteOnboarding({
           walletStatus: WalletStatus;
           walletReady: boolean;
           addresses: NonNullable<OnboardingAccount["addresses"]>;
-        }>(`/api/accounts/${account.id}/wallet/provision`, {}, "GET");
+        }>(`/api/accounts/${accountId}/wallet/provision`, {}, "GET");
         if (active) {
           setAccount((previous) =>
             previous
@@ -120,12 +124,14 @@ export function CompleteOnboarding({
         // A polling error is transient. The page keeps showing the last persisted status.
       }
     };
-    const timer = window.setInterval(refresh, 5000);
+    const kickoff = window.setTimeout(refresh, 600);
+    const timer = window.setInterval(refresh, 2000);
     return () => {
       active = false;
+      window.clearTimeout(kickoff);
       window.clearInterval(timer);
     };
-  }, [account, step]);
+  }, [account?.id, account?.walletStatus, step]);
 
   async function beginProvisioning() {
     setBusy(true);
@@ -152,6 +158,19 @@ export function CompleteOnboarding({
         }
       : statusCopy[account.walletStatus]
     : null;
+
+  const progressPercent =
+    step === "status"
+      ? account?.walletStatus === "provisioning"
+        ? 82
+        : account?.walletStatus === "active" && account.provisioningComplete
+          ? 92
+          : 72
+      : stepProgressPercent[step];
+  const isActivelyCreating =
+    step === "status" &&
+    (account?.walletStatus === "setup_pending" ||
+      account?.walletStatus === "provisioning");
 
   async function leaveToSignIn(mode: "signed-out" | "switch-account") {
     setBusy(true);
@@ -223,33 +242,20 @@ export function CompleteOnboarding({
                 ? "These details come from your authenticated identity and will be used for your Personal FLOW account."
                 : "Set up your Personal FLOW account and verify its wallet before entering the dashboard."}
           </p>
-          <div className="mt-8 flex flex-wrap gap-2" aria-label="Setup steps">
-            {onboardingSteps.map((label, index) => {
-              const current = [
-                "welcome",
-                "details",
-                "security",
-                "confirm",
-                "status",
-                "ready",
-                "dashboard",
-              ].indexOf(step);
-              const passed = index < current;
-              return (
-                <span
-                  key={label}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                    index === current
-                      ? "bg-[#0B0B0B] dark:bg-white text-white dark:text-[#0B0B0B]"
-                      : passed
-                        ? "bg-[#E9F8F1] dark:bg-emerald-950/50 text-[#137A50] dark:text-emerald-300"
-                        : "border border-[#E3DED7] dark:border-white/[0.1] bg-white dark:bg-[#141414] text-[#777] dark:text-neutral-400"
-                  }`}
-                >
-                  {label}
-                </span>
-              );
-            })}
+          <div
+            role="progressbar"
+            aria-label="Wallet onboarding progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progressPercent}
+            className="mt-8 h-2.5 w-full overflow-hidden rounded-full bg-[#ECE7DF] dark:bg-white/[0.08]"
+          >
+            <div
+              className={`h-full rounded-full bg-gradient-to-r from-[#FF1A1A] via-[#FF4D4D] to-[#FF1A1A] transition-all duration-700 ease-out ${
+                isActivelyCreating ? "animate-pulse" : ""
+              }`}
+              style={{ width: `${progressPercent}%` }}
+            />
           </div>
         </section>
 
@@ -263,11 +269,6 @@ export function CompleteOnboarding({
                 {userEmail}
               </p>
             </div>
-            {account && (
-              <span className="text-xs font-medium text-[#555] dark:text-neutral-400 capitalize">
-                {account.walletStatus.replaceAll("_", " ")}
-              </span>
-            )}
           </div>
 
           {step === "welcome" && (
@@ -418,11 +419,6 @@ export function CompleteOnboarding({
                   <p className="mt-3 leading-6 text-[#5A5A5A] dark:text-neutral-400">
                     {status.detail}
                   </p>
-                  <p className="mt-5 rounded-2xl bg-[#F7F5F1] dark:bg-[#1A1A1A] p-4 text-sm leading-6 text-[#555] dark:text-neutral-300">
-                    This status comes from FLOW&apos;s saved account and custody
-                    job records. No wallet address or balance is shown until it
-                    has been returned and verified.
-                  </p>
                   {account?.walletStatus === "setup_failed" && (
                     <button
                       type="button"
@@ -439,19 +435,25 @@ export function CompleteOnboarding({
                   {(account?.walletStatus === "setup_pending" ||
                     account?.walletStatus === "provisioning") && (
                     <>
+                      <div
+                        aria-hidden="true"
+                        className="mt-6 h-2 w-full overflow-hidden rounded-full bg-[#ECE7DF] dark:bg-white/[0.08]"
+                      >
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-[#FF1A1A] via-[#FF4D4D] to-[#FF1A1A] animate-pulse transition-all duration-700 ease-out"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
                       {account.walletStatus === "setup_pending" && (
                         <button
                           type="button"
                           disabled={busy}
                           onClick={beginProvisioning}
-                          className="flow-liquid-btn-primary mt-5 h-12 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
+                          className="flow-liquid-btn-primary mt-6 h-12 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
                         >
                           {busy ? "Resuming…" : "Resume wallet setup"}
                         </button>
                       )}
-                      <p className="mt-3 text-center text-xs text-[#777] dark:text-neutral-400">
-                        Status refreshes automatically while this page is open.
-                      </p>
                     </>
                   )}
                 </>
