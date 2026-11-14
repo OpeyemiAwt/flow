@@ -282,20 +282,54 @@ async function exportProductionPostgresCa() {
         "Production CA export connection has an unexpected database identity.",
       );
     }
-    const result = await admin.query(
-      "SELECT pg_read_file('/var/lib/postgresql/data/certs/root.crt') AS certificate",
+    const settings = await admin.query(
+      "SELECT current_setting('data_directory') AS data_directory, current_setting('ssl_cert_file') AS ssl_cert_file, current_setting('ssl_ca_file') AS ssl_ca_file",
     );
-    const certificate = result.rows[0]?.certificate;
-    if (
-      typeof certificate !== "string" ||
-      !certificate.startsWith("-----BEGIN CERTIFICATE-----") ||
-      !certificate.trimEnd().endsWith("-----END CERTIFICATE-----")
-    ) {
-      fail("Production PostgreSQL root certificate is unavailable or invalid.");
+    const { data_directory, ssl_cert_file, ssl_ca_file } = settings.rows[0];
+    const certDirectory = String(ssl_cert_file).slice(
+      0,
+      String(ssl_cert_file).lastIndexOf("/"),
+    );
+    const candidates = [
+      ssl_ca_file,
+      `${data_directory}/certs/root.crt`,
+      `${data_directory}/root.crt`,
+      `${certDirectory}/root.crt`,
+      `${certDirectory}/ca.crt`,
+    ].filter((candidate) => typeof candidate === "string" && candidate.length);
+    for (const candidate of new Set(candidates)) {
+      try {
+        const result = await admin.query(
+          "SELECT pg_read_file($1) AS certificate",
+          [candidate],
+        );
+        const certificate = result.rows[0]?.certificate;
+        if (
+          typeof certificate === "string" &&
+          certificate.startsWith("-----BEGIN CERTIFICATE-----") &&
+          certificate.trimEnd().endsWith("-----END CERTIFICATE-----")
+        ) {
+          console.log(
+            JSON.stringify({
+              event: "production_postgres_root_ca",
+              certificate,
+            }),
+          );
+          return;
+        }
+      } catch {
+        // Continue to the other known Railway Postgres CA locations.
+      }
     }
     console.log(
-      JSON.stringify({ event: "production_postgres_root_ca", certificate }),
+      JSON.stringify({
+        event: "production_postgres_ca_probe",
+        dataDirectory: data_directory,
+        certificateFile: ssl_cert_file,
+        caFile: ssl_ca_file,
+      }),
     );
+    fail("Production PostgreSQL root certificate is unavailable or invalid.");
   } finally {
     await admin.end();
   }
