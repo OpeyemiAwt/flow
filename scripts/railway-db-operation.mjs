@@ -1887,8 +1887,14 @@ async function inspectStagingReadiness() {
     const wallets = await q(
       "SELECT id, account_id, provider, environment, provider_wallet_id, near_account_id, status::text AS status, policy_state, key_id, left(key_digest, 12) AS key_digest_prefix, created_at FROM flow.wallets ORDER BY created_at ASC LIMIT 50",
     );
+    const walletAddresses = await q(
+      "SELECT wallet_id, network, chain_id, address, public_key, created_at FROM flow.wallet_addresses ORDER BY wallet_id ASC, network ASC LIMIT 100",
+    );
+    const walletCapabilities = await q(
+      "SELECT wallet_id, network, can_derive_address, can_receive, can_read_native_balance, can_read_intents_balance, can_sign_transfer, broadcast_mode FROM flow.wallet_capabilities ORDER BY wallet_id ASC, network ASC LIMIT 100",
+    );
     const provisioningJobs = await q(
-      "SELECT id, account_id, status::text AS status, attempts, failure_classification, last_error, created_at, updated_at FROM flow.wallet_provisioning_jobs ORDER BY created_at ASC LIMIT 50",
+      "SELECT id, account_id, status::text AS status, attempts, fencing_token::text AS fencing_token, dispatch_attempt_id, failure_classification, last_error, created_at, updated_at FROM flow.wallet_provisioning_jobs ORDER BY created_at ASC LIMIT 50",
     );
     const operators = await q(
       "SELECT id, auth_user_id, role, status, enrolled_at FROM flow.custody_operators ORDER BY enrolled_at ASC LIMIT 25",
@@ -2091,6 +2097,8 @@ async function inspectStagingReadiness() {
           trgSessionDef: authFunctionChecks[0]?.trg_session_def ?? null,
         },
         wallets,
+        walletAddresses,
+        walletCapabilities,
         provisioningJobs,
         operators,
         compatAuths,
