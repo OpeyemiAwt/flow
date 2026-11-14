@@ -165,10 +165,14 @@ export async function processAssistantQuery(params: {
         public_id: string;
         status: string;
         amount: string;
+        destination_asset_symbol: string;
+        destination_decimals: number;
         settled_at: Date | null;
       }>
     >`
-      SELECT pr.title, pa.attempt_public_id as public_id, pa.status, pa.quoted_destination_atomic_amount as amount, pa.settled_at
+      SELECT pr.title, pa.attempt_public_id as public_id, pa.status,
+             pa.quoted_destination_atomic_amount as amount,
+             pr.destination_asset_symbol, pr.destination_decimals, pa.settled_at
       FROM flow.payment_attempts pa
       JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
       WHERE pr.account_id = ${params.accountId}::uuid
@@ -187,7 +191,7 @@ export async function processAssistantQuery(params: {
           data: {
             publicId: a.public_id,
             status: a.status,
-            amount: `${(Number(a.amount) / 10 ** 6).toFixed(2)} USDC`,
+            amount: `Quoted: ${formatAtomicToDisplay(a.amount, a.destination_decimals)} ${a.destination_asset_symbol}`,
             settledAt: a.settled_at ? a.settled_at.toISOString() : null,
           },
           ctaLabel: "View in Activity",

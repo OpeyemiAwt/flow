@@ -8,7 +8,7 @@ import {
 import { ApiFailure, api, input, reply } from "../../../../../server/http.ts";
 import {
   getAccountNotifications,
-  markAllNotificationsAsRead,
+  markNotificationsAsRead,
 } from "../../../../../server/notifications-service.ts";
 
 export const runtime = "nodejs";
@@ -33,19 +33,22 @@ async function handle(request: Request, rawId: string): Promise<Response> {
     request.method === "POST"
       ? await input(request, notificationSelection)
       : null;
-  const viewer = actor.userId + ":" + id;
   const notifications = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true),
       set_config('flow.current_account_id', ${id}, true)`;
-    return getAccountNotifications(tx, id, viewer);
+    return getAccountNotifications(tx, id, actor.userId);
   });
   if (selection) {
     const allowed = new Set(notifications.map((item) => item.id));
     const ids = "ids" in selection ? selection.ids : [selection.id];
-    markAllNotificationsAsRead(
-      ids.filter((id) => allowed.has(id)),
-      viewer,
+    const permittedIds = ids.filter((notificationId) =>
+      allowed.has(notificationId),
     );
+    await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true),
+        set_config('flow.current_account_id', ${id}, true)`;
+      await markNotificationsAsRead(tx, id, actor.userId, permittedIds);
+    });
     return reply(200, { ok: true });
   }
   return reply(200, {

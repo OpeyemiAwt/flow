@@ -7,8 +7,8 @@ import {
   resolveQuoteAsset,
 } from "../src/server/providers/near-intents-discovery.ts";
 import {
-  markNotificationAsRead,
-  markAllNotificationsAsRead,
+  getAccountNotifications,
+  markNotificationsAsRead,
 } from "../src/server/notifications-service.ts";
 import { processAssistantQuery } from "../src/server/ai-assistant-service.ts";
 
@@ -144,12 +144,73 @@ test("near-intents-discovery: keeps exact provider asset IDs and chain context",
   assert.equal(fetchMock.mock.callCount(), 1);
 });
 
-test("notifications-service: mark read and mark all as read mutations", () => {
-  const testId = "notif-test-1";
-  markNotificationAsRead(testId);
-  markAllNotificationsAsRead(["notif-test-2", "notif-test-3"]);
-  // Successfully executed without exception
-  assert.ok(true);
+test("notifications-service: persists read IDs idempotently for one account and user", async () => {
+  const executions: unknown[] = [];
+  const db = {
+    $executeRaw: async (query: unknown) => {
+      executions.push(query);
+      return 2;
+    },
+  } as unknown as import("../src/foundation/prisma.ts").FlowDb;
+  await markNotificationsAsRead(db, "account-id", "user-id", [
+    "notif-a",
+    "notif-b",
+  ]);
+  assert.equal(executions.length, 1);
+  assert.match(String(executions[0]), /account_notification_reads/);
+  assert.match(String(executions[0]), /ON CONFLICT/);
+});
+
+test("notifications-service: loads persisted read state and propagates query failure", async () => {
+  const db = {
+    $queryRaw: async (query: unknown) => {
+      const sql = String(query);
+      if (sql.includes("payment_attempts")) {
+        return [
+          {
+            attempt_id: "attempt-1",
+            public_id: "pay-test",
+            title: "Test invoice",
+            source_network: "base-mainnet",
+            source_asset_symbol: "USDC",
+            destination_network: "base-mainnet",
+            destination_asset_symbol: "USDC",
+            settled_atomic_amount: "1000000",
+            destination_decimals: 6,
+            settled_at: new Date("2026-11-14T00:00:00Z"),
+            created_at: new Date("2026-11-13T00:00:00Z"),
+          },
+        ];
+      }
+      if (sql.includes("payment_requests")) return [];
+      if (sql.includes("wallet_balances")) return [];
+      if (sql.includes("account_notification_reads")) {
+        return [{ notification_id: "notif_settled_attempt-1" }];
+      }
+      return [];
+    },
+  } as unknown as import("../src/foundation/prisma.ts").FlowDb;
+  const notifications = await getAccountNotifications(
+    db,
+    "00000000-0000-4000-8000-000000000001",
+    "00000000-0000-4000-8000-000000000002",
+  );
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0]?.isRead, true);
+
+  const failingDb = {
+    $queryRaw: async () => {
+      throw new Error("database unavailable");
+    },
+  } as unknown as import("../src/foundation/prisma.ts").FlowDb;
+  await assert.rejects(
+    getAccountNotifications(
+      failingDb,
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000002",
+    ),
+    /database unavailable/,
+  );
 });
 
 import type { FlowDb } from "../src/foundation/prisma.ts";
@@ -199,4 +260,34 @@ test("ai-assistant-service: draft payment link generates interactive card", asyn
   assert.equal(response.card?.type, "DRAFT_PAYMENT_LINK");
   assert.equal(response.card?.data?.amount, "25.00");
   assert.equal(response.card?.data?.assetSymbol, "USDC");
+});
+
+test("ai-assistant-service: payment status formats the quoted token with exact decimals", async () => {
+  const mockDb = {
+    $queryRaw: async (query: unknown) => {
+      const sql = String(query);
+      if (sql.includes("wallet_balances")) return [];
+      if (sql.includes("payment_attempts")) {
+        return [
+          {
+            title: "Native token invoice",
+            public_id: "pay-native",
+            status: "PROCESSING",
+            amount: "1234567890123456789",
+            destination_asset_symbol: "ETH",
+            destination_decimals: 18,
+            settled_at: null,
+          },
+        ];
+      }
+      return [];
+    },
+  };
+  const response = await processAssistantQuery({
+    accountId: "test-acc-1",
+    prompt: "what is the latest payment status?",
+    db: mockDb as unknown as FlowDb,
+  });
+  assert.equal(response.card?.type, "PAYMENT_STATUS");
+  assert.equal(response.card?.data?.amount, "Quoted: 1.234567890123456789 ETH");
 });
