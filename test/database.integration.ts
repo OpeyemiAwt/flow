@@ -10332,7 +10332,7 @@ test("database integration: M38 canonical network matching across OutLayer short
         quoted_source_atomic_amount, quoted_destination_atomic_amount,
         payer_refund_address, status
       ) VALUES (
-        $1::uuid, $2, 'EXTERNAL_WALLET', 'DIRECT', 'AVAILABLE',
+        $1::uuid, $2, 'WALLET', 'DIRECT', 'AVAILABLE',
         'base-mainnet', 'base-mainnet:USDC', 'USDC', 6,
         1000000, 1000000,
         NULL, 'QUOTE_OBSERVED'
