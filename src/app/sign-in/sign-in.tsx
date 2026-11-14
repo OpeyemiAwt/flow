@@ -244,14 +244,22 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
             code.
           </p>
 
+          {issue === "signup-disabled" && (
+            <p
+              role="status"
+              className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-900"
+            >
+              New account sign-up is currently disabled in this environment.
+              Existing users can sign in with their linked method.
+            </p>
+          )}
           {issue === "authentication" && (
             <p
               role="status"
               className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-900"
             >
               Google sign-in could not be completed. If you already use email,
-              sign in with email and link Google from Security, or confirm that
-              new account sign-up is open in this environment.
+              sign in with email and link Google from Security.
             </p>
           )}
           {notice === "signed-out" && (

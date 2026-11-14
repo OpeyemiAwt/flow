@@ -2100,6 +2100,21 @@ async function inspectProductionReadiness() {
         "flow_production_auth_worker",
         "FLOW_PRODUCTION_AUTH_WORKER_PASSWORD",
       ],
+      [
+        "custody_worker",
+        "flow_production_custody_worker",
+        "FLOW_PRODUCTION_CUSTODY_WORKER_PASSWORD",
+      ],
+      [
+        "payment_worker",
+        "flow_production_payment_worker",
+        "FLOW_PRODUCTION_PAYMENT_WORKER_PASSWORD",
+      ],
+      [
+        "indexer_worker",
+        "flow_production_indexer_worker",
+        "FLOW_PRODUCTION_INDEXER_WORKER_PASSWORD",
+      ],
     ]) {
       const pw = process.env[passwordEnv];
       if (!pw) {
@@ -2133,7 +2148,13 @@ async function inspectProductionReadiness() {
             has_table_privilege(current_user, 'flow.auth_identities', 'INSERT') AS can_insert_auth_identities,
             has_table_privilege(current_user, 'flow.google_subject_bindings', 'INSERT') AS can_insert_google_bindings,
             has_table_privilege(current_user, 'flow.auth_sessions', 'INSERT') AS can_insert_auth_sessions,
-            has_table_privilege(current_user, 'flow.auth_intents', 'INSERT') AS can_insert_auth_intents
+            has_table_privilege(current_user, 'flow.auth_intents', 'INSERT') AS can_insert_auth_intents,
+            has_table_privilege(current_user, 'flow.users', 'INSERT') AS can_insert_users,
+            has_table_privilege(current_user, 'flow.accounts', 'INSERT') AS can_insert_accounts,
+            has_table_privilege(current_user, 'flow.account_members', 'INSERT') AS can_insert_account_members,
+            has_table_privilege(current_user, 'flow.wallet_provisioning_jobs', 'INSERT') AS can_insert_provisioning_jobs,
+            has_table_privilege(current_user, 'flow.wallets', 'SELECT') AS can_select_wallets_table,
+            has_table_privilege(current_user, 'flow.security_audits', 'INSERT') AS can_insert_audits
         `);
         let ticketProbe = null;
         let emailTicketProbe = null;

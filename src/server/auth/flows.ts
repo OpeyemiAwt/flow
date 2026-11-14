@@ -724,6 +724,13 @@ async function finishGoogle(request: Request): Promise<Response> {
         redirectMatched:
           responseLocation === new URL(providerRedirect, auth.origin).href,
       });
+      if (
+        !link &&
+        !auth.publicSignupEnabled &&
+        safeLocation?.providerError === "unable_to_create_user"
+      ) {
+        throw new ApiFailure(403, "SIGNUP_UNAVAILABLE");
+      }
       throw new ApiFailure(401, "INVALID_PROOF");
     }
     failureStage = "session-finalization";
@@ -798,7 +805,11 @@ async function finishGoogle(request: Request): Promise<Response> {
       error,
     });
     return authRedirect(
-      link ? "/security?issue=authentication" : fixedSignInError,
+      link
+        ? "/security?issue=authentication"
+        : error.code === "SIGNUP_UNAVAILABLE"
+          ? "/sign-in?issue=signup-disabled"
+          : fixedSignInError,
       headers,
     );
   }
