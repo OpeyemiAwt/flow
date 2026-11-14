@@ -76,9 +76,12 @@ export function getMainnetWalletAddress(
   if (wallet?.status !== "ACTIVE" || wallet.environment !== "mainnet") {
     return null;
   }
+  const target = canonicalizeNetworkId(networkKey) ?? networkKey;
   return (
     wallet.addresses.find(
-      (address) => canonicalizeNetworkId(address.chainId) === networkKey,
+      (address) =>
+        (canonicalizeNetworkId(address.chainId) ??
+          canonicalizeNetworkId(address.network)) === target,
     )?.address ?? null
   );
 }

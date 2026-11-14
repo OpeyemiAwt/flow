@@ -10,6 +10,7 @@ import { isValidPublicPaymentId } from "../domain/payment-requests.ts";
 import {
   isFinancialExecutionDisabled,
   isValidEvmAddress,
+  validateAddressForNetwork,
 } from "../domain/custody.ts";
 import {
   canonicalizeNetworkId,
@@ -221,11 +222,22 @@ export async function commitPaymentAttempt(
       );
     }
 
-    if (attempt.destination_network.toLowerCase().includes("base")) {
-      if (row.recipient_chain_id !== "8453") {
+    const canonicalDest = canonicalizeNetworkId(attempt.destination_network);
+    const expectedChainIds: Readonly<Record<string, string>> = {
+      "base-mainnet": "8453",
+      "ethereum-mainnet": "1",
+      "solana-mainnet": "solana-mainnet",
+      "near-mainnet": "near-mainnet",
+    };
+    const expectedChainId = canonicalDest
+      ? expectedChainIds[canonicalDest]
+      : undefined;
+
+    if (expectedChainId && canonicalDest) {
+      if (row.recipient_chain_id !== expectedChainId) {
         throw new ApiFailure(
           400,
-          `RECIPIENT_CHAIN_ID_MISMATCH: Base mainnet chain ID must be 8453, got ${row.recipient_chain_id}. Testnet (84532) wallets are strictly prohibited.`,
+          `RECIPIENT_CHAIN_ID_MISMATCH: ${canonicalDest} chain ID must be ${expectedChainId}, got ${row.recipient_chain_id}. Testnet wallets are strictly prohibited.`,
         );
       }
       if (row.wallet_environment !== "mainnet") {
@@ -234,13 +246,17 @@ export async function commitPaymentAttempt(
           `RECIPIENT_ENVIRONMENT_MISMATCH: Recipient wallet environment must be mainnet, got ${row.wallet_environment}.`,
         );
       }
-      if (
-        !isValidEvmAddress(recipientAddress) ||
-        isBannedIllustrativeAddress(recipientAddress)
-      ) {
+      const isValidAddress =
+        canonicalDest === "base-mainnet" || canonicalDest === "ethereum-mainnet"
+          ? isValidEvmAddress(recipientAddress)
+          : validateAddressForNetwork(
+              canonicalDest as Parameters<typeof validateAddressForNetwork>[0],
+              recipientAddress,
+            ).valid;
+      if (!isValidAddress || isBannedIllustrativeAddress(recipientAddress)) {
         throw new ApiFailure(
           400,
-          "RECIPIENT_ADDRESS_INVALID: Recipient Base address must be a verified, valid non-probe EVM address. Illustrative probe addresses are strictly prohibited.",
+          `RECIPIENT_ADDRESS_INVALID: Recipient ${canonicalDest} address must be a verified, valid non-probe address. Illustrative probe addresses are strictly prohibited.`,
         );
       }
     }

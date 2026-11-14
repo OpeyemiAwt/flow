@@ -10236,3 +10236,166 @@ test("database integration: M37 automated NEAR policy sponsorship RLS isolation,
     await mockServer.close();
   }
 });
+
+test("database integration: M38 canonical network matching across OutLayer short wallet networks, payment commitments, and outgoing custody claim", async () => {
+  assert.ok(custodyPool, "FLOW_CUSTODY_DATABASE_URL required");
+
+  let fixtureClient: pg.PoolClient | undefined;
+  let appClient: pg.PoolClient | undefined;
+  let custodyClient: pg.PoolClient | undefined;
+
+  try {
+    fixtureClient = await workerPool.connect();
+    appClient = await pool.connect();
+    custodyClient = await custodyPool.connect();
+
+    const owner = await createTestAccount(fixtureClient, "PERSONAL", "m38-net");
+    const sessionToken = await createTestSession(
+      fixtureClient,
+      owner.authUserId,
+    );
+
+    const matchCheck = await appClient.query<{
+      m_base: boolean;
+      m_eth: boolean;
+      m_sol: boolean;
+      m_near: boolean;
+      no_testnet: boolean;
+    }>(`
+      SELECT
+        flow.networks_match('base', 'base-mainnet') AS m_base,
+        flow.networks_match('ethereum', 'ethereum-mainnet') AS m_eth,
+        flow.networks_match('solana', 'solana-mainnet') AS m_sol,
+        flow.networks_match('near', 'near-mainnet') AS m_near,
+        flow.networks_match('base', 'base-sepolia') AS no_testnet
+    `);
+    assert.deepEqual(matchCheck.rows[0], {
+      m_base: true,
+      m_eth: true,
+      m_sol: true,
+      m_near: true,
+      no_testnet: false,
+    });
+
+    const walletId = randomUUID();
+    const baseAddress = "0x8F23a2944B109a3c4223a2A79B903bF1cF35611a";
+    await fixtureClient.query(
+      `INSERT INTO flow.wallets (
+        id, account_id, provider, environment, provider_wallet_id,
+        near_account_id, encrypted_credential, key_id, key_digest, status
+      ) VALUES (
+        $1::uuid, $2::uuid, 'OUTLAYER', 'mainnet', $3,
+        'm38owner.near', 'enc_m38_secret', 'v1', 'digest_m38_1', 'ACTIVE'::flow.wallet_status
+      )`,
+      [walletId, owner.accountId, `pw_${randomUUID().slice(0, 8)}`],
+    );
+    await fixtureClient.query(
+      `INSERT INTO flow.wallet_addresses (id, wallet_id, network, chain_id, address, public_key)
+       VALUES
+         (gen_random_uuid(), $1::uuid, 'base', '8453', $2, 'pk_base_m38'),
+         (gen_random_uuid(), $1::uuid, 'ethereum', '1', $2, 'pk_eth_m38'),
+         (gen_random_uuid(), $1::uuid, 'near', 'near-mainnet', 'm38owner.near', 'ed25519:m38')`,
+      [walletId, baseAddress],
+    );
+    await fixtureClient.query(
+      `INSERT INTO flow.wallet_capabilities (wallet_id, network, can_derive_address, can_receive, can_sign_transfer, broadcast_mode)
+       VALUES ($1::uuid, 'base', true, true, false, 'caller_broadcast')`,
+      [walletId],
+    );
+
+    await appClient.query(
+      `SELECT set_config('flow.current_session_token', $1, false),
+              set_config('flow.current_account_id', $2, false)`,
+      [sessionToken, owner.accountId],
+    );
+
+    const publicId = `pr_m38_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const attemptPublicId = `pa_m38_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const prInsert = await appClient.query<{ id: string }>(
+      `INSERT INTO flow.payment_requests (
+        account_id, public_id, title, destination_network, destination_asset_id,
+        destination_asset_symbol, destination_decimals, amount_mode, requested_atomic_amount,
+        status, payer_memo_required, metadata
+      ) VALUES (
+        $1::uuid, $2, 'M38 Network Match Request', 'base-mainnet', 'base-mainnet:USDC',
+        'USDC', 6, 'FIXED'::flow.payment_amount_mode, 1000000,
+        'ACTIVE'::flow.payment_request_status, false, '{}'::jsonb
+      ) RETURNING id`,
+      [owner.accountId, publicId],
+    );
+    const paymentRequestId = prInsert.rows[0]!.id;
+
+    await fixtureClient.query(
+      `INSERT INTO flow.payment_attempts (
+        payment_request_id, attempt_public_id, route_type, source_network, source_asset_id,
+        source_asset_symbol, source_decimals, destination_network, destination_asset_id,
+        quoted_source_atomic_amount, quoted_destination_atomic_amount,
+        payer_refund_address, status
+      ) VALUES (
+        $1::uuid, $2, 'DIRECT', 'base-mainnet', 'base-mainnet:USDC',
+        'USDC', 6, 'base-mainnet', 'base-mainnet:USDC',
+        1000000, 1000000,
+        NULL, 'QUOTED'::flow.payment_attempt_status
+      )`,
+      [paymentRequestId, attemptPublicId],
+    );
+
+    const details = await appClient.query<{
+      recipient_address: string | null;
+      recipient_network: string | null;
+      recipient_chain_id: string | null;
+      wallet_environment: string | null;
+      wallet_status: string | null;
+      can_receive: boolean;
+    }>(
+      `SELECT recipient_address, recipient_network, recipient_chain_id, wallet_environment, wallet_status, can_receive
+       FROM flow.get_payment_attempt_commitment_details($1, $2)`,
+      [publicId, attemptPublicId],
+    );
+    assert.equal(details.rows.length, 1);
+    assert.deepEqual(details.rows[0], {
+      recipient_address: baseAddress,
+      recipient_network: "base",
+      recipient_chain_id: "8453",
+      wallet_environment: "mainnet",
+      wallet_status: "ACTIVE",
+      can_receive: true,
+    });
+
+    const outRes = await appClient.query<{ id: string }>(
+      `INSERT INTO flow.outgoing_transfer_jobs (
+        public_id, account_id, wallet_id, idempotency_key, job_kind,
+        source_network, source_asset_id, source_asset_symbol, source_decimals, source_atomic_amount,
+        recipient_address, destination_network, destination_asset_id, destination_asset_symbol,
+        destination_decimals, status, authorized_by_user_id
+      ) VALUES (
+        $1, $2::uuid, $3::uuid, $4::uuid, 'SEND',
+        'base-mainnet', '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 'USDC', 6, 100000,
+        '0x9A676e781A523b5d0C0e43731313A708CB607508', 'base-mainnet', '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 'USDC',
+        6, 'PENDING_CUSTODY', $5::uuid
+      ) RETURNING id`,
+      [
+        `snd_m38_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
+        owner.accountId,
+        walletId,
+        randomUUID(),
+        owner.userId,
+      ],
+    );
+    const outJobId = outRes.rows[0]!.id;
+
+    const claimed = await custodyClient.query<{
+      id: string;
+      source_address: string | null;
+    }>(
+      `SELECT id, source_address FROM flow.claim_outgoing_transfer_for_custody('m38-cust', 60)`,
+    );
+    assert.equal(claimed.rows.length, 1);
+    assert.equal(claimed.rows[0]!.id, outJobId);
+    assert.equal(claimed.rows[0]!.source_address, baseAddress);
+  } finally {
+    fixtureClient?.release();
+    appClient?.release();
+    custodyClient?.release();
+  }
+});

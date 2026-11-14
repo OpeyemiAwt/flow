@@ -120,10 +120,14 @@ export async function ingestWalletActivities(
       if (addr.network === "base" || addr.network === "ethereum") {
         const primaryRpc =
           addr.network === "ethereum"
-            ? process.env.FLOW_ETH_RPC_URL || "https://rpc.ankr.com/eth"
+            ? process.env.FLOW_ETHEREUM_RPC_URL ||
+              process.env.FLOW_ETH_RPC_URL ||
+              "https://ethereum-rpc.publicnode.com"
             : (rpc.base?.primary ?? "https://sepolia.base.org");
         const fallbackRpc =
-          addr.network === "ethereum" ? undefined : rpc.base?.fallback;
+          addr.network === "ethereum"
+            ? "https://cloudflare-eth.com"
+            : rpc.base?.fallback;
 
         const items = await indexEvmAddressActivities(
           primaryRpc,

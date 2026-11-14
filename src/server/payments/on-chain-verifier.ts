@@ -704,10 +704,11 @@ export function getNetworkRpcUrl(network: string): string {
   }
   if (norm.includes("ethereum") || norm.includes("eth")) {
     return (
+      process.env.FLOW_ETHEREUM_RPC_URL ||
       process.env.FLOW_ETH_RPC_URL ||
       (norm.includes("sepolia")
         ? "https://rpc.sepolia.org"
-        : "https://rpc.ankr.com/eth")
+        : "https://ethereum-rpc.publicnode.com")
     );
   }
   throw new FlowError(
