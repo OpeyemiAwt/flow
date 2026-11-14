@@ -581,7 +581,7 @@ async function rehearseProductionMigrations() {
     fail(
       "Railway deployment identity is required for isolated rehearsal names.",
     );
-  const name = `flow_prodshape_${deploymentId.slice(0, 10).toLowerCase()}_${randomBytes(5).toString("hex")}`;
+  const name = `flow_test_prodshape_${deploymentId.slice(0, 10).toLowerCase()}_${randomBytes(5).toString("hex")}`;
   const suffixes = [
     "app",
     "auth_worker",
@@ -654,6 +654,8 @@ async function rehearseProductionMigrations() {
       HOME: process.env.HOME,
       NODE_ENV: "production",
       FLOW_ENV: "test",
+      FLOW_TEST_DATABASE_REMOTE: "enabled",
+      FLOW_TEST_DATABASE_NAME: name,
       FLOW_EXECUTION: "disabled",
       FLOW_MIGRATION_DATABASE_URL: migrationUrl.toString(),
     };
