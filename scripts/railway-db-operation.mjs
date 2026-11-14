@@ -1885,7 +1885,7 @@ async function inspectStagingReadiness() {
       "SELECT split_part(key, ':', 1) || ':' || split_part(key, ':', 2) AS bucket, count, expires_at FROM flow.auth_throttles ORDER BY expires_at DESC LIMIT 25",
     );
     const recentAuditEvents = await q(
-      "SELECT event, user_id, account_id, created_at FROM flow.security_audit_events ORDER BY created_at DESC LIMIT 30",
+      "SELECT kind, actor_auth_id, account_id, target_id, created_at FROM flow.security_audit_events ORDER BY created_at DESC LIMIT 30",
     );
     const dbClock = await q(
       "SELECT current_setting('TIMEZONE') AS timezone, CURRENT_TIMESTAMP AS current_ts, (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS current_ts_utc",
@@ -1960,6 +1960,7 @@ async function inspectStagingReadiness() {
             has_table_privilege(current_user, 'flow.wallets', 'DELETE') AS can_delete_wallets
         `);
         let ticketProbe = null;
+        let emailTicketProbe = null;
         if (label === "auth_ticket") {
           try {
             await rc.query(
@@ -1970,10 +1971,20 @@ async function inspectStagingReadiness() {
             ticketProbe =
               probeErr instanceof Error ? probeErr.message : String(probeErr);
           }
+          try {
+            await rc.query(
+              "SELECT flow.issue_email_auth_ticket('__diag_nonexistent_slot__', '__diag_nonexistent_digest__')",
+            );
+            emailTicketProbe = "unexpected_success";
+          } catch (probeErr) {
+            emailTicketProbe =
+              probeErr instanceof Error ? probeErr.message : String(probeErr);
+          }
         }
         roleChecks[label] = {
           ...res.rows[0],
           ...(ticketProbe ? { ticketProbe } : {}),
+          ...(emailTicketProbe ? { emailTicketProbe } : {}),
         };
       } finally {
         await rc.end();
@@ -2013,6 +2024,9 @@ async function inspectStagingReadiness() {
             authFunctionChecks[0]?.trg_session_def?.includes(
               "flow.active_auth_ticket_id",
             ) ?? null,
+          issueGoogleDef: authFunctionChecks[0]?.issue_google_def ?? null,
+          issueEmailDef: authFunctionChecks[0]?.issue_email_def ?? null,
+          trgSessionDef: authFunctionChecks[0]?.trg_session_def ?? null,
         },
         wallets,
         provisioningJobs,
