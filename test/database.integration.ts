@@ -9696,9 +9696,21 @@ test("database integration: M36 settings RLS, Add Money worker lease lifecycle, 
     );
     await assert.rejects(
       custodyClient.query(
-        `UPDATE flow.wallets SET status = 'FROZEN' WHERE id = $1::uuid`,
-        [walletA],
+        `UPDATE flow.outgoing_transfer_jobs SET status = 'SETTLED' WHERE id = $1::uuid`,
+        [outJobId],
       ),
+      { code: "42501" },
+    );
+    await assert.rejects(
+      custodyClient.query(
+        `SELECT * FROM flow.claim_active_add_money_intents('bad', 60, 5)`,
+      ),
+      { code: "42501" },
+    );
+    await assert.rejects(
+      custodyClient.query(`DELETE FROM flow.wallets WHERE id = $1::uuid`, [
+        walletA,
+      ]),
       { code: "42501" },
     );
 
