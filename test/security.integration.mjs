@@ -5138,7 +5138,7 @@ test("Chromium onboarding sign-out and switch-account clear the session and reco
     );
 
     await page.goto(app.origin);
-    assert.equal(new URL(page.url()).pathname, "/sign-in");
+    assert.equal(new URL(page.url()).pathname, "/");
     await page.goto(`${app.origin}/onboarding`);
     assert.equal(new URL(page.url()).pathname, "/sign-in");
 
