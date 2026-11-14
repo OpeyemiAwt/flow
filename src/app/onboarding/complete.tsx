@@ -153,15 +153,45 @@ export function CompleteOnboarding({
       : statusCopy[account.walletStatus]
     : null;
 
+  async function leaveToSignIn(mode: "signed-out" | "switch-account") {
+    setBusy(true);
+    setMessage("");
+    try {
+      await send("/api/auth/sign-out");
+      window.location.replace(`/sign-in?notice=${mode}`);
+    } catch {
+      setMessage("Could not sign out. Try again.");
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] px-5 py-8 text-[#0B0B0B] sm:px-8 sm:py-12">
-      <header className="mx-auto flex max-w-6xl items-center justify-between">
+      <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
         <Link href="/" aria-label="FLOW Home">
           <FlowLogo className="h-8 w-auto" />
         </Link>
-        <span className="rounded-full border border-[#E8E4DC] bg-white px-4 py-2 text-sm text-[#555]">
-          Personal account
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-[#E8E4DC] bg-white px-4 py-2 text-sm text-[#555]">
+            {userEmail ? `Signed in: ${userEmail}` : "Personal account"}
+          </span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void leaveToSignIn("switch-account")}
+            className="rounded-full border border-[#E8E4DC] bg-white px-4 py-2 text-sm font-medium text-[#0B0B0B] transition hover:border-[#0B0B0B] disabled:opacity-50"
+          >
+            Switch account
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void leaveToSignIn("signed-out")}
+            className="rounded-full border border-[#E8E4DC] bg-white px-4 py-2 text-sm font-medium text-[#555] transition hover:border-[#0B0B0B] hover:text-[#0B0B0B] disabled:opacity-50"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="mx-auto mt-10 grid max-w-6xl gap-8 lg:mt-16 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">

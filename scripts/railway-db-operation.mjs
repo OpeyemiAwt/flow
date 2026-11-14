@@ -2040,6 +2040,146 @@ async function inspectStagingReadiness() {
   }
 }
 
+async function inspectProductionReadiness() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID ||
+    process.env.FLOW_DB_TARGET !== "production-empty-only" ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail(
+      "Production inspection is restricted to the designated isolated production environment.",
+    );
+  }
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("FLOW_BOOTSTRAP_DATABASE_URL is required.");
+  const prodUrl = new URL(rawUrl);
+  if (
+    !prodUrl.hostname.endsWith(".railway.internal") ||
+    prodUrl.pathname !== "/railway" ||
+    decodeURIComponent(prodUrl.username) !== "postgres"
+  ) {
+    fail(
+      "Production inspection URL does not identify the isolated Railway PostgreSQL service.",
+    );
+  }
+  prodUrl.pathname = "/flow_production";
+  prodUrl.search = "?sslmode=require&uselibpqcompat=true";
+
+  const admin = new pg.Client({
+    connectionString: prodUrl.toString(),
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    const q = async (sql) => (await admin.query(sql)).rows;
+    const migrations = await q(
+      "SELECT COUNT(*)::int AS applied_count, MAX(migration_name) AS latest_migration FROM public._prisma_migrations WHERE finished_at IS NOT NULL",
+    );
+    const dbClock = await q(
+      "SELECT current_setting('TIMEZONE') AS timezone, CURRENT_TIMESTAMP AS current_ts",
+    );
+    const counts = await q(`
+      SELECT
+        (SELECT COUNT(*)::int FROM flow.auth_users) AS auth_users,
+        (SELECT COUNT(*)::int FROM flow.auth_identities) AS auth_identities,
+        (SELECT COUNT(*)::int FROM flow.auth_sessions) AS auth_sessions,
+        (SELECT COUNT(*)::int FROM flow.auth_intents) AS auth_intents,
+        (SELECT COUNT(*)::int FROM flow.google_subject_bindings) AS google_bindings,
+        (SELECT COUNT(*)::int FROM flow.users) AS users,
+        (SELECT COUNT(*)::int FROM flow.accounts) AS accounts,
+        (SELECT COUNT(*)::int FROM flow.wallets) AS wallets,
+        (SELECT COUNT(*)::int FROM flow.wallet_provisioning_jobs) AS provisioning_jobs
+    `);
+    const roleChecks = {};
+    for (const [label, roleName, passwordEnv] of [
+      ["app", "flow_production_app", "FLOW_PRODUCTION_APP_PASSWORD"],
+      [
+        "auth_worker",
+        "flow_production_auth_worker",
+        "FLOW_PRODUCTION_AUTH_WORKER_PASSWORD",
+      ],
+    ]) {
+      const pw = process.env[passwordEnv];
+      if (!pw) {
+        roleChecks[label] = { configured: false };
+        continue;
+      }
+      const roleUrl = new URL(prodUrl.toString());
+      roleUrl.username = roleName;
+      roleUrl.password = pw;
+      const rc = new pg.Client({
+        connectionString: roleUrl.toString(),
+        connectionTimeoutMillis: 5000,
+      });
+      try {
+        await rc.connect();
+      } catch (err) {
+        roleChecks[label] = {
+          connectError: err instanceof Error ? err.message : String(err),
+        };
+        continue;
+      }
+      try {
+        const res = await rc.query(`
+          SELECT
+            current_user AS current_user,
+            has_schema_privilege(current_user, 'flow', 'USAGE') AS can_use_flow_schema,
+            has_function_privilege(current_user, 'flow.issue_google_auth_ticket(text,text,bigint)', 'EXECUTE') AS can_issue_google_ticket,
+            has_function_privilege(current_user, 'flow.issue_email_auth_ticket(text,text)', 'EXECUTE') AS can_issue_email_ticket,
+            has_sequence_privilege(current_user, 'flow.google_oauth_order', 'USAGE') AS can_use_google_order_seq,
+            has_table_privilege(current_user, 'flow.auth_users', 'INSERT') AS can_insert_auth_users,
+            has_table_privilege(current_user, 'flow.auth_identities', 'INSERT') AS can_insert_auth_identities,
+            has_table_privilege(current_user, 'flow.google_subject_bindings', 'INSERT') AS can_insert_google_bindings,
+            has_table_privilege(current_user, 'flow.auth_sessions', 'INSERT') AS can_insert_auth_sessions,
+            has_table_privilege(current_user, 'flow.auth_intents', 'INSERT') AS can_insert_auth_intents
+        `);
+        let ticketProbe = null;
+        let emailTicketProbe = null;
+        if (label === "auth_worker") {
+          try {
+            await rc.query(
+              "SELECT flow.issue_google_auth_ticket('__diag_nonexistent_sub__', '__diag_nonexistent_user__', 1)",
+            );
+            ticketProbe = "unexpected_success";
+          } catch (probeErr) {
+            ticketProbe =
+              probeErr instanceof Error ? probeErr.message : String(probeErr);
+          }
+          try {
+            await rc.query(
+              "SELECT flow.issue_email_auth_ticket('__diag_nonexistent__@example.com', 'none')",
+            );
+            emailTicketProbe = "unexpected_success";
+          } catch (probeErr) {
+            emailTicketProbe =
+              probeErr instanceof Error ? probeErr.message : String(probeErr);
+          }
+        }
+        roleChecks[label] = {
+          ...res.rows[0],
+          ...(ticketProbe ? { ticketProbe } : {}),
+          ...(emailTicketProbe ? { emailTicketProbe } : {}),
+        };
+      } finally {
+        await rc.end();
+      }
+    }
+    console.log(
+      JSON.stringify({
+        event: "production_readiness_snapshot",
+        migrations: migrations[0],
+        dbClock: dbClock[0],
+        counts: counts[0],
+        roleChecks,
+      }),
+    );
+  } finally {
+    await admin.end();
+  }
+}
+
 function idle() {
   const stagingSafe =
     process.env.FLOW_ENV === "test" &&
@@ -2079,6 +2219,8 @@ else if (operation === "export-production-postgres-ca")
 else if (operation === "migrate-staging") await migrateStaging();
 else if (operation === "inspect-staging-readiness")
   await inspectStagingReadiness();
+else if (operation === "inspect-production-readiness")
+  await inspectProductionReadiness();
 else if (operation === "provision-auth-ticket-role")
   await provisionAuthTicketRole();
 else if (operation === "provision-indexer-heartbeat-role")

@@ -5096,3 +5096,79 @@ test("FLOW portfolio distinguishes a posted deposit from P&L and signs out the b
     await browser.close();
   }
 });
+
+test("Chromium onboarding sign-out and switch-account clear the session and recover from stale cookies", async () => {
+  const browser = await app.browser.newContext({ ignoreHTTPSErrors: true });
+  let nextEmail = "onboarding-switch@gmail.com";
+  let nextSubject = "onboarding-switch-sub";
+  try {
+    await browser.route(
+      "https://accounts.google.com/o/oauth2/v2/auth?**",
+      async (route) => {
+        const location = await app.authorize(
+          route.request().url(),
+          google(nextEmail, nextSubject),
+        );
+        await route.fulfill({ status: 302, headers: { location } });
+      },
+    );
+
+    const page = await browser.newPage();
+    await page.goto(`${app.origin}/sign-in`);
+    await page.getByRole("button", { name: "Continue with Google" }).click();
+    await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page
+      .getByRole("heading", { name: "Your Personal account" })
+      .waitFor();
+
+    await page
+      .getByRole("button", { name: "Switch account", exact: true })
+      .click();
+    await page.waitForURL("**/sign-in?notice=switch-account");
+    await page
+      .getByText(
+        "Signed out. Choose Google or enter another email to switch accounts.",
+        { exact: true },
+      )
+      .waitFor();
+    assert.equal(
+      (await browser.cookies()).some((cookie) => cookie.name === sessionCookie),
+      false,
+    );
+
+    await page.goto(app.origin);
+    assert.equal(new URL(page.url()).pathname, "/sign-in");
+    await page.goto(`${app.origin}/onboarding`);
+    assert.equal(new URL(page.url()).pathname, "/sign-in");
+
+    // Stale/corrupted session cookie must not trap the user or allow session fixation.
+    await browser.addCookies([
+      {
+        name: sessionCookie,
+        value: "stale.invalid.session.token",
+        url: app.origin,
+      },
+    ]);
+    await page.goto(`${app.origin}/sign-in`);
+    assert.equal(new URL(page.url()).pathname, "/sign-in");
+
+    // Re-authenticating as a second Google user succeeds cleanly without inheriting state.
+    nextEmail = "onboarding-second@gmail.com";
+    nextSubject = "onboarding-second-sub";
+    await page.getByRole("button", { name: "Continue with Google" }).click();
+    await page.getByRole("heading", { name: "Welcome to FLOW" }).waitFor();
+    await page.getByText(`Signed in: ${nextEmail}`, { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await page.waitForURL("**/sign-in?notice=signed-out");
+    await page
+      .getByText("You have been signed out.", { exact: true })
+      .waitFor();
+    assert.equal(
+      (await browser.cookies()).some((cookie) => cookie.name === sessionCookie),
+      false,
+    );
+  } finally {
+    await browser.close();
+  }
+});

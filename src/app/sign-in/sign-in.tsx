@@ -250,7 +250,25 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
               className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-900"
             >
               Google sign-in could not be completed. If you already use email,
-              sign in with email and link Google from Security.
+              sign in with email and link Google from Security, or confirm that
+              new account sign-up is open in this environment.
+            </p>
+          )}
+          {notice === "signed-out" && (
+            <p
+              role="status"
+              className="mt-3 rounded-xl border border-neutral-200 bg-neutral-100 px-4 py-2.5 text-xs font-semibold text-neutral-900"
+            >
+              You have been signed out.
+            </p>
+          )}
+          {notice === "switch-account" && (
+            <p
+              role="status"
+              className="mt-3 rounded-xl border border-neutral-200 bg-neutral-100 px-4 py-2.5 text-xs font-semibold text-neutral-900"
+            >
+              Signed out. Choose Google or enter another email to switch
+              accounts.
             </p>
           )}
           {notice === "linked" && (

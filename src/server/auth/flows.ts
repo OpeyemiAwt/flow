@@ -850,18 +850,25 @@ async function changeSecurity(
 async function signOut(request: Request): Promise<Response> {
   await input(request, empty);
   const { auth } = runtime();
-  await transaction(async (tx) => {
-    const session = await readSession(tx, request.headers);
-    if (session) {
-      await lockAuthUser(tx, session.userId);
-      await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${session.token}, true)`;
-      const deleted = await tx.authSession.deleteMany({
-        where: { id: session.id },
-      });
-      if (deleted.count)
-        await audit(tx, "sign-out", session.userId, undefined, session.id);
-    }
-  });
+  try {
+    await transaction(async (tx) => {
+      const session = await readSession(tx, request.headers);
+      if (session) {
+        await lockAuthUser(tx, session.userId);
+        await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${session.token}, true)`;
+        const deleted = await tx.authSession.deleteMany({
+          where: { id: session.id },
+        });
+        if (deleted.count)
+          await audit(tx, "sign-out", session.userId, undefined, session.id);
+      }
+    });
+  } catch (error) {
+    // Still clear auth cookies when revoking a stale or partially deleted session fails.
+    log("info", "sign_out_session_cleanup_failed", {
+      code: error instanceof Error ? error.name : "unknown",
+    });
+  }
   const headers = privateHeaders();
   for (const key of Object.values(auth.cookies))
     headers.append("set-cookie", cookie(auth, key, "", 0));

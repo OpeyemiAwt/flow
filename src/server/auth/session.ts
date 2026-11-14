@@ -30,7 +30,11 @@ export function cookie(
   value: string,
   seconds: number,
 ): string {
-  return `${name}=${value}; Path=/; Max-Age=${seconds}; HttpOnly; SameSite=Lax${config.secure ? "; Secure" : ""}`;
+  const expiry =
+    seconds <= 0
+      ? "Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+      : `Max-Age=${seconds}`;
+  return `${name}=${value}; Path=/; ${expiry}; HttpOnly; SameSite=Lax${config.secure ? "; Secure" : ""}`;
 }
 
 export function extractCookieSessionToken(

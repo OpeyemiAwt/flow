@@ -4,6 +4,7 @@ import { runtime } from "../../foundation/prisma.ts";
 import { accessibleAccounts, principal } from "../../server/accounts.ts";
 import { readSession } from "../../server/auth/session.ts";
 import { pageData } from "../../server/pages.ts";
+import { SignOutButton } from "../controls.tsx";
 import { CompleteOnboarding } from "./complete.tsx";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,22 @@ export default async function Onboarding({
   if (!identity) redirect("/sign-in");
 
   let account = null;
+  if (existingUser && !existingUser.active) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-6 py-16 text-center">
+        <h1 className="font-serif text-3xl text-[#0B0B0B]">
+          Account unavailable
+        </h1>
+        <p className="mt-3 text-sm text-[#555]">
+          This FLOW account is currently inactive. Sign out to access a
+          different account.
+        </p>
+        <div className="mt-6">
+          <SignOutButton />
+        </div>
+      </main>
+    );
+  }
   if (existingUser?.active) {
     const actor = await pageData(() => principal(db, requestHeaders));
     const accounts = await pageData(() => accessibleAccounts(db, actor));

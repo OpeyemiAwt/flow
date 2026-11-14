@@ -371,6 +371,7 @@ export function provider(
             claims.email_verified === true &&
             !!domain &&
             (domain === "gmail.com" ||
+              domain === "googlemail.com" ||
               (typeof claims.hd === "string" &&
                 claims.hd.toLowerCase() === domain));
           const name =
