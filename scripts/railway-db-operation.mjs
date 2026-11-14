@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import pg from "pg";
 
 const STAGING_ENVIRONMENT_ID = "a3c2b9e7-a102-4148-a69a-768103aa1016";
@@ -1829,9 +1829,34 @@ async function inspectStagingReadiness() {
     const users = await q(
       "SELECT id, auth_user_id, active, created_at FROM flow.users ORDER BY created_at ASC LIMIT 50",
     );
-    const authUsers = await q(`
+    const maskEmail = (rawEmail) => {
+      if (typeof rawEmail !== "string" || !rawEmail.includes("@")) return null;
+      const [local, domain] = rawEmail.trim().split("@");
+      const domainParts = domain.split(".");
+      const maskedDomain = domainParts
+        .map((part, index) =>
+          index === domainParts.length - 1
+            ? part
+            : part.length <= 2
+              ? `${part[0]}*`
+              : `${part.slice(0, 2)}***`,
+        )
+        .join(".");
+      const maskedLocal =
+        local.length <= 2
+          ? `${local[0]}***`
+          : `${local.slice(0, 2)}***${local.slice(-1)}`;
+      return `${maskedLocal}@${maskedDomain}`;
+    };
+    const sha256Hex = (value) =>
+      typeof value === "string" && value.length > 0
+        ? createHash("sha256").update(value).digest("hex")
+        : null;
+
+    const authUsersRaw = await q(`
       SELECT
         au.id,
+        au.email,
         au.email_verified,
         au.email_enrolled,
         au.mailbox_paused,
@@ -1843,6 +1868,22 @@ async function inspectStagingReadiness() {
       ORDER BY au.created_at ASC
       LIMIT 50
     `);
+    const authUsers = authUsersRaw.map((row) => ({
+      id: row.id,
+      masked_email: maskEmail(row.email),
+      email_sha256:
+        typeof row.email === "string"
+          ? sha256Hex(row.email.trim().toLowerCase())
+          : null,
+      email_verified: row.email_verified,
+      email_enrolled: row.email_enrolled,
+      mailbox_paused: row.mailbox_paused,
+      has_google: row.has_google,
+      created_at: row.created_at,
+    }));
+    const accountMemberships = await q(
+      "SELECT account_id, user_id, role::text AS role, created_at FROM flow.account_memberships ORDER BY created_at ASC LIMIT 50",
+    );
     const wallets = await q(
       "SELECT id, account_id, provider, environment, provider_wallet_id, near_account_id, status::text AS status, policy_state, key_id, left(key_digest, 12) AS key_digest_prefix, created_at FROM flow.wallets ORDER BY created_at ASC LIMIT 50",
     );
@@ -1866,12 +1907,31 @@ async function inspectStagingReadiness() {
         (SELECT COUNT(*)::int FROM flow.wallet_activities) AS wallet_activities
     `);
 
-    const authIdentities = await q(
-      "SELECT id, user_id, provider_id, google_binding_order::text AS google_binding_order, created_at FROM flow.auth_identities ORDER BY created_at ASC LIMIT 50",
+    const authIdentitiesRaw = await q(
+      "SELECT id, user_id, provider_id, provider_subject, google_binding_order::text AS google_binding_order, created_at FROM flow.auth_identities ORDER BY created_at ASC LIMIT 50",
     );
-    const googleBindingsSummary = await q(
-      "SELECT COUNT(*)::int AS count, array_agg(user_id ORDER BY created_at ASC) AS user_ids FROM flow.google_subject_bindings",
+    const authIdentities = authIdentitiesRaw.map((row) => ({
+      id: row.id,
+      user_id: row.user_id,
+      provider_id: row.provider_id,
+      provider_subject_sha256: sha256Hex(row.provider_subject),
+      google_binding_order: row.google_binding_order,
+      created_at: row.created_at,
+    }));
+    const googleBindingsRaw = await q(
+      "SELECT user_id, subject, created_at FROM flow.google_subject_bindings ORDER BY created_at ASC LIMIT 50",
     );
+    const googleBindings = googleBindingsRaw.map((row) => ({
+      user_id: row.user_id,
+      subject_sha256: sha256Hex(row.subject),
+      created_at: row.created_at,
+    }));
+    const googleBindingsSummary = [
+      {
+        count: googleBindings.length,
+        user_ids: googleBindings.map((row) => row.user_id),
+      },
+    ];
     const authSessionsSummary = await q(
       "SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE expires_at > CURRENT_TIMESTAMP)::int AS active_count, MAX(created_at) AS latest_created_at FROM flow.auth_sessions",
     );
@@ -1997,9 +2057,11 @@ async function inspectStagingReadiness() {
         migrations: migrations[0],
         counts: counts[0],
         accounts,
+        accountMemberships,
         users,
         authUsers,
         authIdentities,
+        googleBindings,
         googleBindingsSummary: googleBindingsSummary[0],
         authSessionsSummary: authSessionsSummary[0],
         authIntents,
