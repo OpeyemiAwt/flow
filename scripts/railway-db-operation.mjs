@@ -515,6 +515,8 @@ async function recoverProductionM6() {
     PATH: process.env.PATH,
     HOME: process.env.HOME,
     NODE_ENV: "production",
+    FLOW_ENV: "production",
+    FLOW_EXECUTION: "disabled",
     FLOW_MIGRATION_DATABASE_URL: migrationUrl.toString(),
   };
   const runPrisma = (args) =>
@@ -651,6 +653,8 @@ async function rehearseProductionMigrations() {
       PATH: process.env.PATH,
       HOME: process.env.HOME,
       NODE_ENV: "production",
+      FLOW_ENV: "test",
+      FLOW_EXECUTION: "disabled",
       FLOW_MIGRATION_DATABASE_URL: migrationUrl.toString(),
     };
     const child = spawn(
