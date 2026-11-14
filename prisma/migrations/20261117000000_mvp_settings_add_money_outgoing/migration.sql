@@ -669,7 +669,7 @@ BEGIN
   IF db_name LIKE 'flow_test_%'
      AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = fixture_role) THEN
     EXECUTE format(
-      'GRANT ALL PRIVILEGES ON TABLE flow.user_profile_preferences, flow.account_notification_preferences, flow.add_money_intents, flow.outgoing_transfer_jobs TO %I',
+      'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE flow.user_profile_preferences, flow.account_notification_preferences, flow.add_money_intents, flow.outgoing_transfer_jobs TO %I',
       fixture_role
     );
   END IF;
