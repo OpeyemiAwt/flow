@@ -1,0 +1,5 @@
+node_modules/
+.next/
+.git/
+video-production/
+tsconfig.tsbuildinfo

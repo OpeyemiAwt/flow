@@ -129,17 +129,10 @@ export async function POST(
           record.networkAsset.status === "ACTIVE" &&
           isBalanceMatchingDeployment(record, sourceDeployment),
       );
-      const observedAt = Date.parse(balance?.lastSyncedAt ?? "");
-      if (
-        !balance ||
-        balance.syncStatus !== "SYNCED" ||
-        !Number.isFinite(observedAt) ||
-        Date.now() - observedAt > 120_000 ||
-        balance.finality === "UNKNOWN"
-      ) {
+      if (!balance || BigInt(balance.atomicBalance) <= 0n) {
         throw new ApiFailure(
-          409,
-          "Refresh the source balance before requesting a quote.",
+          400,
+          "No available balance for the selected source asset.",
         );
       }
       if (amount > BigInt(balance.atomicBalance)) {

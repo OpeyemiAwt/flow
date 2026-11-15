@@ -12,6 +12,7 @@ import {
   readPolicySponsorConfig,
   readWalletConfig,
 } from "../src/foundation/wallet-environment.ts";
+import { upgradeActiveWalletsToLiveExecutionPolicy } from "../src/server/custody/near-policy-sponsor.ts";
 import { OutLayerAdapter } from "../src/server/custody/outlayer-adapter.ts";
 import { processOutgoingTransferCycle } from "../src/server/custody/outgoing-executor.ts";
 import { WalletProvisioningWorker } from "../src/server/custody/provisioning-worker.ts";
@@ -259,6 +260,24 @@ async function main(): Promise<void> {
     registrationAccountAuthorized: registrationAuthorized,
   });
   worker.start(pollIntervalMs);
+
+  if (
+    mode === "execute" &&
+    config.execution === "enabled" &&
+    policySponsorConfig.enabled
+  ) {
+    void upgradeActiveWalletsToLiveExecutionPolicy({
+      db,
+      adapter,
+      sponsorConfig: policySponsorConfig,
+      walletConfig,
+    }).catch((error: unknown) => {
+      log("error", "wallet_policy_startup_upgrade_failed", {
+        workerId,
+        reason: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      });
+    });
+  }
 }
 
 main().catch((error: unknown) => {

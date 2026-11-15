@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "../../../components/theme-toggle.tsx";
 import { FloatingNav } from "../../../components/floating-nav.tsx";
@@ -52,7 +51,6 @@ export interface SecurityPanelProps {
   };
 }
 
-type SettingsTab = "notifications" | "security" | "preferences" | "profile";
 type SecurityAction =
   | "enroll-email"
   | "disable-email"
@@ -106,11 +104,6 @@ export function SecurityPanel({
   initialProfilePreference,
   initialNotificationPreferences,
 }: SecurityPanelProps) {
-  const searchParams = useSearchParams();
-  const initialTab =
-    (searchParams?.get("tab") as SettingsTab) || "notifications";
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
-
   const [notificationPreferences, setNotificationPreferences] = useState({
     incomingPayments: initialNotificationPreferences?.incomingPayments ?? true,
     paymentLinkActivity:
@@ -281,16 +274,6 @@ export function SecurityPanel({
     }
   }
 
-  async function handleResetAvatar() {
-    try {
-      await send("/api/me/preferences", { avatarDataUrl: null }, "PATCH");
-      writeProfilePreference(profileId, "avatar", null);
-      setProfileSavedMessage("Avatar reset to default.");
-    } catch (err) {
-      setProfileSavedMessage(describe(err));
-    }
-  }
-
   // Revoke session
   async function handleRevoke(sessionId: string) {
     setRevokingId(sessionId);
@@ -394,130 +377,190 @@ export function SecurityPanel({
           </div>
         )}
 
-        {/* 2-Column Layout matching media_1794481849606_6993ee54.jpg */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Subnav Card (4 cols) */}
-          <div className="lg:col-span-4 rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-3 shadow-sm space-y-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab("profile")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-semibold transition-all text-left cursor-pointer ${
-                activeTab === "profile"
-                  ? "bg-red-50/70 dark:bg-red-950/30 text-neutral-950 dark:text-white border border-red-200/60 dark:border-red-900/40"
-                  : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-              }`}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={activeTab === "profile" ? "text-[#FF1A1A]" : ""}
-              >
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              <span>Account &amp; Profile</span>
-            </button>
+        {/* Single-Scroll Settings Layout */}
+        <div className="flow-anim-fade-up space-y-6">
+              <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-6">
+                <div>
+                  <h2 className="font-display text-base font-bold text-neutral-950 dark:text-white">
+                    Account &amp; Profile
+                  </h2>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                    Manage your personal details and profile picture across
+                    Flow.
+                  </p>
+                </div>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("notifications")}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-semibold transition-all text-left cursor-pointer ${
-                activeTab === "notifications"
-                  ? "bg-red-50/70 dark:bg-red-950/30 text-neutral-950 dark:text-white border border-red-200/60 dark:border-red-900/40"
-                  : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={
-                    activeTab === "notifications" ? "text-[#FF1A1A]" : ""
-                  }
-                >
-                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                </svg>
-                <span>Notifications</span>
+                {profileSavedMessage && (
+                  <div className="flow-anim-fade-up p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                    {profileSavedMessage}
+                  </div>
+                )}
+
+                {/* Profile Picture Card */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
+                  <div className="flex items-center gap-4">
+                    <UserAvatar
+                      profileId={profileId}
+                      fallbackImage={image}
+                      email={email}
+                      name={savedDisplayName || name}
+                      alt={savedDisplayName || email}
+                      size={64}
+                      className="rounded-full border-2 border-white dark:border-neutral-700 shadow-sm object-cover"
+                    />
+                    <div>
+                      <p className="font-display font-bold text-sm text-neutral-950 dark:text-white">
+                        Profile Picture
+                      </p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                        PNG or JPEG up to 2 MB. Saved in this browser.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label className="whitespace-nowrap shrink-0 px-4 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity cursor-pointer">
+                      <span>Change photo</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        onChange={handleAvatarUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Personal Name Summary & Pencil Edit */}
+                {editingDisplayName ? (
+                  <form
+                    onSubmit={handleSaveDisplayName}
+                    className="p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 space-y-4"
+                  >
+                    <div>
+                      <label
+                        htmlFor="display-name-input"
+                        className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5"
+                      >
+                        Display Name
+                      </label>
+                      <input
+                        id="display-name-input"
+                        type="text"
+                        maxLength={100}
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        placeholder={email}
+                        className="w-full px-4 py-2.5 rounded-2xl text-xs bg-white dark:bg-[#1a1a1a] border border-neutral-200 dark:border-neutral-700 text-neutral-950 dark:text-white focus:outline-hidden focus:border-neutral-900 dark:focus:border-white"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                        Primary Email:{" "}
+                        <span className="font-mono text-neutral-800 dark:text-neutral-200">
+                          {email}
+                        </span>
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDisplayName(savedDisplayName);
+                            setEditingDisplayName(false);
+                          }}
+                          className="px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                        Display Name
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-neutral-950 dark:text-white truncate">
+                        {savedDisplayName}
+                      </p>
+                      <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+                        Primary Email:{" "}
+                        <span className="font-mono text-neutral-800 dark:text-neutral-200">
+                          {email}
+                        </span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Edit display name"
+                      title="Edit display name"
+                      onClick={() => {
+                        setProfileSavedMessage(null);
+                        setDisplayName(savedDisplayName);
+                        setEditingDisplayName(true);
+                      }}
+                      className="shrink-0 p-2.5 rounded-full border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Account Details */}
+                <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 text-xs space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500">Account Type</span>
+                    <span className="font-semibold text-neutral-900 dark:text-white uppercase tracking-wider text-[11px]">
+                      {primaryAccount?.kind ?? "PERSONAL"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500">Account ID</span>
+                    <span className="font-mono text-neutral-700 dark:text-neutral-300 text-[11px]">
+                      {primaryAccount?.id ?? "acc_default"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500">Wallet Status</span>
+                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-900 dark:text-white">
+                      <span
+                        className={`h-2 w-2 rounded-full ${walletStatusInfo.dot}`}
+                        aria-hidden="true"
+                      />
+                      <span>{walletStatusInfo.label}</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500">Verification</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Verified Owner
+                    </span>
+                  </div>
+                </div>
               </div>
-              <span className="h-2 w-2 rounded-full bg-[#FF1A1A]" />
-            </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("security")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-semibold transition-all text-left cursor-pointer ${
-                activeTab === "security"
-                  ? "bg-red-50/70 dark:bg-red-950/30 text-neutral-950 dark:text-white border border-red-200/60 dark:border-red-900/40"
-                  : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-              }`}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={activeTab === "security" ? "text-[#FF1A1A]" : ""}
-              >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
-              <span>Security &amp; Sessions</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("preferences")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-semibold transition-all text-left cursor-pointer ${
-                activeTab === "preferences"
-                  ? "bg-red-50/70 dark:bg-red-950/30 text-neutral-950 dark:text-white border border-red-200/60 dark:border-red-900/40"
-                  : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-              }`}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={activeTab === "preferences" ? "text-[#FF1A1A]" : ""}
-              >
-                <line x1="4" y1="21" x2="4" y2="14" />
-                <line x1="4" y1="10" x2="4" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12" y2="3" />
-                <line x1="20" y1="21" x2="20" y2="16" />
-                <line x1="20" y1="12" x2="20" y2="3" />
-                <line x1="1" y1="14" x2="7" y2="14" />
-                <line x1="9" y1="8" x2="15" y2="8" />
-                <line x1="17" y1="16" x2="23" y2="16" />
-              </svg>
-              <span>Preferences</span>
-            </button>
-          </div>
-
-          {/* Right Content Panels (8 cols) */}
-          <div className="lg:col-span-8 space-y-4">
-            {/* TAB 1: NOTIFICATIONS (Matches Reference Screenshot) */}
-            {activeTab === "notifications" && (
               <div className="space-y-4">
                 <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm">
                   {/* Panel Header */}
@@ -640,118 +683,31 @@ export function SecurityPanel({
                     </button>
                   </div>
                 </div>
-
-                {/* Secondary Navigation Strips matching reference screenshot */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("security")}
-                  className="w-full flex items-center justify-between p-5 rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] shadow-sm hover:border-neutral-300 transition-all text-left cursor-pointer"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-display font-bold text-xs text-neutral-950 dark:text-white">
-                        Security &amp; Sessions
-                      </p>
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Keep your account secure and manage your active
-                        sessions.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-neutral-400 font-bold">&gt;</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("preferences")}
-                  className="w-full flex items-center justify-between p-5 rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] shadow-sm hover:border-neutral-300 transition-all text-left cursor-pointer"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <line x1="4" y1="21" x2="4" y2="14" />
-                        <line x1="4" y1="10" x2="4" y2="3" />
-                        <line x1="12" y1="21" x2="12" y2="12" />
-                        <line x1="12" y1="8" x2="12" y2="3" />
-                        <line x1="20" y1="21" x2="20" y2="16" />
-                        <line x1="20" y1="12" x2="20" y2="3" />
-                        <line x1="1" y1="14" x2="7" y2="14" />
-                        <line x1="9" y1="8" x2="15" y2="8" />
-                        <line x1="17" y1="16" x2="23" y2="16" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-display font-bold text-xs text-neutral-950 dark:text-white">
-                        Preferences
-                      </p>
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Customize the look and feel of Flow.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-neutral-400 font-bold">&gt;</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("profile")}
-                  className="w-full flex items-center justify-between p-5 rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] shadow-sm hover:border-neutral-300 transition-all text-left cursor-pointer"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-display font-bold text-xs text-neutral-950 dark:text-white">
-                        Account &amp; Profile
-                      </p>
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Update your personal details and profile picture.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-neutral-400 font-bold">&gt;</span>
-                </button>
               </div>
-            )}
 
-            {/* TAB 2: SECURITY & SESSIONS */}
-            {activeTab === "security" && (
+              <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-6">
+                <div>
+                  <h2 className="font-display text-base font-bold text-neutral-950 dark:text-white">
+                    Preferences
+                  </h2>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                    Customize your display settings and theme preferences.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800">
+                  <div>
+                    <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
+                      Appearance Theme
+                    </p>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                      Toggle between clean light and deep dark visual styles.
+                    </p>
+                  </div>
+                  <ThemeToggle />
+                </div>
+              </div>
+
               <div className="space-y-4">
                 <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-6">
                   <div>
@@ -941,7 +897,12 @@ export function SecurityPanel({
                           className="flex items-center justify-between p-3.5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/40 dark:bg-neutral-900/20"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="text-lg">💻</span>
+                            <div className="h-8 w-8 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 flex items-center justify-center shrink-0">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <rect width="18" height="12" x="3" y="4" rx="2" ry="2" />
+                                <line x1="2" x2="22" y1="20" y2="20" />
+                              </svg>
+                            </div>
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
@@ -978,226 +939,6 @@ export function SecurityPanel({
                   </div>
                 </div>
               </div>
-            )}
-
-            {/* TAB 3: PREFERENCES */}
-            {activeTab === "preferences" && (
-              <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-6">
-                <div>
-                  <h2 className="font-display text-base font-bold text-neutral-950 dark:text-white">
-                    Preferences
-                  </h2>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    Customize your display settings and theme preferences.
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800">
-                  <div>
-                    <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
-                      Appearance Theme
-                    </p>
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                      Toggle between clean light and deep dark visual styles.
-                    </p>
-                  </div>
-                  <ThemeToggle />
-                </div>
-              </div>
-            )}
-
-            {/* TAB 4: ACCOUNT & PROFILE */}
-            {activeTab === "profile" && (
-              <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-6">
-                <div>
-                  <h2 className="font-display text-base font-bold text-neutral-950 dark:text-white">
-                    Account &amp; Profile
-                  </h2>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    Manage your personal details and profile picture across
-                    Flow.
-                  </p>
-                </div>
-
-                {profileSavedMessage && (
-                  <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                    {profileSavedMessage}
-                  </div>
-                )}
-
-                {/* Profile Picture Card */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
-                  <div className="flex items-center gap-4">
-                    <UserAvatar
-                      profileId={profileId}
-                      fallbackImage={image}
-                      email={email}
-                      name={savedDisplayName || name}
-                      alt={savedDisplayName || email}
-                      size={64}
-                      className="rounded-full border-2 border-white dark:border-neutral-700 shadow-sm object-cover"
-                    />
-                    <div>
-                      <p className="font-display font-bold text-sm text-neutral-950 dark:text-white">
-                        Profile Picture
-                      </p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                        PNG or JPEG up to 2 MB. Saved in this browser.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <label className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity cursor-pointer">
-                      <span>Change photo</span>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg"
-                        onChange={handleAvatarUpload}
-                        className="hidden"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleResetAvatar}
-                      className="px-3.5 py-1.5 rounded-full text-xs font-semibold border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                </div>
-
-                {/* Personal Name Summary & Pencil Edit */}
-                {editingDisplayName ? (
-                  <form
-                    onSubmit={handleSaveDisplayName}
-                    className="p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 space-y-4"
-                  >
-                    <div>
-                      <label
-                        htmlFor="display-name-input"
-                        className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5"
-                      >
-                        Display Name
-                      </label>
-                      <input
-                        id="display-name-input"
-                        type="text"
-                        maxLength={100}
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        placeholder={email}
-                        className="w-full px-4 py-2.5 rounded-2xl text-xs bg-white dark:bg-[#1a1a1a] border border-neutral-200 dark:border-neutral-700 text-neutral-950 dark:text-white focus:outline-hidden focus:border-neutral-900 dark:focus:border-white"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Primary Email:{" "}
-                        <span className="font-mono text-neutral-800 dark:text-neutral-200">
-                          {email}
-                        </span>
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDisplayName(savedDisplayName);
-                            setEditingDisplayName(false);
-                          }}
-                          className="px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-5 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
-                        >
-                          Save Changes
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                        Display Name
-                      </p>
-                      <p className="mt-1 text-sm font-bold text-neutral-950 dark:text-white truncate">
-                        {savedDisplayName}
-                      </p>
-                      <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
-                        Primary Email:{" "}
-                        <span className="font-mono text-neutral-800 dark:text-neutral-200">
-                          {email}
-                        </span>
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="Edit display name"
-                      title="Edit display name"
-                      onClick={() => {
-                        setProfileSavedMessage(null);
-                        setDisplayName(savedDisplayName);
-                        setEditingDisplayName(true);
-                      }}
-                      className="shrink-0 p-2.5 rounded-full border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-                    >
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 20h9" />
-                        <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
-
-                {/* Account Details */}
-                <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 text-xs space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Account Type</span>
-                    <span className="font-semibold text-neutral-900 dark:text-white uppercase tracking-wider text-[11px]">
-                      {primaryAccount?.kind ?? "PERSONAL"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Account ID</span>
-                    <span className="font-mono text-neutral-700 dark:text-neutral-300 text-[11px]">
-                      {primaryAccount?.id ?? "acc_default"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Wallet Status</span>
-                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-900 dark:text-white">
-                      <span
-                        className={`h-2 w-2 rounded-full ${walletStatusInfo.dot}`}
-                        aria-hidden="true"
-                      />
-                      <span>{walletStatusInfo.label}</span>
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Verification</span>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      Verified Owner
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </main>
     </div>

@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FLOW — 3:00 White-Theme Motion Graphics Product Film</title>
+  <style>
+    :root {
+      --bg-white: #FFFFFF;
+      --bg-cream: #FBF8F3;
+      --ink: #0B0B0B;
+      --ink-muted: #5A554C;
+      --ink-soft: #8C857B;
+      --crimson: #FF1A1A;
+      --Solana: #9945FF;
+      --Near: #00C08B;
+      --Base: #0052FF;
+      --Eth: #627EEA;
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", sans-serif;
+      --font-serif: "Instrument Serif", "Playfair Display", Georgia, serif;
+      --font-mono: "SF Mono", "JetBrains Mono", Menlo, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background: #111111;
+      color: var(--ink);
+      font-family: var(--font-sans);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body.capture-mode {
+      background: #FFFFFF;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    body.capture-mode .studio-toolbar {
+      display: none !important;
+    }
+
+    body.capture-mode .viewport-wrap {
+      padding: 0 !important;
+      width: 1920px !important;
+      height: 1080px !important;
+    }
+
+    body.capture-mode #stage {
+      transform: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .studio-toolbar {
+      width: 100%;
+      max-width: 1560px;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      color: #FFFFFF;
+    }
+
+    .toolbar-btn {
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: #FFFFFF;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .toolbar-btn.primary {
+      background: var(--crimson);
+      border-color: #FF5252;
+    }
+
+    .viewport-wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 6px 20px;
+    }
+
+    /* 1920x1080 Pure White Motion Design Canvas */
+    #stage {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      background: radial-gradient(circle at 50% 42%, #FFFFFF 0%, #FDFBF7 62%, #F6F1E8 100%);
+      overflow: hidden;
+      transform-origin: top center;
+      border-radius: 16px;
+      box-shadow: 0 28px 80px rgba(0,0,0,0.45);
+    }
+
+    /* Subtle Motion-Graphics Dot Grid (ClickUp / Reference style) */
+    .mg-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(rgba(11, 11, 11, 0.055) 1.25px, transparent 1.25px);
+      background-size: 36px 36px;
+      pointer-events: none;
+    }
+
+    /* Soft Drifting Pastel / Brand Aura Blooms */
+    .aura-bloom {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(85px);
+      pointer-events: none;
+    }
+
+    /* Liquid Glass Pill & Button System (Exact User Spec) */
+    .liquid-glass-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(242, 239, 233, 0.92) 0%, rgba(232, 227, 218, 0.88) 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.95);
+      box-shadow:
+        0 12px 32px rgba(15, 15, 15, 0.08),
+        inset 0 2px 3px rgba(255, 255, 255, 0.98),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.05);
+      backdrop-filter: blur(20px);
+    }
+
+    .nav-tab {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 22px;
+      border-radius: 999px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #6B665E;
+      transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .nav-tab.active {
+      background: linear-gradient(180deg, #FFFFFF 0%, #F8F7F4 100%);
+      color: #0B0B0B;
+      font-weight: 700;
+      box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.09),
+        0 1px 3px rgba(0, 0, 0, 0.06),
+        inset 0 2px 2px #FFFFFF;
+      border: 1px solid rgba(255, 255, 255, 0.98);
+    }
+
+    .liquid-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 13px 26px;
+      border-radius: 999px;
+      font-size: 16px;
+      font-weight: 650;
+      background: linear-gradient(180deg, #FFFFFF 0%, #F4F1EA 100%);
+      color: #0B0B0B;
+      border: 1.5px solid #FFFFFF;
+      box-shadow:
+        0 10px 26px rgba(0, 0, 0, 0.08),
+        inset 0 2px 3px rgba(255, 255, 255, 1),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .liquid-btn.dark {
+      background: linear-gradient(180deg, #222222 0%, #0B0B0B 100%);
+      color: #FFFFFF;
+      border: 1.5px solid rgba(255, 255, 255, 0.28);
+      box-shadow:
+        0 12px 28px rgba(11, 11, 11, 0.22),
+        inset 0 1.5px 2px rgba(255, 255, 255, 0.35);
+    }
+
+    .liquid-round-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #FFFFFF 0%, #F3EFE7 100%);
+      border: 1.5px solid #FFFFFF;
+      box-shadow:
+        0 8px 20px rgba(0, 0, 0, 0.08),
+        inset 0 2px 3px #FFFFFF;
+    }
+
+    /* 3D UI Window Container (ClickUp Reference Style) */
+    .ui-window-3d {
+      position: absolute;
+      width: 1520px;
+      height: 880px;
+      left: 200px;
+      top: 100px;
+      background: #FBF8F3;
+      border-radius: 32px;
+      border: 2px solid #FFFFFF;
+      box-shadow:
+        0 40px 110px rgba(11, 11, 11, 0.11),
+        0 15px 45px rgba(255, 26, 26, 0.07),
+        0 0 0 1px rgba(11, 11, 11, 0.05);
+      overflow: hidden;
+      transform-style: preserve-3d;
+    }
+
+    /* Pop-Out 3D Elevated Card */
+    .pop-card {
+      background: #FFFFFF;
+      border-radius: 24px;
+      border: 1.5px solid rgba(11, 11, 11, 0.06);
+      box-shadow:
+        0 28px 68px rgba(11, 11, 11, 0.14),
+        0 6px 20px rgba(255, 26, 26, 0.08);
+    }
+
+    /* Skeleton Shimmer */
+    .skeleton-box {
+      background: linear-gradient(90deg, #ECE7DF 0%, #F6F3ED 50%, #ECE7DF 100%);
+      background-size: 200% 100%;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="studio-toolbar">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <img src="../assets/brand/flow-logo-white.png" style="height:26px;" alt="flow" />
+      <span style="font-size:13px; color:#A3A3A3; font-weight:600;">3:00 White-Theme Motion Design Film · 80% Live UI / 20% Kinetic Text · Calm Female Voiceover</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button id="play-btn" class="toolbar-btn primary" onclick="togglePlay()">▶ Play 3:00 Film</button>
+      <button class="toolbar-btn" onclick="seekTo(12.0)">✨ Logo Reveal (0:12)</button>
+      <button class="toolbar-btn" onclick="seekTo(33.5)">⚡ Auto Setup (0:34)</button>
+      <button class="toolbar-btn" onclick="seekTo(44.0)">🏠 Dashboard & Nav (0:44)</button>
+      <button class="toolbar-btn" onclick="seekTo(66.0)">↙ Receive SOL/NEAR (1:06)</button>
+      <button class="toolbar-btn" onclick="seekTo(82.0)">🔁 Live Convert (1:22)</button>
+      <button class="toolbar-btn" onclick="seekTo(122.0)">🌐 SOL → NEAR Checkout (2:02)</button>
+      <input id="scrubber" type="range" min="0" max="180" step="0.04" value="0" style="width:220px; accent-color:#FF1A1A;" oninput="seekTo(parseFloat(this.value))" />
+      <span id="time-display" style="font-family:var(--font-mono); font-size:13px; min-width:96px; text-align:right;">00:00 / 03:00</span>
+    </div>
+  </div>
+
+  <div class="viewport-wrap">
+    <div id="stage">
+      <div class="mg-grid"></div>
+      <div id="aura-1" class="aura-bloom" style="width:680px; height:680px; background:rgba(255,26,26,0.085); left:18%; top:12%;"></div>
+      <div id="aura-2" class="aura-bloom" style="width:640px; height:640px; background:rgba(153,69,255,0.075); right:14%; bottom:10%;"></div>
+      <div id="aura-3" class="aura-bloom" style="width:580px; height:580px; background:rgba(0,192,139,0.07); left:42%; bottom:16%;"></div>
+      <div id="canvas-root" style="position:absolute; inset:0; perspective: 1800px;"></div>
+    </div>
+  </div>
+
+  <audio id="vo-audio" src="../audio-3min/flow-3min-female-vo.m4a" preload="auto"></audio>
+
+  <script>
+    // Mathematical easing & spring helpers for genuine 60fps motion graphics
+    const clamp = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
+    const prog = (t, start, dur) => clamp((t - start) / dur, 0, 1);
+    const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+    const easeOutExpo = (x) => (x === 1 ? 1 : 1 - Math.pow(2, -10 * x));
+    const easeInOutCubic = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const springOut = (x) => {
+      const c4 = (2 * Math.PI) / 3.2;
+      return x <= 0 ? 0 : x >= 1 ? 1 : Math.pow(2, -9 * x) * Math.sin((x * 8.5 - 0.75) * c4) + 1;
+    };
+    const lerp = (a, b, p) => a + (b - a) * p;
+
+    // SVG Icons (Enlarged, crisp, Apple-style)
+    const ICONS = {
+      home: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>`,
+      send: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H8M17 7V16"/></svg>`,
+      receive: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M7 17H16M7 17V8"/></svg>`,
+      request: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+      activity: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
+      plus: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+      bell: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B0B0B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+      eyeOpen: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5A554C" stroke-width="2.1" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+      eyeClosed: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF1A1A" stroke-width="2.1" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
+      aiMascot: `
+        <svg width="28" height="28" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="14" fill="url(#mascotGrad)" />
+          <rect x="9" y="12" width="18" height="12" rx="6" fill="#0B0B0B" />
+          <circle cx="14.5" cy="18" r="2.2" fill="#FFFFFF" />
+          <circle cx="21.5" cy="18" r="2.2" fill="#FF4D4D" />
+          <path d="M18 4V7" stroke="#FF1A1A" stroke-width="2.4" stroke-linecap="round"/>
+          <circle cx="18" cy="3.5" r="2" fill="#FF1A1A"/>
+          <defs>
+            <linearGradient id="mascotGrad" x1="4" y1="4" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#FFFFFF"/>
+              <stop offset="1" stop-color="#F2E9DC"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      `,
+      googleAvatar: `
+        <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #0B0B0B 0%, #FF1A1A 100%); color:#FFF; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center; border:2px solid #FFF; box-shadow:0 2px 8px rgba(0,0,0,0.12);">OM</div>
+      `,
+      cursorHand: `
+        <svg width="42" height="42" viewBox="0 0 36 36" fill="none" style="filter:drop-shadow(0 8px 16px rgba(0,0,0,0.26));">
+          <path d="M13 6.5C13 5.12 14.12 4 15.5 4C16.88 4 18 5.12 18 6.5V15H19.5C20.88 15 22 16.12 22 17.5V18H23.5C24.88 18 26 19.12 26 20.5V24.5C26 28.64 22.64 32 18.5 32H14.5C11.5 32 9.2 30.1 8.1 27.4L5.8 21.8C5.2 20.4 5.9 18.8 7.3 18.3C8.5 17.9 9.8 18.4 10.4 19.5L13 24V6.5Z" fill="#FFFFFF" stroke="#0B0B0B" stroke-width="2.2" stroke-linejoin="round"/>
+        </svg>
+      `,
+      cursorArrow: `
+        <svg width="38" height="38" viewBox="0 0 32 32" fill="none" style="filter:drop-shadow(0 8px 16px rgba(0,0,0,0.25));">
+          <path d="M6 4L26 14.5L16.5 17.5L12.5 27L6 4Z" fill="#0B0B0B" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round"/>
+        </svg>
+      `
+    };
+
+    function renderCursor(x, y, clicking = false, useHand = true) {
+      const scale = clicking ? 0.86 : 1.0;
+      return `
+        <div style="position:absolute; left:${x.toFixed(1)}px; top:${y.toFixed(1)}px; transform:translate(-10px, -8px) scale(${scale}); z-index:200; pointer-events:none;">
+          ${clicking ? `<div style="position:absolute; left:-18px; top:-18px; width:56px; height:56px; border-radius:50%; border:3px solid #FF1A1A; background:rgba(255,26,26,0.16);"></div>` : ""}
+          ${useHand ? ICONS.cursorHand : ICONS.cursorArrow}
+        </div>
+      `;
+    }
+
+    // Shared Top Header Bar with Centered Apple-Style Liquid Glass Nav
+    function renderTopNav(activeTab = "home", highlightAi = false, highlightProfile = false) {
+      const tabs = [
+        { id: "home", label: "Home", icon: ICONS.home },
+        { id: "send", label: "Send", icon: ICONS.send },
+        { id: "receive", label: "Receive", icon: ICONS.receive },
+        { id: "request", label: "Request", icon: ICONS.request },
+        { id: "activity", label: "Activity", icon: ICONS.activity },
+      ];
+      return `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:22px 42px; border-bottom:1px solid rgba(11,11,11,0.05); background:rgba(251,248,243,0.88); backdrop-filter:blur(16px);">
+          <!-- Brand Logo (Light Theme) -->
+          <div style="display:flex; align-items:center; gap:12px;">
+            <img src="../assets/brand/flow-logo.png" style="height:38px;" alt="flow" />
+          </div>
+
+          <!-- Centered Enlarged Apple-Style Liquid Glass Navigation -->
+          <div class="liquid-glass-nav">
+            ${tabs.map(tb => `
+              <div class="nav-tab ${activeTab === tb.id ? 'active' : ''}">
+                ${tb.icon}
+                <span>${tb.label}</span>
+              </div>
+            `).join("")}
+          </div>
+
+          <!-- Right Liquid Glass Round AI Mascot + Notification + Google Profile -->
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="liquid-round-btn" style="${highlightAi ? 'box-shadow:0 0 0 4px rgba(255,26,26,0.28), 0 10px 24px rgba(255,26,26,0.22); transform:scale(1.08);' : ''}">
+              ${ICONS.aiMascot}
+            </div>
+            <div class="liquid-round-btn">
+              ${ICONS.bell}
+            </div>
+            <div class="liquid-btn" style="padding:6px 14px 6px 8px; gap:10px; ${highlightProfile ? 'box-shadow:0 0 0 4px rgba(255,26,26,0.25);' : ''}">
+              ${ICONS.googleAvatar}
+              <span style="font-size:15px; font-weight:650;">Opeyemi Moses</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 1 (0.0s - 12.0s): KINETIC TYPOGRAPHY + CONCENTRIC ORBITAL RINGS (ref1 & ref3)
+    // ============================================================================
+    function renderScene01Hook(t) {
+      // Sub-beat A (0.0s - 3.6s): "Crypto payments today feel [disconnected.]" with selection box & corner handles
+      if (t < 3.6) {
+        const pIn = easeOutCubic(prog(t, 0.1, 0.9));
+        const pBox = easeInOutCubic(prog(t, 1.1, 1.1));
+        const blur = (1 - pIn) * 14;
+        return `
+          <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+            <div style="display:flex; align-items:center; gap:20px; font-size:74px; font-weight:750; letter-spacing:-0.035em; color:#0B0B0B; filter:blur(${blur.toFixed(1)}px); opacity:${pIn.toFixed(2)}; transform:scale(${lerp(0.92, 1.03, prog(t, 0, 3.6)).toFixed(3)});">
+              <span>Crypto payments today feel</span>
+              <div style="position:relative; display:inline-block; padding:4px 16px;">
+                <!-- Selection highlight box (ref1/ref3 style) -->
+                <div style="position:absolute; left:0; top:4px; bottom:4px; width:${(pBox * 100).toFixed(1)}%; background:rgba(255, 26, 26, 0.13); border:2.5px solid #FF1A1A; border-radius:6px;">
+                  <div style="position:absolute; left:-7px; top:-7px; width:12px; height:12px; border-radius:50%; background:#FF1A1A;"></div>
+                  <div style="position:absolute; right:-7px; bottom:-7px; width:12px; height:12px; border-radius:50%; background:#FF1A1A;"></div>
+                </div>
+                <span style="position:relative; z-index:2; color:#FF1A1A;">disconnected.</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // Sub-beat B (3.6s - 8.4s): Concentric Rings with Solana (SOL) & NEAR tokens + floating UI thought cards (ref1 & ref3)
+      if (t < 8.4) {
+        const lt = t - 3.6;
+        const pRing = easeOutCubic(prog(lt, 0, 1.0));
+        const rot = lt * 26;
+        const tokens = [
+          { name: "SOL", chain: "Solana", img: "../assets/tokens/sol.png", r: 210, a: rot + 20, color: "#9945FF" },
+          { name: "NEAR", chain: "NEAR Protocol", img: "../assets/tokens/near.png", r: 210, a: rot + 200, color: "#00C08B" },
+          { name: "USDC", chain: "Base", img: "../assets/tokens/usdc.png", r: 340, a: -rot * 0.8 + 65, color: "#0052FF" },
+          { name: "ETH", chain: "Ethereum", img: "../assets/tokens/eth.png", r: 340, a: -rot * 0.8 + 245, color: "#627EEA" },
+          { name: "USDT", chain: "Solana / NEAR", img: "../assets/tokens/usdt.png", r: 450, a: rot * 0.6 + 135, color: "#26A17B" },
+        ];
+        return `
+          <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transform:scale(${lerp(0.95, 1.06, lt / 4.8).toFixed(3)});">
+            <!-- Concentric Glowing Rings on White Canvas -->
+            ${[210, 340, 450].map((r, i) => `
+              <div style="
+                position:absolute;
+                width:${r * 2}px;
+                height:${r * 2}px;
+                border-radius:50%;
+                border: 2.5px solid ${i === 0 ? 'rgba(153,69,255,0.28)' : i === 1 ? 'rgba(0,192,139,0.26)' : 'rgba(255,26,26,0.20)'};
+                box-shadow: 0 0 40px ${i === 0 ? 'rgba(153,69,255,0.12)' : 'rgba(0,192,139,0.12)'};
+                transform: scale(${pRing.toFixed(3)});
+              "></div>
+            `).join("")}
+
+            <!-- Center Text (ref1 style) -->
+            <div style="text-align:center; z-index:20; background:rgba(255,255,255,0.88); padding:26px 44px; border-radius:28px; backdrop-filter:blur(12px); box-shadow:0 16px 40px rgba(0,0,0,0.06);">
+              <div style="font-size:22px; font-weight:650; color:#5A554C; margin-bottom:6px;">You hold <span style="color:#9945FF; font-weight:800;">SOL on Solana</span>.</div>
+              <div style="font-size:44px; font-weight:800; letter-spacing:-0.03em; color:#0B0B0B;">They want <span style="color:#00A878;">NEAR</span>.</div>
+              <div style="font-size:17px; font-weight:600; color:#FF1A1A; margin-top:8px;">Bridges · Gas tokens · Incompatible chains</div>
+            </div>
+
+            <!-- Orbiting Token Medallions -->
+            ${tokens.map(tk => {
+              const rad = (tk.a * Math.PI) / 180;
+              const x = Math.cos(rad) * tk.r * pRing;
+              const y = Math.sin(rad) * tk.r * pRing;
+              return `
+                <div class="pop-card" style="
+                  position:absolute;
+                  left:calc(50% + ${x.toFixed(1)}px - 92px);
+                  top:calc(50% + ${y.toFixed(1)}px - 34px);
+                  padding:12px 20px;
+                  border-radius:999px;
+                  display:flex;
+                  align-items:center;
+                  gap:12px;
+                  z-index:25;
+                ">
+                  <img src="${tk.img}" style="width:38px; height:38px; border-radius:50%; object-fit:cover;" />
+                  <div>
+                    <div style="font-size:16px; font-weight:800; color:#0B0B0B;">${tk.name}</div>
+                    <div style="font-size:12px; font-weight:600; color:${tk.color};">${tk.chain}</div>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `;
+      }
+
+      // Sub-beat C (8.4s - 12.0s): "What if it didn't have to be?" + Floating [ x -> + ] button clicked by hand cursor (ref3 row 2!)
+      const lt = t - 8.4;
+      const pQ = easeOutCubic(prog(lt, 0.0, 0.8));
+      const pBtn = springOut(prog(lt, 0.7, 1.0));
+      const rotPlus = lerp(0, 45, easeInOutCubic(prog(lt, 1.2, 0.8)));
+      const pCursor = easeInOutCubic(prog(lt, 1.1, 1.5));
+      const isClick = lt > 2.65 && lt < 3.15;
+      const btnScale = isClick ? 0.90 : 1.0;
+
+      return `
+        <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:44px;">
+          <div style="font-size:68px; font-weight:750; letter-spacing:-0.035em; color:#0B0B0B; opacity:${pQ.toFixed(2)}; transform:translateY(${lerp(24, 0, pQ).toFixed(1)}px);">
+            What if it didn't have to be?
+          </div>
+
+          <!-- Floating Liquid Glass Action Button (exact ref3_ui_detail row 2 homage) -->
+          <div style="
+            position:relative;
+            width:148px;
+            height:96px;
+            border-radius:28px;
+            background:linear-gradient(180deg, #FFFFFF 0%, #F7F3EB 100%);
+            border:2.5px solid #0B0B0B;
+            box-shadow: 0 24px 60px rgba(255, 26, 26, 0.25), 0 8px 24px rgba(0,0,0,0.08);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            transform: scale(${(pBtn * btnScale).toFixed(3)});
+          ">
+            <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#0B0B0B" stroke-width="2.6" stroke-linecap="round" style="transform:rotate(${rotPlus.toFixed(1)}deg);">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </div>
+
+          ${renderCursor(lerp(1180, 985, pCursor), lerp(780, 610, pCursor), isClick, true)}
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 2 (12.0s - 22.0s): AUTHENTIC PIXEL-ELEMENT FLOW LOGO REVEAL (ref3 ClickUp style)
+    // Uses the exact extracted PNG layers from public/assets/flow-symbol.png & flow-logo.png!
+    // ============================================================================
+    function renderScene02LogoReveal(t, isOutro = false) {
+      const lt = isOutro ? (t - 172.0) : (t - 12.0);
+      const dur = isOutro ? 8.0 : 10.0;
+
+      // Phase 1 (0.0s - 2.6s): Concentric Solana & NEAR arcs spiral in and assemble the 2-piece FLOW Symbol (symbol-delta.png + symbol-crest.png)
+      const pRings = easeInOutCubic(prog(lt, 0.0, 2.0));
+      const pDelta = springOut(prog(lt, 0.5, 1.4));
+      const pCrest = springOut(prog(lt, 0.85, 1.55));
+
+      // Phase 2 (2.4s - 5.2s): Symbol slides left into lockup position while f, l, o, w (logo-letter-f/l/o/w.png) animate in!
+      const pLockup = easeInOutCubic(prog(lt, 2.3, 1.3));
+      const pf = springOut(prog(lt, 2.7, 1.1));
+      const pl = springOut(prog(lt, 2.88, 1.1));
+      const po = springOut(prog(lt, 3.06, 1.1));
+      const pw = springOut(prog(lt, 3.24, 1.1));
+      const pSub = easeOutCubic(prog(lt, 3.7, 1.2));
+
+      // For Outro (last 1.6s of film), retract wordmark back to centered solo symbol like ClickUp ref3_logo_detail!
+      const pRetract = isOutro ? easeInOutCubic(prog(lt, 6.2, 1.3)) : 0;
+      const wordAlpha = clamp(1 - pRetract * 1.4, 0, 1);
+      const effectiveLockup = pLockup * (1 - pRetract);
+
+      // Symbol delta & crest transforms before lockup
+      const deltaY = lerp(72, 0, pDelta);
+      const deltaScale = lerp(0.62, 1.0, pDelta);
+      const crestX = lerp(78, 0, pCrest);
+      const crestY = lerp(-58, 0, pCrest);
+      const crestRot = lerp(18, 0, pCrest);
+
+      // Whole logo container shifts so that when effectiveLockup=0, the symbol alone is centered on screen;
+      // when effectiveLockup=1, the full 2172x724 flow-logo.png canvas (scaled to 840x280) is centered on screen!
+      // In the 840x280 scaled canvas, the symbol center is at X=235px (canvas center is 420px, offset = +185px).
+      const containerShiftX = lerp(185, 0, effectiveLockup);
+
+      return `
+        <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+          <!-- Converging Multi-Chain Orbital Rings (Solana #9945FF, NEAR #00C08B, Crimson #FF1A1A) -->
+          <svg width="1920" height="1080" viewBox="0 0 1920 1080" style="position:absolute; inset:0; pointer-events:none;">
+            <circle cx="960" cy="500" r="${lerp(560, 140, pRings).toFixed(1)}" fill="none" stroke="#9945FF" stroke-width="3.5" stroke-dasharray="420 600" stroke-dashoffset="${(-lt * 240).toFixed(0)}" opacity="${(1 - pLockup * 0.85).toFixed(2)}" />
+            <circle cx="960" cy="500" r="${lerp(440, 110, pRings).toFixed(1)}" fill="none" stroke="#00C08B" stroke-width="3.5" stroke-dasharray="360 500" stroke-dashoffset="${(lt * 220).toFixed(0)}" opacity="${(1 - pLockup * 0.85).toFixed(2)}" />
+            <circle cx="960" cy="500" r="${lerp(320, 80, pRings).toFixed(1)}" fill="none" stroke="#FF1A1A" stroke-width="3" stroke-dasharray="260 400" stroke-dashoffset="${(-lt * 260).toFixed(0)}" opacity="${(1 - pLockup * 0.85).toFixed(2)}" />
+          </svg>
+
+          <!-- Exact Pixel-Matched FLOW Logo Elements Container (840 x 280 -> exact 3:1 aspect ratio of 2172x724 flow-logo.png) -->
+          <div style="position:relative; width:840px; height:280px; transform:translateX(${containerShiftX.toFixed(1)}px); z-index:30;">
+            <!-- 1. Real Black Base Delta Layer (logo-delta.png) -->
+            <img
+              src="../assets/brand/elements/logo-delta.png"
+              style="
+                position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+                transform-origin: 26% 58%;
+                transform: translateY(${deltaY.toFixed(1)}px) scale(${deltaScale.toFixed(3)});
+                opacity: ${clamp(pDelta * 1.5).toFixed(2)};
+              "
+            />
+            <!-- 2. Real Floating Crimson Crest Layer (logo-crest.png) -->
+            <img
+              src="../assets/brand/elements/logo-crest.png"
+              style="
+                position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+                transform-origin: 33% 35%;
+                transform: translate(${crestX.toFixed(1)}px, ${crestY.toFixed(1)}px) rotate(${crestRot.toFixed(1)}deg);
+                opacity: ${clamp(pCrest * 1.5).toFixed(2)};
+                filter: drop-shadow(0 10px 24px rgba(255,26,26,0.28));
+              "
+            />
+            <!-- 3. Real Wordmark Letter Layers (f, l, o, w) -->
+            ${[
+              { ch: "f", p: pf },
+              { ch: "l", p: pl },
+              { ch: "o", p: po },
+              { ch: "w", p: pw },
+            ].map(item => `
+              <img
+                src="../assets/brand/elements/logo-letter-${item.ch}.png"
+                style="
+                  position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+                  transform: translateY(${lerp(34, 0, item.p).toFixed(1)}px) scale(${lerp(0.9, 1.0, item.p).toFixed(3)});
+                  filter: blur(${((1 - item.p) * 10).toFixed(1)}px);
+                  opacity: ${(clamp(item.p * 1.3) * wordAlpha).toFixed(2)};
+                "
+              />
+            `).join("")}
+          </div>
+
+          <!-- Tagline & Token Badges Underneath -->
+          <div style="
+            margin-top: 24px;
+            text-align: center;
+            opacity: ${(pSub * wordAlpha).toFixed(2)};
+            transform: translateY(${lerp(18, 0, pSub).toFixed(1)}px);
+            z-index: 30;
+          ">
+            <div style="font-size:32px; font-weight:650; letter-spacing:-0.02em; color:#0B0B0B;">
+              ${isOutro ? 'Solana · NEAR · Ethereum · Base — <span style="color:#FF1A1A;">in one flow.</span>' : 'Pay with what you hold. <span style="color:#FF1A1A;">Receive what you want.</span>'}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 3 (22.0s - 44.0s): LANDING -> GOOGLE-FIRST LOGIN -> AUTO PROGRESS-BAR ONBOARDING
+    // ============================================================================
+    function renderScene03Onboarding(t) {
+      const lt = t - 22.0;
+
+      // Sub-scene 3A (0.0s - 4.5s): White-theme Landing Page -> Cursor clicks "Get Started"
+      if (lt < 4.5) {
+        const pIn = easeOutCubic(prog(lt, 0, 0.9));
+        const pCur = easeInOutCubic(prog(lt, 1.0, 2.2));
+        const click = lt > 3.2 && lt < 3.8;
+        const zoom = lerp(1.0, 1.18, easeInOutCubic(prog(lt, 2.8, 1.7)));
+        return `
+          <div class="ui-window-3d" style="transform: rotateX(${lerp(12, 4, pIn).toFixed(1)}deg) rotateY(${lerp(-10, -2, pIn).toFixed(1)}deg) scale(${zoom.toFixed(3)});">
+            <img src="../assets/ui/01-marketing-landing.png" style="width:100%; height:100%; object-fit:cover; object-position:top;" />
+            ${renderCursor(lerp(1120, 310, pCur), lerp(680, 565, pCur), click, true)}
+          </div>
+        `;
+      }
+
+      // Sub-scene 3B (4.5s - 11.5s): Updated Login Screen (Google Only on First Screen + "Already have an account? Sign in" -> Email OTP preview)
+      if (lt < 11.5) {
+        const st = lt - 4.5;
+        const pCard = springOut(prog(st, 0, 0.9));
+        const pSecondary = springOut(prog(st, 2.0, 1.1));
+        const pCur = easeInOutCubic(prog(st, 3.2, 2.2));
+        const click = st > 5.4 && st < 6.1;
+
+        return `
+          <div class="ui-window-3d" style="
+            display:flex; align-items:center; justify-content:center;
+            transform: rotateX(6deg) rotateY(-6deg) scale(${lerp(1.02, 1.08, st / 7).toFixed(3)});
+          ">
+            <!-- Top-left FLOW Logo -->
+            <img src="../assets/brand/flow-logo.png" style="position:absolute; left:48px; top:36px; height:38px;" />
+
+            <!-- Primary First-Screen Sign-In Card (Exact User Spec: Only Google + Already have an account? Sign in) -->
+            <div class="pop-card" style="
+              width:520px; padding:48px; text-align:center;
+              transform: scale(${pCard.toFixed(3)}) translateX(${lerp(0, -140, easeInOutCubic(prog(st, 1.8, 1.0))).toFixed(1)}px);
+            ">
+              <img src="../assets/brand/flow-symbol.png" style="width:54px; height:54px; margin-bottom:18px;" />
+              <h2 style="font-family:var(--font-serif); font-size:46px; font-weight:400; color:#0B0B0B; margin-bottom:10px;">Welcome to FLOW</h2>
+              <p style="font-size:17px; color:#5A554C; margin-bottom:34px;">Get paid in what you want while others pay with what they have.</p>
+
+              <!-- Continue with Google Button -->
+              <div class="liquid-btn dark" style="width:100%; padding:18px 24px; font-size:18px; margin-bottom:24px; transform:scale(${click ? 0.96 : 1});">
+                <svg width="22" height="22" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"/><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z"/><path fill="#FBBC05" d="M5.3 14.8c-.2-.8-.4-1.6-.4-2.5s.2-1.7.4-2.5L1.6 7C.6 9 0 11.2 0 13.5s.6 4.5 1.6 6.5l3.7-2.9z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 21.4 7.4 24 12 24z"/></svg>
+                <span>Continue with Google</span>
+              </div>
+
+              <div style="font-size:15px; color:#5A554C;">
+                Already have an account? <span style="color:#0B0B0B; font-weight:700; text-decoration:underline;">Sign in</span>
+              </div>
+            </div>
+
+            <!-- Secondary Pop-Out Card: Clicking "Sign in" reveals Email Code Login -->
+            <div class="pop-card" style="
+              position:absolute; right:140px; top:250px; width:400px; padding:32px;
+              opacity:${clamp(pSecondary).toFixed(2)};
+              transform: scale(${lerp(0.85, 1, pSecondary).toFixed(3)}) translateZ(40px);
+              border:2px solid rgba(255,26,26,0.18);
+            ">
+              <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#FF1A1A; margin-bottom:8px;">When "Sign in" is clicked</div>
+              <div style="font-family:var(--font-serif); font-size:28px; color:#0B0B0B; margin-bottom:14px;">Sign in with Email Code</div>
+              <div style="padding:13px 16px; border-radius:14px; background:#FBF8F3; border:1px solid #E2DDD5; font-family:var(--font-mono); font-size:14px; color:#0B0B0B; margin-bottom:12px;">
+                opeyemiawt@gmail.com
+              </div>
+              <div class="liquid-btn" style="width:100%; font-size:14px; padding:12px;">Send Login Code →</div>
+            </div>
+
+            ${renderCursor(lerp(980, 620, pCur), lerp(640, 495, pCur), click, true)}
+          </div>
+        `;
+      }
+
+      // Sub-scene 3C (11.5s - 22.0s): Automatic Wallet Onboarding
+      // Google Name ("Opeyemi Moses") + Google email avatar + ONLY the clean auto-updating progress bar (no words like provisioning, no "Resume wallet setup")!
+      const st = lt - 11.5; // 0 .. 10.5s
+      const barPct = clamp(lerp(8, 100, easeInOutCubic(prog(st, 0.4, 8.2))), 8, 100);
+      const chains = [
+        { name: "Solana Mainnet", sym: "SOL", addr: "7xKX...9b2q", img: "../assets/tokens/sol.png", t0: 1.2, color: "#9945FF" },
+        { name: "NEAR Protocol", sym: "NEAR", addr: "opeyemi.near", img: "../assets/tokens/near.png", t0: 2.8, color: "#00C08B" },
+        { name: "Ethereum Mainnet", sym: "ETH", addr: "0x71C...89A4", img: "../assets/tokens/eth.png", t0: 4.4, color: "#627EEA" },
+        { name: "Base Mainnet", sym: "USDC", addr: "0x71C...89A4", img: "../assets/tokens/usdc.png", t0: 5.8, color: "#0052FF" },
+      ];
+
+      return `
+        <div class="ui-window-3d" style="
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          transform: rotateX(${lerp(8, 0, st / 10.5).toFixed(1)}deg) rotateY(${lerp(6, 0, st / 10.5).toFixed(1)}deg) scale(${lerp(1.04, 1.12, st / 10.5).toFixed(3)});
+        ">
+          <img src="../assets/brand/flow-logo.png" style="position:absolute; left:48px; top:36px; height:38px;" />
+
+          <!-- Clean Onboarding Card: Google Name + Email Avatar + Pure Updating Progress Bar Only -->
+          <div class="pop-card" style="width:620px; padding:46px 52px; margin-bottom:36px;">
+            <div style="display:flex; align-items:center; gap:16px; padding-bottom:28px; border-bottom:1px solid #EFEAE1; margin-bottom:36px;">
+              ${ICONS.googleAvatar}
+              <div>
+                <div style="font-size:20px; font-weight:750; color:#0B0B0B;">Opeyemi Moses</div>
+                <div style="font-size:15px; color:#6B665E;">opeyemiawt@gmail.com</div>
+              </div>
+            </div>
+
+            <!-- Pure Loading Bar Only (Exact User Spec: just the loading bar and no text attached to it) -->
+            <div style="width:100%; height:14px; border-radius:999px; background:#EDE8DF; overflow:hidden; padding:2px;">
+              <div style="
+                width:${barPct.toFixed(1)}%;
+                height:100%;
+                border-radius:999px;
+                background:linear-gradient(90deg, #0B0B0B 0%, #FF1A1A 100%);
+                box-shadow: 0 0 18px rgba(255,26,26,0.45);
+              "></div>
+            </div>
+          </div>
+
+          <!-- 4 Derived Multi-Chain Rails Popping In Below -->
+          <div style="display:flex; gap:18px;">
+            ${chains.map(ch => {
+              const p = springOut(prog(st, ch.t0, 1.1));
+              return `
+                <div class="pop-card" style="
+                  padding:18px 22px; width:265px;
+                  display:flex; align-items:center; gap:14px;
+                  opacity:${clamp(p).toFixed(2)};
+                  transform: translateY(${lerp(32, 0, p).toFixed(1)}px) scale(${lerp(0.88, 1, p).toFixed(3)});
+                ">
+                  <img src="${ch.img}" style="width:42px; height:42px; border-radius:50%;" />
+                  <div>
+                    <div style="font-size:15px; font-weight:750; color:#0B0B0B;">${ch.name}</div>
+                    <div style="font-family:var(--font-mono); font-size:13px; color:${ch.color}; font-weight:600;">${ch.addr} ✓</div>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 4 (44.0s - 66.0s): UNIFIED MULTI-CHAIN WALLET DASHBOARD & ASSETS
+    // ============================================================================
+    function renderScene04Dashboard(t) {
+      const lt = t - 44.0; // 0 .. 22.0s
+      const pReveal = easeOutCubic(prog(lt, 0.0, 0.9));
+
+      // Smooth 3D camera movement
+      const camRotX = lerp(9, 4, Math.sin((lt / 22) * Math.PI));
+      const camRotY = lerp(-7, 5, lt / 22);
+      const camScale = lerp(1.03, 1.15, Math.sin((lt / 22) * Math.PI));
+
+      const assets = [
+        { sym: "NEAR", name: "NEAR Protocol", net: "NEAR Mainnet", bal: "2,450.00 NEAR", usd: "$3,185.00", chg: "+4.8%", img: "../assets/tokens/near.png", netImg: "../assets/tokens/near.png" },
+        { sym: "SOL", name: "Solana", net: "Solana Mainnet", bal: "14.20 SOL", usd: "$2,130.00", chg: "+6.2%", img: "../assets/tokens/sol.png", netImg: "../assets/tokens/sol.png" },
+        { sym: "USDC", name: "USD Coin", net: "Base Mainnet", bal: "850.00 USDC", usd: "$850.00", chg: "0.0%", img: "../assets/tokens/usdc.png", netImg: "../assets/tokens/base.png" },
+        { sym: "ETH", name: "Ethereum", net: "Ethereum Mainnet", bal: "0.105 ETH", usd: "$255.00", chg: "+1.9%", img: "../assets/tokens/eth.png", netImg: "../assets/tokens/eth.png" },
+      ];
+
+      // Cursor path: inspects NEAR & Solana rows, then hovers Request / Send / Add Money actions
+      let curX = 640, curY = 580;
+      let activeRow = -1;
+      if (lt < 8.0) {
+        const p = easeInOutCubic(lt / 8.0);
+        curX = lerp(420, 620, p);
+        curY = lerp(520, 610, p);
+        activeRow = lt < 4.5 ? 0 : 1;
+      } else if (lt < 16.0) {
+        const p = easeInOutCubic((lt - 8.0) / 8.0);
+        curX = lerp(620, 880, p);
+        curY = lerp(610, 415, p);
+        activeRow = lt < 10.5 ? 1 : -1;
+      } else {
+        const p = easeInOutCubic((lt - 16.0) / 6.0);
+        curX = lerp(880, 960, p);
+        curY = lerp(415, 130, p);
+      }
+
+      return `
+        <div class="ui-window-3d" style="transform: rotateX(${camRotX.toFixed(2)}deg) rotateY(${camRotY.toFixed(2)}deg) scale(${camScale.toFixed(3)});">
+          ${renderTopNav("home", false, false)}
+
+          <!-- Dashboard Body: Unified Multi-Chain Portfolio -->
+          <div style="padding:36px 88px; opacity:${pReveal.toFixed(2)}; transform:translateY(${lerp(16, 0, pReveal).toFixed(1)}px);">
+            <!-- Centered Total Balance + Primary Actions -->
+            <div style="text-align:center; margin-bottom:36px;">
+              <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <span style="font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#6B665E;">Total Portfolio Balance</span>
+              </div>
+
+              <div style="font-family:var(--font-serif); font-size:82px; line-height:1; color:#0B0B0B; margin-bottom:24px;">
+                $6,420.00
+              </div>
+
+              <!-- Action Buttons -->
+              <div style="display:inline-flex; align-items:center; justify-content:center; gap:16px;">
+                <div class="liquid-btn dark">
+                  ${ICONS.plus}
+                  <span>Add Money</span>
+                </div>
+                <div class="liquid-btn" style="${lt >= 12.0 && lt < 16.5 ? 'border-color:#0B0B0B; box-shadow:0 10px 26px rgba(0,0,0,0.14);' : ''}">
+                  ${ICONS.request}
+                  <span>Request</span>
+                </div>
+                <div class="liquid-btn">
+                  ${ICONS.send}
+                  <span>Send</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Multi-Chain Assets Held Section -->
+            <div class="pop-card" style="padding:26px 34px; border-radius:26px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+                <span style="font-size:18px; font-weight:750; color:#0B0B0B;">Assets Held</span>
+                <span style="font-size:13px; font-weight:600; color:#6B665E;">Solana · NEAR · Base · Ethereum</span>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                ${assets.map((a, idx) => `
+                  <div style="
+                    display:flex; align-items:center; justify-content:space-between;
+                    padding:11px 18px; border-radius:16px;
+                    background:${activeRow === idx ? '#F4EFE6' : idx < 2 ? '#FBF8F3' : '#FFFFFF'};
+                    border:1.5px solid ${activeRow === idx ? 'rgba(11,11,11,0.18)' : 'rgba(11,11,11,0.045)'};
+                  ">
+                    <div style="display:flex; align-items:center; gap:14px;">
+                      <div style="position:relative; width:40px; height:40px;">
+                        <img src="${a.img}" style="width:40px; height:40px; border-radius:50%;" />
+                        <img src="${a.netImg}" style="position:absolute; right:-2px; bottom:-2px; width:16px; height:16px; border-radius:50%; border:2px solid #FFF;" />
+                      </div>
+                      <div>
+                        <div style="font-size:16px; font-weight:750; color:#0B0B0B;">${a.name} <span style="color:#6B665E; font-weight:600;">· ${a.sym}</span></div>
+                        <div style="font-size:13px; color:#6B665E;">${a.net}</div>
+                      </div>
+                    </div>
+
+                    <div style="text-align:right;">
+                      <div style="font-size:16px; font-weight:750; color:#0B0B0B;">${a.usd}</div>
+                      <div style="font-size:13px; color:#5A554C; font-family:var(--font-mono);">${a.bal} <span style="color:#00A878; font-weight:700;">${a.chg}</span></div>
+                    </div>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+          </div>
+
+          ${renderCursor(curX, curY, lt > 13.5 && lt < 14.2, true)}
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 5 (66.0s - 82.0s): DIRECT RECEIVE — SOLANA & NEAR NETWORK-FILTERED SUPPORTED ASSETS
+    // ============================================================================
+    function renderScene05Receive(t) {
+      const lt = t - 66.0; // 0 .. 16.0s
+      const isNear = lt >= 8.0;
+      const dropdownOpen = (lt > 1.2 && lt < 2.8) || (lt > 7.2 && lt < 8.6);
+      const clickDrop = (lt > 2.2 && lt < 2.7) || (lt > 7.8 && lt < 8.4);
+
+      const selectedAsset = isNear
+        ? { sym: "NEAR", name: "NEAR Protocol", net: "NEAR Mainnet", addr: "opeyemi-flow.near", img: "../assets/tokens/near.png", color: "#00C08B" }
+        : { sym: "SOL", name: "Solana", net: "Solana Mainnet", addr: "7xKXt9pL4mN8vQ2rW5yB9cE3fH6jK9b2q", img: "../assets/tokens/sol.png", color: "#9945FF" };
+
+      const supportedByNetwork = isNear
+        ? [
+            { sym: "NEAR", name: "Native NEAR", img: "../assets/tokens/near.png" },
+            { sym: "USDC", name: "USDC on NEAR", img: "../assets/tokens/usdc.png" },
+            { sym: "USDT", name: "USDT on NEAR", img: "../assets/tokens/usdt.png" },
+          ]
+        : [
+            { sym: "SOL", name: "Native SOL", img: "../assets/tokens/sol.png" },
+            { sym: "USDC", name: "USDC on Solana", img: "../assets/tokens/usdc.png" },
+            { sym: "USDT", name: "USDT on Solana", img: "../assets/tokens/usdt.png" },
+          ];
+
+      const pPop = springOut(prog(isNear ? lt - 8.0 : lt - 2.4, 0, 1.0));
+
+      return `
+        <div class="ui-window-3d" style="transform: rotateX(7deg) rotateY(-6deg) scale(1.06);">
+          ${renderTopNav("receive", false, false)}
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:36px; padding:42px 84px; align-items:start;">
+            <!-- Left Card: Asset Dropdown & Network-Filtered Supported Assets (NO "More" button!) -->
+            <div class="pop-card" style="padding:36px;">
+              <div style="font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:${selectedAsset.color}; margin-bottom:8px;">Direct Receive · Same-Network Transfer</div>
+              <h2 style="font-family:var(--font-serif); font-size:44px; font-weight:400; color:#0B0B0B; margin-bottom:24px;">Select Asset to Receive</h2>
+
+              <!-- Asset Dropdown Selector -->
+              <div style="
+                padding:18px 22px; border-radius:20px; background:#FBF8F3;
+                border:2px solid ${dropdownOpen ? '#FF1A1A' : '#E2DDD5'};
+                display:flex; align-items:center; justify-content:space-between;
+                margin-bottom:28px;
+              ">
+                <div style="display:flex; align-items:center; gap:14px;">
+                  <img src="${selectedAsset.img}" style="width:42px; height:42px; border-radius:50%;" />
+                  <div>
+                    <div style="font-size:18px; font-weight:800; color:#0B0B0B;">${selectedAsset.sym} · ${selectedAsset.name}</div>
+                    <div style="font-size:14px; font-weight:600; color:${selectedAsset.color};">Network checked: ${selectedAsset.net}</div>
+                  </div>
+                </div>
+                <span style="font-size:18px; font-weight:700;">▾</span>
+              </div>
+
+              <!-- Supported Assets Populated Dynamically for that Network (No "More" overflow!) -->
+              <div style="padding:22px; border-radius:20px; background:#FBF8F3; border:1px solid #EAE5DC;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                  <span style="font-size:14px; font-weight:750; color:#0B0B0B;">Supported Assets on ${selectedAsset.net}</span>
+                  <span style="font-size:12px; font-weight:700; color:${selectedAsset.color};">Auto-populated by network</span>
+                </div>
+                <div style="display:flex; gap:12px; transform:scale(${lerp(0.92, 1.0, pPop).toFixed(3)});">
+                  ${supportedByNetwork.map(tk => `
+                    <div style="flex:1; padding:14px; border-radius:16px; background:#FFFFFF; border:1.5px solid rgba(11,11,11,0.06); display:flex; align-items:center; gap:10px; box-shadow:0 6px 16px rgba(0,0,0,0.04);">
+                      <img src="${tk.img}" style="width:32px; height:32px; border-radius:50%;" />
+                      <div>
+                        <div style="font-size:15px; font-weight:800; color:#0B0B0B;">${tk.sym}</div>
+                        <div style="font-size:11px; color:#6B665E;">${tk.name}</div>
+                      </div>
+                    </div>
+                  `).join("")}
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Card: Permanent Verified Address & QR Code -->
+            <div class="pop-card" style="padding:36px; text-align:center;">
+              <div style="display:inline-flex; align-items:center; gap:10px; padding:8px 18px; border-radius:999px; background:#FBF8F3; border:1px solid #E5DFD5; margin-bottom:22px;">
+                <img src="${selectedAsset.img}" style="width:22px; height:22px; border-radius:50%;" />
+                <span style="font-size:14px; font-weight:750; color:#0B0B0B;">Your Permanent ${selectedAsset.net} Address</span>
+              </div>
+
+              <div style="width:220px; height:220px; margin:0 auto 22px; padding:16px; border-radius:24px; background:#FFFFFF; border:2px solid #0B0B0B; display:flex; align-items:center; justify-content:center;">
+                <img src="../assets/brand/qr-standee.png" style="width:100%; height:100%; object-fit:contain;" />
+              </div>
+
+              <div style="padding:14px 20px; border-radius:16px; background:#FBF8F3; font-family:var(--font-mono); font-size:15px; font-weight:700; color:#0B0B0B; margin-bottom:18px;">
+                ${selectedAsset.addr}
+              </div>
+
+              <div class="liquid-btn dark" style="width:100%;">Copy ${selectedAsset.sym} Address</div>
+            </div>
+          </div>
+
+          ${renderCursor(dropdownOpen ? 460 : 540, dropdownOpen ? 360 : 520, clickDrop, true)}
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 6 (82.0s - 96.0s): CONVERT & ADD MONEY — LIVE INSTANT QUOTES AS YOU TYPE (SOL -> NEAR)
+    // ============================================================================
+    function renderScene06Convert(t) {
+      const lt = t - 82.0; // 0 .. 14.0s
+      // Typing progression: starts at "0", then types "1" -> "12" -> "12.5"
+      let typedAmt = "0";
+      let outNear = "0.00";
+      if (lt >= 2.0 && lt < 3.6) {
+        typedAmt = "1";
+        outNear = "30.74";
+      } else if (lt >= 3.6 && lt < 5.2) {
+        typedAmt = "12";
+        outNear = "368.88";
+      } else if (lt >= 5.2) {
+        typedAmt = "12.5";
+        outNear = "384.25";
+      }
+
+      const quotePop = springOut(prog(lt, 2.1, 1.0));
+
+      return `
+        <div class="ui-window-3d" style="transform: rotateX(8deg) rotateY(7deg) scale(1.08);">
+          ${renderTopNav("send", false, false)}
+
+          <div style="display:grid; grid-template-columns: 1.05fr 0.95fr; gap:36px; padding:40px 84px; align-items:center;">
+            <!-- Left: Convert Input Card (Starts from 0, never negative, updates quote immediately on keystroke!) -->
+            <div class="pop-card" style="padding:36px;">
+              <div style="display:inline-flex; gap:8px; padding:6px; border-radius:999px; background:#F3EFE7; margin-bottom:24px;">
+                <span style="padding:8px 20px; border-radius:999px; font-size:14px; font-weight:650; color:#6B665E;">Send</span>
+                <span style="padding:8px 20px; border-radius:999px; font-size:14px; font-weight:750; background:#FFFFFF; color:#0B0B0B; box-shadow:0 2px 8px rgba(0,0,0,0.08);">Convert</span>
+                <span style="padding:8px 20px; border-radius:999px; font-size:14px; font-weight:650; color:#6B665E;">Add Money</span>
+              </div>
+
+              <!-- From SOL (Solana) -->
+              <div style="padding:20px 24px; border-radius:20px; background:#FBF8F3; border:2px solid #0B0B0B; margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:700; color:#6B665E; margin-bottom:8px;">
+                  <span>You Pay (Solana Mainnet)</span>
+                  <span>Min: 0 · Balance: 14.20 SOL</span>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <div style="font-family:var(--font-mono); font-size:44px; font-weight:800; color:#0B0B0B;">
+                    ${typedAmt}<span style="color:#FF1A1A;">|</span>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:999px; background:#FFFFFF; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+                    <img src="../assets/tokens/sol.png" style="width:28px; height:28px; border-radius:50%;" />
+                    <span style="font-size:16px; font-weight:800;">SOL</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- To NEAR (NEAR Protocol) -->
+              <div style="padding:20px 24px; border-radius:20px; background:#FBF8F3; border:1.5px solid #E5DFD5;">
+                <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:700; color:#00A878; margin-bottom:8px;">
+                  <span>You Receive Instantly (NEAR Mainnet)</span>
+                  <span>Live 1Click Quote (Auto-Updating)</span>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <div style="font-family:var(--font-mono); font-size:44px; font-weight:800; color:#00A878;">
+                    ${outNear}
+                  </div>
+                  <div style="display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:999px; background:#FFFFFF; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+                    <img src="../assets/tokens/near.png" style="width:28px; height:28px; border-radius:50%;" />
+                    <span style="font-size:16px; font-weight:800;">NEAR</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: 3D Pop-Out Live Quote Card -->
+            <div class="pop-card" style="
+              padding:36px;
+              border:2px solid rgba(0,192,139,0.35);
+              transform: scale(${lerp(0.9, 1.03, quotePop).toFixed(3)});
+            ">
+              <div style="display:inline-flex; align-items:center; gap:8px; padding:6px 14px; border-radius:999px; background:rgba(0,192,139,0.12); color:#008F68; font-size:12px; font-weight:800; text-transform:uppercase; margin-bottom:16px;">
+                ⚡ Instant Live Quote · No Click Delay
+              </div>
+              <h3 style="font-family:var(--font-serif); font-size:38px; font-weight:400; color:#0B0B0B; margin-bottom:18px;">
+                ${typedAmt} SOL → ${outNear} NEAR
+              </h3>
+              <div style="display:flex; flex-direction:column; gap:12px; font-size:15px; color:#5A554C; margin-bottom:24px;">
+                <div style="display:flex; justify-content:space-between;"><span>Route Engine</span><strong style="color:#0B0B0B;">NEAR Intents · 1Click</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Exchange Rate</span><strong style="color:#0B0B0B;">1 SOL = 30.74 NEAR</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Estimated Settlement</span><strong style="color:#00A878;">~15–30 seconds</strong></div>
+              </div>
+              <div class="liquid-btn dark" style="width:100%;">Confirm Conversion →</div>
+            </div>
+          </div>
+
+          ${renderCursor(390, 415, lt > 1.8 && lt < 5.6, false)}
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 7 (96.0s - 102.0s): MID-FILM KINETIC TYPOGRAPHY INTERSTITIAL (ref3 "Plans that actually make [sense.]")
+    // ============================================================================
+    function renderScene07MidText(t) {
+      const lt = t - 96.0; // 0 .. 6.0s
+      if (lt < 3.2) {
+        const pIn = easeOutCubic(prog(lt, 0, 0.7));
+        const pSel = easeInOutCubic(prog(lt, 0.7, 1.0));
+        return `
+          <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+            <div style="display:flex; align-items:center; gap:20px; font-size:70px; font-weight:750; letter-spacing:-0.035em; color:#0B0B0B; opacity:${pIn.toFixed(2)}; transform:scale(${lerp(0.93, 1.03, lt / 3.2).toFixed(3)});">
+              <span>Cross-chain payments that make</span>
+              <div style="position:relative; display:inline-block; padding:4px 18px;">
+                <div style="position:absolute; left:0; top:4px; bottom:4px; width:${(pSel * 100).toFixed(1)}%; background:rgba(0, 192, 139, 0.16); border:2.5px solid #00A878; border-radius:6px;">
+                  <div style="position:absolute; left:-7px; top:-7px; width:12px; height:12px; border-radius:50%; background:#00A878;"></div>
+                  <div style="position:absolute; right:-7px; bottom:-7px; width:12px; height:12px; border-radius:50%; background:#00A878;"></div>
+                </div>
+                <span style="position:relative; z-index:2; color:#008F68;">sense.</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // 3.2s - 6.0s: Bold two-tone words ("Send SOL. Receive NEAR.") + Floating tokens (ref4 Bolt style)
+      const st = lt - 3.2;
+      const pPop = springOut(prog(st, 0, 0.9));
+      return `
+        <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; transform:scale(${lerp(0.92, 1.05, pPop).toFixed(3)});">
+          <div style="display:flex; align-items:center; gap:24px;">
+            <div class="pop-card" style="padding:14px 26px; border-radius:999px; display:flex; align-items:center; gap:12px;">
+              <img src="../assets/tokens/sol.png" style="width:42px; height:42px; border-radius:50%;" />
+              <span style="font-size:24px; font-weight:800; color:#9945FF;">Pay with SOL</span>
+            </div>
+            <span style="font-size:38px; font-weight:800; color:#0B0B0B;">→</span>
+            <div class="pop-card" style="padding:14px 26px; border-radius:999px; display:flex; align-items:center; gap:12px;">
+              <img src="../assets/tokens/near.png" style="width:42px; height:42px; border-radius:50%;" />
+              <span style="font-size:24px; font-weight:800; color:#00A878;">Receive NEAR</span>
+            </div>
+          </div>
+          <div style="font-size:78px; font-weight:800; letter-spacing:-0.04em; color:#0B0B0B;">
+            One <span style="color:#FF1A1A;">Payment Link.</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 8 (102.0s - 122.0s): REQUEST PAYMENT LINK — REQUESTING 150 NEAR ON NEAR PROTOCOL
+    // ============================================================================
+    function renderScene08Request(t) {
+      const lt = t - 102.0; // 0 .. 20.0s
+      const created = lt >= 10.5;
+      const clickCreate = lt > 9.8 && lt < 10.6;
+      const clickCopy = lt > 16.2 && lt < 17.0;
+      const pLinkCard = springOut(prog(lt, 10.5, 1.2));
+
+      return `
+        <div class="ui-window-3d" style="transform: rotateX(7deg) rotateY(-6deg) scale(1.06);">
+          ${renderTopNav("request", false, false)}
+
+          <div style="display:grid; grid-template-columns: 1.05fr 0.95fr; gap:36px; padding:40px 84px; align-items:center;">
+            <!-- Left: Request Payment Form (Recipient requests 150 NEAR on NEAR Protocol) -->
+            <div class="pop-card" style="padding:36px;">
+              <div style="font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#00A878; margin-bottom:6px;">Request Payment · Shareable Link</div>
+              <h2 style="font-family:var(--font-serif); font-size:44px; font-weight:400; color:#0B0B0B; margin-bottom:20px;">Create a Payment Link</h2>
+
+              <div style="display:flex; flex-direction:column; gap:14px;">
+                <div style="padding:14px 18px; border-radius:16px; background:#FBF8F3; border:1px solid #E2DDD5;">
+                  <div style="font-size:12px; font-weight:700; color:#6B665E;">Title / Description</div>
+                  <div style="font-size:17px; font-weight:700; color:#0B0B0B; margin-top:4px;">Product Design & Motion Deliverable</div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
+                  <div style="padding:14px 18px; border-radius:16px; background:#FBF8F3; border:2px solid #00C08B;">
+                    <div style="font-size:12px; font-weight:700; color:#00A878;">You Want to Receive</div>
+                    <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+                      <img src="../assets/tokens/near.png" style="width:28px; height:28px; border-radius:50%;" />
+                      <span style="font-size:18px; font-weight:800; color:#0B0B0B;">NEAR · NEAR Mainnet</span>
+                    </div>
+                  </div>
+                  <div style="padding:14px 18px; border-radius:16px; background:#FBF8F3; border:1px solid #E2DDD5;">
+                    <div style="font-size:12px; font-weight:700; color:#6B665E;">Requested Amount</div>
+                    <div style="font-family:var(--font-mono); font-size:24px; font-weight:800; color:#0B0B0B; margin-top:4px;">150.00 NEAR</div>
+                  </div>
+                </div>
+
+                <div class="liquid-btn dark" style="width:100%; margin-top:8px; transform:scale(${clickCreate ? 0.96 : 1});">
+                  Create Payment Link →
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Pop-Out Shareable Link Card -->
+            <div class="pop-card" style="
+              padding:36px; text-align:center;
+              opacity:${created ? clamp(pLinkCard).toFixed(2) : '0.35'};
+              transform: scale(${created ? lerp(0.88, 1.03, pLinkCard).toFixed(3) : '0.94'});
+              border:2px solid ${created ? '#00C08B' : 'transparent'};
+            ">
+              <div style="display:inline-flex; align-items:center; gap:8px; padding:6px 14px; border-radius:999px; background:rgba(0,192,139,0.12); color:#008F68; font-size:13px; font-weight:800; margin-bottom:16px;">
+                ✓ Active Payment Link Ready
+              </div>
+              <div style="font-family:var(--font-serif); font-size:40px; color:#0B0B0B; margin-bottom:6px;">150.00 NEAR</div>
+              <div style="font-size:14px; color:#6B665E; margin-bottom:20px;">Payer can pay with SOL, USDC, ETH, or 200+ tokens</div>
+
+              <div style="padding:14px 18px; border-radius:14px; background:#FBF8F3; border:1px solid #E2DDD5; font-family:var(--font-mono); font-size:14px; font-weight:700; color:#0B0B0B; margin-bottom:18px;">
+                .../pay/pl_near_150
+              </div>
+
+              <div class="liquid-btn dark" style="width:100%; transform:scale(${clickCopy ? 0.95 : 1});">
+                ${lt > 16.6 ? "✓ Link Copied to Clipboard!" : "Copy Shareable Link"}
+              </div>
+            </div>
+          </div>
+
+          ${renderCursor(created ? 1060 : 480, created ? 610 : 640, clickCreate || clickCopy, true)}
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 9 & 10 (122.0s - 152.0s): GUEST CHECKOUT — PAYING SOL ON SOLANA FOR 150 NEAR
+    // ============================================================================
+    function renderScene09And10Checkout(t) {
+      const lt = t - 122.0; // 0 .. 30.0s
+
+      // Part 1 (0.0s - 15.5s): Guest Checkout Asset Selector (231 tokens / 39 chains, all with real online images) -> Payer picks SOL on Solana
+      if (lt < 15.5) {
+        const modalOpen = lt >= 3.2 && lt < 12.2;
+        const clickSol = lt > 10.6 && lt < 11.6;
+        const tokensGrid = [
+          { sym: "SOL", name: "Solana", net: "Solana Mainnet", img: "../assets/tokens/sol.png", selected: true },
+          { sym: "NEAR", name: "NEAR Protocol", net: "NEAR Mainnet", img: "../assets/tokens/near.png", selected: false },
+          { sym: "USDC", name: "USD Coin", net: "Solana / Base", img: "../assets/tokens/usdc.png", selected: false },
+          { sym: "USDT", name: "Tether USD", net: "Solana / NEAR", img: "../assets/tokens/usdt.png", selected: false },
+          { sym: "ETH", name: "Ethereum", net: "Ethereum / Base", img: "../assets/tokens/eth.png", selected: false },
+          { sym: "BASE", name: "Base ETH", net: "Base Mainnet", img: "../assets/tokens/base.png", selected: false },
+          { sym: "cNEAR", name: "Compound NEAR", net: "NEAR Ecosystem", img: "../assets/tokens/cnear.png", selected: false },
+          { sym: "gNEAR", name: "Golden NEAR", net: "NEAR Ecosystem", img: "../assets/tokens/gnear.svg", selected: false },
+        ];
+
+        return `
+          <div class="ui-window-3d" style="transform: rotateX(6deg) rotateY(5deg) scale(1.05);">
+            <!-- Clean White-Theme Guest Checkout Top Bar -->
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:22px 48px; border-bottom:1px solid rgba(11,11,11,0.06); background:#FFFFFF;">
+              <img src="../assets/brand/flow-logo.png" style="height:36px;" />
+              <div style="display:flex; align-items:center; gap:12px;">
+                <span style="padding:8px 16px; border-radius:999px; background:#FBF8F3; border:1px solid #E5DFD5; font-size:13px; font-weight:700; color:#0B0B0B;">🔒 Instant Guest Checkout · No FLOW Account Needed</span>
+              </div>
+            </div>
+
+            <!-- Live White-Theme Guest Checkout Body -->
+            <div style="display:flex; align-items:center; justify-content:center; gap:36px; padding:44px 64px;">
+              <!-- Left: Recipient Request Summary -->
+              <div class="pop-card" style="width:520px; padding:38px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+                  <img src="../assets/brand/flow-logo.png" style="height:32px;" />
+                  <span style="padding:6px 14px; border-radius:999px; background:#F3EFE7; font-size:12px; font-weight:800;">Guest Checkout · No Account Needed</span>
+                </div>
+                <div style="font-size:14px; font-weight:700; color:#6B665E;">Opeyemi Moses requested</div>
+                <div style="font-family:var(--font-serif); font-size:56px; color:#0B0B0B; margin:4px 0 8px;">150.00 NEAR</div>
+                <div style="display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:700; color:#00A878; margin-bottom:24px;">
+                  <img src="../assets/tokens/near.png" style="width:20px; height:20px; border-radius:50%;" />
+                  <span>Recipient receives native NEAR on NEAR Protocol</span>
+                </div>
+
+                <div style="padding:18px 20px; border-radius:18px; background:#FBF8F3; border:2px solid #9945FF;">
+                  <div style="font-size:12px; font-weight:800; color:#9945FF; text-transform:uppercase;">You Pay With (Your Choice)</div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:8px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <img src="../assets/tokens/sol.png" style="width:36px; height:36px; border-radius:50%;" />
+                      <div>
+                        <div style="font-size:18px; font-weight:800; color:#0B0B0B;">SOL · Solana Mainnet</div>
+                        <div style="font-size:13px; color:#6B665E;">Live quote: 4.88 SOL</div>
+                      </div>
+                    </div>
+                    <span style="font-size:14px; font-weight:700; color:#9945FF;">Change ▾</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: 231-Token / 39-Chain Unified Asset Selector Modal with Exact Token Icons -->
+              <div class="pop-card" style="
+                width:640px; padding:34px;
+                transform: scale(${modalOpen ? 1.03 : 0.96});
+                border:2px solid rgba(153,69,255,0.35);
+              ">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+                  <div>
+                    <div style="font-size:20px; font-weight:800; color:#0B0B0B;">Select Payment Asset</div>
+                    <div style="font-size:13px; font-weight:600; color:#6B665E;">231 Eligible Tokens · 39 Blockchains via NEAR Intents / 1Click</div>
+                  </div>
+                  <span style="padding:6px 14px; border-radius:999px; background:rgba(153,69,255,0.12); color:#9945FF; font-size:12px; font-weight:800;">Solana Selected</span>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                  ${tokensGrid.map(tk => `
+                    <div style="
+                      padding:12px 16px; border-radius:16px;
+                      background:${tk.selected ? 'rgba(153,69,255,0.09)' : '#FBF8F3'};
+                      border:2px solid ${tk.selected ? '#9945FF' : 'transparent'};
+                      display:flex; align-items:center; gap:12px;
+                    ">
+                      <img src="${tk.img}" onerror="this.src='../assets/tokens/usdc.png'" style="width:36px; height:36px; border-radius:50%;" />
+                      <div>
+                        <div style="font-size:15px; font-weight:800; color:#0B0B0B;">${tk.sym}</div>
+                        <div style="font-size:12px; color:#6B665E;">${tk.net}</div>
+                      </div>
+                    </div>
+                  `).join("")}
+                </div>
+              </div>
+            </div>
+
+            ${renderCursor(modalOpen ? 940 : 520, modalOpen ? 360 : 580, clickSol, true)}
+          </div>
+        `;
+      }
+
+      // Part 2 (15.5s - 30.0s): Quote + Solana Deposit QR -> Routing via NEAR Intents / 1Click -> 150 NEAR Settled!
+      const st = lt - 15.5; // 0 .. 14.5s
+      const stepIdx = st < 3.0 ? 0 : st < 6.2 ? 1 : st < 9.5 ? 2 : 3;
+      const steps = [
+        "1. Awaiting 4.88 SOL Deposit on Solana",
+        "2. Deposit Detected on Solana Mainnet",
+        "3. Routing SOL → NEAR via NEAR Intents / 1Click",
+        "4. Settlement Confirmed: 150.00 NEAR Delivered",
+      ];
+
+      return `
+        <div class="ui-window-3d" style="transform: rotateX(5deg) rotateY(-5deg) scale(1.06);">
+          <div style="position:absolute; inset:0; display:grid; grid-template-columns: 1fr 1fr; gap:36px; padding:48px 80px; align-items:center;">
+            <!-- Left: Live Route Choreography Card (SOL on Solana -> 150 NEAR on NEAR) -->
+            <div class="pop-card" style="padding:38px;">
+              <div style="font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#00A878; margin-bottom:10px;">Live Cross-Chain Execution</div>
+              <h2 style="font-family:var(--font-serif); font-size:44px; font-weight:400; color:#0B0B0B; margin-bottom:24px;">4.88 SOL → 150.00 NEAR</h2>
+
+              <!-- Visual Route Bar -->
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-radius:20px; background:#FBF8F3; margin-bottom:24px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <img src="../assets/tokens/sol.png" style="width:44px; height:44px; border-radius:50%;" />
+                  <div>
+                    <div style="font-size:17px; font-weight:800;">4.88 SOL</div>
+                    <div style="font-size:12px; color:#9945FF; font-weight:700;">Sender (Solana)</div>
+                  </div>
+                </div>
+                <div style="font-size:24px; font-weight:800; color:#FF1A1A;">━━━▶</div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <img src="../assets/tokens/near.png" style="width:44px; height:44px; border-radius:50%;" />
+                  <div>
+                    <div style="font-size:17px; font-weight:800;">150.00 NEAR</div>
+                    <div style="font-size:12px; color:#00A878; font-weight:700;">Recipient (NEAR)</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4-Stage Real Verification Stepper -->
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                ${steps.map((label, idx) => `
+                  <div style="
+                    padding:13px 18px; border-radius:14px;
+                    background:${idx === stepIdx ? '#0B0B0B' : idx < stepIdx ? 'rgba(0,192,139,0.12)' : '#FBF8F3'};
+                    color:${idx === stepIdx ? '#FFFFFF' : idx < stepIdx ? '#008F68' : '#6B665E'};
+                    font-size:15px; font-weight:750;
+                    display:flex; align-items:center; justify-content:space-between;
+                  ">
+                    <span>${label}</span>
+                    <span>${idx <= stepIdx ? "✓" : "⋯"}</span>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+
+            <!-- Right: Actual Settled Receipt UI Screenshot / Card -->
+            <div class="pop-card" style="padding:18px; overflow:hidden;">
+              <img
+                src="${stepIdx < 3 ? '../assets/ui/18-public-guest-checkout-deposit.png' : '../assets/ui/19-public-guest-checkout-settled.png'}"
+                style="width:100%; height:540px; object-fit:cover; object-position:top; border-radius:18px;"
+              />
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // SCENE 11 (152.0s - 172.0s): VERIFIED ON-CHAIN ACTIVITY & FLOW AI ASSISTANT
+    // ============================================================================
+    function renderScene11ActivityAndAi(t) {
+      const lt = t - 152.0; // 0 .. 20.0s
+      const showAiDrawer = lt >= 9.0;
+      const pAi = springOut(prog(lt, 9.0, 1.0));
+
+      return `
+        <div class="ui-window-3d" style="transform: rotateX(6deg) rotateY(-4deg) scale(1.05);">
+          ${renderTopNav("activity", showAiDrawer, false)}
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:32px; padding:36px 80px; align-items:start;">
+            <!-- Left Card: Verified On-Chain Activity -->
+            <div class="pop-card" style="padding:34px; border:2px solid ${!showAiDrawer ? '#00C08B' : 'transparent'};">
+              <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#00A878; margin-bottom:6px;">Verified On-Chain Activity</div>
+              <h3 style="font-family:var(--font-serif); font-size:36px; font-weight:400; color:#0B0B0B; margin-bottom:18px;">Transaction History</h3>
+
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div style="padding:16px 18px; border-radius:16px; background:#FBF8F3; border:1.5px solid rgba(0,192,139,0.35); display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div style="font-size:16px; font-weight:800; color:#0B0B0B;">Payment Link Settled (SOL → NEAR)</div>
+                    <div style="font-size:13px; color:#6B665E;">4.88 SOL paid on Solana · Confirmed on NEAR</div>
+                  </div>
+                  <span style="font-family:var(--font-mono); font-size:17px; font-weight:800; color:#00A878;">+150.00 NEAR</span>
+                </div>
+
+                <div style="padding:16px 18px; border-radius:16px; background:#FBF8F3; display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div style="font-size:16px; font-weight:800; color:#0B0B0B;">Instant Convert (SOL → NEAR)</div>
+                    <div style="font-size:13px; color:#6B665E;">12.50 SOL swapped via NEAR Intents</div>
+                  </div>
+                  <span style="font-family:var(--font-mono); font-size:17px; font-weight:800; color:#00A878;">+384.25 NEAR</span>
+                </div>
+
+                <div style="padding:16px 18px; border-radius:16px; background:#FBF8F3; display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div style="font-size:16px; font-weight:800; color:#0B0B0B;">Direct Receive (Solana Mainnet)</div>
+                    <div style="font-size:13px; color:#6B665E;">Indexed directly to permanent SOL address</div>
+                  </div>
+                  <span style="font-family:var(--font-mono); font-size:17px; font-weight:800; color:#0B0B0B;">+14.20 SOL</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Card: On-Chain Verification Details -> Transitions to Flow AI Assistant -->
+            <div class="pop-card" style="padding:34px; border:2px solid ${showAiDrawer ? '#FF1A1A' : 'transparent'}; transform:scale(${showAiDrawer ? lerp(0.96, 1.02, pAi).toFixed(3) : '1.0'});">
+              ${showAiDrawer ? `
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+                  <div class="liquid-round-btn">${ICONS.aiMascot}</div>
+                  <div>
+                    <div style="font-size:19px; font-weight:800; color:#0B0B0B;">Flow AI Assistant</div>
+                    <div style="font-size:13px; color:#6B665E;">Account-Aware Wallet Assistant</div>
+                  </div>
+                </div>
+                <div style="padding:16px 20px; border-radius:18px; background:#FBF8F3; font-size:15px; color:#0B0B0B; margin-bottom:12px;">
+                  <strong>You:</strong> Did my 150 NEAR payment link settle from Solana?
+                </div>
+                <div style="padding:18px 20px; border-radius:18px; background:#0B0B0B; color:#FFFFFF; font-size:15px; line-height:1.5;">
+                  <strong>Flow AI:</strong> Yes! <strong>4.88 SOL</strong> was received on Solana and settled as <strong>150.00 NEAR</strong> into your NEAR Mainnet wallet via NEAR Intents / 1Click.
+                </div>
+              ` : `
+                <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#6B665E; margin-bottom:6px;">Settlement Receipt</div>
+                <h3 style="font-family:var(--font-serif); font-size:36px; font-weight:400; color:#0B0B0B; margin-bottom:18px;">On-Chain Verification</h3>
+                <div style="display:flex; flex-direction:column; gap:12px; font-size:15px;">
+                  <div style="padding:14px 18px; border-radius:14px; background:#FBF8F3; display:flex; justify-content:space-between;">
+                    <span style="color:#6B665E;">Sender Paid</span>
+                    <strong style="color:#9945FF;">4.88 SOL (Solana Mainnet)</strong>
+                  </div>
+                  <div style="padding:14px 18px; border-radius:14px; background:#FBF8F3; display:flex; justify-content:space-between;">
+                    <span style="color:#6B665E;">You Received</span>
+                    <strong style="color:#00A878;">150.00 NEAR (NEAR Mainnet)</strong>
+                  </div>
+                  <div style="padding:14px 18px; border-radius:14px; background:#FBF8F3; display:flex; justify-content:space-between;">
+                    <span style="color:#6B665E;">Status</span>
+                    <strong style="color:#00A878;">Settled & Verified ✓</strong>
+                  </div>
+                </div>
+              `}
+            </div>
+          </div>
+
+          ${renderCursor(showAiDrawer ? 1236 : 460, showAiDrawer ? 145 : 350, (lt > 8.6 && lt < 9.4), true)}
+        </div>
+      `;
+    }
+
+    // Master Dispatcher for any timestamp t in [0, 180]
+    function renderAtTime(t) {
+      const root = document.getElementById("canvas-root");
+      if (t < 12.0) {
+        root.innerHTML = renderScene01Hook(t);
+      } else if (t < 22.0) {
+        root.innerHTML = renderScene02LogoReveal(t, false);
+      } else if (t < 44.0) {
+        root.innerHTML = renderScene03Onboarding(t);
+      } else if (t < 66.0) {
+        root.innerHTML = renderScene04Dashboard(t);
+      } else if (t < 82.0) {
+        root.innerHTML = renderScene05Receive(t);
+      } else if (t < 96.0) {
+        root.innerHTML = renderScene06Convert(t);
+      } else if (t < 102.0) {
+        root.innerHTML = renderScene07MidText(t);
+      } else if (t < 122.0) {
+        root.innerHTML = renderScene08Request(t);
+      } else if (t < 152.0) {
+        root.innerHTML = renderScene09And10Checkout(t);
+      } else if (t < 172.0) {
+        root.innerHTML = renderScene11ActivityAndAi(t);
+      } else {
+        root.innerHTML = renderScene02LogoReveal(t, true);
+      }
+
+      const m = Math.floor(t / 60);
+      const s = Math.floor(t % 60);
+      const disp = document.getElementById("time-display");
+      if (disp) disp.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} / 03:00`;
+      const scrub = document.getElementById("scrubber");
+      if (scrub) scrub.value = t;
+    }
+
+    // Playback state for interactive browser viewing
+    let currentTime = 0;
+    let isPlaying = false;
+    let rafId = null;
+    let lastTs = 0;
+
+    function fitStage() {
+      if (document.body.classList.contains("capture-mode")) return;
+      const stage = document.getElementById("stage");
+      const scale = Math.min((window.innerWidth - 40) / 1920, 0.82);
+      stage.style.transform = `scale(${scale})`;
+      stage.parentElement.style.height = `${Math.round(1080 * scale) + 16}px`;
+    }
+    window.addEventListener("resize", fitStage);
+
+    function togglePlay() {
+      const audio = document.getElementById("vo-audio");
+      const btn = document.getElementById("play-btn");
+      isPlaying = !isPlaying;
+      if (isPlaying) {
+        btn.textContent = "⏸ Pause";
+        audio.currentTime = currentTime;
+        audio.play().catch(() => {});
+        lastTs = performance.now();
+        rafId = requestAnimationFrame(tick);
+      } else {
+        btn.textContent = "▶ Play 3:00 Film";
+        audio.pause();
+        cancelAnimationFrame(rafId);
+      }
+    }
+
+    function seekTo(sec) {
+      currentTime = clamp(sec, 0, 180);
+      const audio = document.getElementById("vo-audio");
+      if (audio) audio.currentTime = currentTime;
+      renderAtTime(currentTime);
+    }
+
+    function tick(now) {
+      if (!isPlaying) return;
+      const audio = document.getElementById("vo-audio");
+      if (audio && !audio.paused) {
+        currentTime = audio.currentTime;
+      } else {
+        currentTime += (now - lastTs) / 1000;
+      }
+      lastTs = now;
+      if (currentTime >= 180) {
+        currentTime = 0;
+        isPlaying = false;
+        document.getElementById("play-btn").textContent = "▶ Play 3:00 Film";
+        return;
+      }
+      renderAtTime(currentTime);
+      rafId = requestAnimationFrame(tick);
+    }
+
+    // Deterministic hook for Playwright headless frame-by-frame rendering
+    window.__setVideoFrame = function(cutName, sec) {
+      document.body.classList.add("capture-mode");
+      const stage = document.getElementById("stage");
+      stage.style.transform = "none";
+      renderAtTime(sec);
+    };
+
+    fitStage();
+    renderAtTime(0);
+  </script>
+</body>
+</html>

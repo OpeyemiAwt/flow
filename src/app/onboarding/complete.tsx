@@ -232,7 +232,7 @@ export function CompleteOnboarding({
             type="button"
             disabled={busy}
             onClick={() => void leaveToSignIn("switch-account")}
-            className="flow-liquid-btn rounded-full px-4 py-2 text-sm font-medium text-[#0B0B0B] dark:text-white disabled:opacity-50 cursor-pointer"
+            className="flow-liquid-btn flow-press rounded-full px-4 py-2 text-sm font-medium text-[#0B0B0B] dark:text-white disabled:opacity-50 cursor-pointer"
           >
             Switch account
           </button>
@@ -240,7 +240,7 @@ export function CompleteOnboarding({
             type="button"
             disabled={busy}
             onClick={() => void leaveToSignIn("signed-out")}
-            className="flow-liquid-btn rounded-full px-4 py-2 text-sm font-medium text-[#555] dark:text-neutral-300 disabled:opacity-50 cursor-pointer"
+            className="flow-liquid-btn flow-press rounded-full px-4 py-2 text-sm font-medium text-[#555] dark:text-neutral-300 disabled:opacity-50 cursor-pointer"
           >
             Sign out
           </button>
@@ -248,7 +248,7 @@ export function CompleteOnboarding({
       </header>
 
       <main className="mx-auto mt-14 max-w-xl">
-        <section className="rounded-[28px] border border-[#E8E4DC] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-7 shadow-[0_12px_36px_rgba(20,15,10,0.05)] sm:p-10">
+        <section className="flow-anim-fade-up rounded-[28px] border border-[#E8E4DC] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-7 shadow-[0_12px_36px_rgba(20,15,10,0.05)] sm:p-10">
           <div className="border-b border-[#F0EDE6] dark:border-white/[0.08] pb-5">
             <p className="text-base font-semibold text-neutral-950 dark:text-white">
               {displayUserName}
@@ -295,7 +295,7 @@ export function CompleteOnboarding({
                   type="button"
                   disabled={busy}
                   onClick={() => void beginProvisioning()}
-                  className="flow-liquid-btn-primary h-11 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
+                  className="flow-liquid-btn-primary flow-press h-11 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
                 >
                   {busy ? "Retrying…" : "Try again"}
                 </button>

@@ -108,14 +108,14 @@ export function FlowAIAssistantDrawer({
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-neutral-950/40 backdrop-blur-xs transition-opacity animate-in fade-in"
+        className="flow-anim-backdrop absolute inset-0 bg-neutral-950/40 backdrop-blur-xs transition-opacity"
         onClick={onClose}
       />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
         <aside
           aria-label="Flow AI assistant drawer"
-          className="w-screen max-w-md bg-white dark:bg-[#141414] border-l border-neutral-200 dark:border-neutral-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+          className="flow-anim-drawer-right w-screen max-w-md bg-white dark:bg-[#141414] border-l border-neutral-200 dark:border-neutral-800 shadow-2xl flex flex-col"
         >
           {/* Header */}
           <div className="p-5 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">

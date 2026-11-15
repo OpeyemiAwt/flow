@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { IconShield } from "../components/icons.tsx";
 
 const messages: Record<string, string> = {
@@ -147,7 +147,27 @@ export function FreshProof({
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const codeInputRef = useRef<HTMLInputElement>(null);
   const { seconds, startClock } = useResendClock();
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) {
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [busy, onCancel]);
+
+  useEffect(() => {
+    if (stage === "code") {
+      codeInputRef.current?.focus();
+    }
+  }, [stage]);
+
+  const digits = Array.from({ length: 8 }, (_, idx) => code[idx] ?? "");
+  const activeDigitIdx = Math.min(code.length, 7);
 
   async function requestCode() {
     setBusy(true);
@@ -168,7 +188,7 @@ export function FreshProof({
     setBusy(true);
     setMessage("");
     try {
-      await send("/api/security/code/verify", { purpose, target, code });
+      await send("/api/security/code/verify", { code: code.trim() });
       await onConfirm();
     } catch (error) {
       setMessage(describe(error));
@@ -177,85 +197,126 @@ export function FreshProof({
   }
 
   return (
-    <section
-      className="flow-card p-6 space-y-4 border-l-4 border-l-[#FF1A1A]"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
       aria-label="Security confirmation"
+      onClick={() => {
+        if (!busy) onCancel();
+      }}
     >
-      <div className="flex items-start gap-3">
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[#FF1A1A]/10 text-[#FF1A1A]">
-          <IconShield size={18} />
-        </span>
-        <div>
-          <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
-            Confirm with a fresh email code
-          </h2>
-          <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-            {children}
-          </p>
+      <section
+        className="flow-card relative w-full max-w-[440px] space-y-5 p-6 sm:p-7 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FF1A1A]/10 text-[#FF1A1A]">
+            <IconShield size={20} />
+          </span>
+          <div>
+            <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">
+              Confirm with a fresh email code
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+              {children}
+            </p>
+          </div>
         </div>
-      </div>
 
-      {stage === "start" ? (
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={requestCode}
-            className="flow-btn-primary px-4 py-2 text-xs"
-          >
-            Send security code
-          </button>
-          <button
-            type="button"
-            className="flow-btn-secondary px-4 py-2 text-xs"
-            disabled={busy}
-            onClick={onCancel}
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <form className="space-y-3" onSubmit={verify}>
-          <label className="block text-xs font-semibold text-[var(--text-primary)]">
-            Security code
-            <input
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              required
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              pattern="[0-9]{8}"
-              maxLength={8}
-              className="flow-input mt-1.5 w-full max-w-xs px-3.5 py-2 font-mono text-sm tracking-widest block"
-            />
-          </label>
-          <div className="flex flex-wrap items-center gap-2.5">
+        {stage === "start" ? (
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
             <button
+              type="button"
               disabled={busy}
-              className="flow-btn-primary px-4 py-2 text-xs"
-            >
-              Confirm change
-            </button>
-            <button
-              type="button"
-              className="flow-btn-secondary px-3.5 py-2 text-xs"
-              disabled={busy || seconds > 0}
               onClick={requestCode}
+              className="flow-btn-primary px-4 py-2.5 text-xs"
             >
-              {seconds ? `Resend in ${seconds}s` : "Resend code"}
+              Send security code
             </button>
             <button
               type="button"
-              className="flow-btn-secondary px-3.5 py-2 text-xs"
+              className="flow-btn-secondary px-4 py-2.5 text-xs"
               disabled={busy}
               onClick={onCancel}
             >
               Cancel
             </button>
           </div>
-        </form>
-      )}
-      <Feedback text={message} />
-    </section>
+        ) : (
+          <form className="space-y-4" onSubmit={verify}>
+            <div
+              className="relative"
+              onClick={() => codeInputRef.current?.focus()}
+            >
+              <label htmlFor="security-code-input" className="sr-only">
+                Security code
+              </label>
+              <input
+                ref={codeInputRef}
+                id="security-code-input"
+                aria-label="Security code"
+                value={code}
+                onChange={(event) => {
+                  const sanitized = event.target.value
+                    .replace(/\D/g, "")
+                    .slice(0, 8);
+                  setCode(sanitized);
+                }}
+                required
+                autoFocus
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                pattern="[0-9]{8}"
+                maxLength={8}
+                className="absolute inset-0 z-10 h-full w-full cursor-text opacity-0"
+              />
+              <div className="grid grid-cols-8 gap-1.5 sm:gap-2">
+                {digits.map((digit, idx) => {
+                  const isActive = idx === activeDigitIdx;
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex h-12 items-center justify-center rounded-xl bg-white dark:bg-[#161616] text-[18px] font-semibold text-[#0B0B0B] dark:text-white shadow-2xs transition sm:h-14 sm:text-[20px] ${
+                        isActive
+                          ? "border-2 border-[#FF1A1A]"
+                          : "border border-[#DCDCDC] dark:border-white/[0.12]"
+                      }`}
+                    >
+                      {digit}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                disabled={busy || code.length < 8}
+                className="flow-btn-primary px-4 py-2.5 text-xs"
+              >
+                {busy ? "Confirming..." : "Confirm & continue"}
+              </button>
+              <button
+                type="button"
+                className="flow-btn-secondary px-3.5 py-2.5 text-xs"
+                disabled={busy || seconds > 0}
+                onClick={requestCode}
+              >
+                {seconds ? `Resend in ${seconds}s` : "Resend code"}
+              </button>
+              <button
+                type="button"
+                className="flow-btn-secondary px-3.5 py-2.5 text-xs"
+                disabled={busy}
+                onClick={onCancel}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+        <Feedback text={message} />
+      </section>
+    </div>
   );
 }

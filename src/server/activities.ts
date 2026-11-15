@@ -160,9 +160,17 @@ function accountActivityRows(accountId: string) {
         am.account_id,
         am.wallet_id,
         am.destination_network AS network,
-        'near-mainnet'::text AS chain_id,
-        'near'::text AS ecosystem,
-        'FLOW_CROSS_CHAIN_SETTLEMENT'::text AS activity_type,
+        am.destination_network AS chain_id,
+        CASE
+          WHEN am.destination_network LIKE 'solana%' THEN 'solana'
+          WHEN am.destination_network LIKE 'base%' THEN 'base'
+          WHEN am.destination_network LIKE 'ethereum%' THEN 'ethereum'
+          ELSE 'near'
+        END::text AS ecosystem,
+        CASE
+          WHEN am.status = 'SETTLED' THEN 'FLOW_CROSS_CHAIN_SETTLEMENT'
+          ELSE 'FLOW_PAYMENT'
+        END::text AS activity_type,
         'INCOMING'::text AS direction,
         COALESCE(am.destination_tx_hash, am.source_tx_hash, am.public_id) AS tx_hash,
         0::integer AS event_index,
@@ -197,6 +205,11 @@ function accountActivityRows(accountId: string) {
         am.updated_at
       FROM flow.add_money_intents am
       WHERE am.account_id = ${accountId}::uuid
+        AND NOT (
+          am.source_tx_hash IS NULL
+          AND am.destination_tx_hash IS NULL
+          AND (am.status = 'EXPIRED' OR (am.status = 'AWAITING_DEPOSIT' AND am.expires_at < CURRENT_TIMESTAMP))
+        )
         AND NOT EXISTS (
           SELECT 1 FROM flow.wallet_activities indexed
           WHERE indexed.account_id = am.account_id

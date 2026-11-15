@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SegmentedTabPill } from "./motion.tsx";
 
 import type { AccountNotification } from "../server/notifications-service.ts";
 import {
@@ -121,7 +122,7 @@ export function NotificationsDrawer({
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-neutral-950/40 backdrop-blur-xs transition-opacity animate-in fade-in"
+        className="flow-anim-backdrop absolute inset-0 bg-neutral-950/40 backdrop-blur-xs transition-opacity"
         onClick={onClose}
       />
 
@@ -129,7 +130,7 @@ export function NotificationsDrawer({
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
         <aside
           aria-label="Account notifications drawer"
-          className="w-screen max-w-md bg-white dark:bg-[#141414] border-l border-neutral-200 dark:border-neutral-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+          className="flow-anim-drawer-right w-screen max-w-md bg-white dark:bg-[#141414] border-l border-neutral-200 dark:border-neutral-800 shadow-2xl flex flex-col"
         >
           {/* Header */}
           <div className="p-6 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
@@ -177,25 +178,17 @@ export function NotificationsDrawer({
           </div>
 
           {/* Filter Pills */}
-          <div className="px-6 py-3 border-b border-neutral-100 dark:border-neutral-800 flex items-center gap-2">
-            {(["ALL", "PAYMENTS", "SYSTEM"] as const).map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setFilter(cat)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                  filter === cat
-                    ? "bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs"
-                    : "text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white bg-neutral-100 dark:bg-neutral-800"
-                }`}
-              >
-                {cat === "ALL"
-                  ? "All"
-                  : cat === "PAYMENTS"
-                    ? "Payments"
-                    : "System"}
-              </button>
-            ))}
+          <div className="px-6 py-3 border-b border-neutral-100 dark:border-neutral-800 flex items-center">
+            <SegmentedTabPill
+              tabs={[
+                { id: "ALL", label: "All" },
+                { id: "PAYMENTS", label: "Payments" },
+                { id: "SYSTEM", label: "System" },
+              ] as const}
+              activeTab={filter}
+              onChange={setFilter}
+              size="sm"
+            />
           </div>
 
           {/* List */}
@@ -226,16 +219,34 @@ export function NotificationsDrawer({
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 shrink-0">
                         {item.type === "PAYMENT_RECEIVED" ? (
-                          <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs">
-                            ↓
+                          <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M17 7 7 17" />
+                              <path d="M17 17H7V7" />
+                            </svg>
                           </div>
                         ) : item.type === "DEPOSIT_DETECTED" ? (
-                          <div className="h-7 w-7 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
-                            ✓
+                          <div className="h-7 w-7 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M12 3v12" />
+                              <path d="m7 10 5 5 5-5" />
+                              <path d="M5 20h14" />
+                            </svg>
+                          </div>
+                        ) : item.type === "PAYMENT_LINK_CREATED" ? (
+                          <div className="h-7 w-7 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 flex items-center justify-center">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                            </svg>
                           </div>
                         ) : (
-                          <div className="h-7 w-7 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 flex items-center justify-center font-bold text-xs">
-                            ℹ
+                          <div className="h-7 w-7 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 flex items-center justify-center">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="M12 16v-4" />
+                              <path d="M12 8h.01" />
+                            </svg>
                           </div>
                         )}
                       </div>

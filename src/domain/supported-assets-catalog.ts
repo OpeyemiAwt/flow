@@ -685,3 +685,109 @@ export function validateEcosystemAddress(
       "NEAR requires a named account (e.g. name.near / name.testnet) or 64-character hex implicit account.",
   };
 }
+
+export interface NetworkGasReserve {
+  symbol: string;
+  decimals: number;
+  minAtomic: bigint;
+  minDisplay: string;
+  networkLabel: string;
+}
+
+export const NETWORK_GAS_RESERVES: Record<string, NetworkGasReserve> = {
+  "ethereum-mainnet": {
+    symbol: "ETH",
+    decimals: 18,
+    minAtomic: 500_000_000_000_000n,
+    minDisplay: "0.0005",
+    networkLabel: "Ethereum",
+  },
+  "base-mainnet": {
+    symbol: "ETH",
+    decimals: 18,
+    minAtomic: 10_000_000_000_000n,
+    minDisplay: "0.00001",
+    networkLabel: "Base",
+  },
+  "solana-mainnet": {
+    symbol: "SOL",
+    decimals: 9,
+    minAtomic: 10_000n,
+    minDisplay: "0.00001",
+    networkLabel: "Solana",
+  },
+  "near-mainnet": {
+    symbol: "NEAR",
+    decimals: 24,
+    minAtomic: 10_000_000_000_000_000_000_000n,
+    minDisplay: "0.01",
+    networkLabel: "NEAR",
+  },
+};
+
+export type NetworkGasCheckResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: string;
+      gasSymbol: string;
+      networkLabel: string;
+      minDisplay: string;
+      isNativeSource: boolean;
+    };
+
+/**
+ * Checks whether the wallet holds enough native gas on `networkKey` to
+ * broadcast an outgoing transaction (either a token transfer requiring native
+ * gas, or a native transfer that must leave enough for network fees).
+ */
+export function checkNetworkGasBalance(params: {
+  networkKey: string;
+  sourceStandard: string;
+  requestedAmountAtomic: bigint;
+  nativeBalanceAtomic: bigint;
+}): NetworkGasCheckResult {
+  const reserve = NETWORK_GAS_RESERVES[params.networkKey];
+  if (!reserve) return { ok: true };
+
+  const isNative = params.sourceStandard === "NATIVE";
+  const requiredNative = isNative
+    ? params.requestedAmountAtomic + reserve.minAtomic
+    : reserve.minAtomic;
+
+  if (params.nativeBalanceAtomic >= requiredNative) {
+    return { ok: true };
+  }
+
+  const reason = isNative
+    ? `Leave at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas.`
+    : `You need at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} to pay network gas for this transaction.`;
+
+  return {
+    ok: false,
+    reason,
+    gasSymbol: reserve.symbol,
+    networkLabel: reserve.networkLabel,
+    minDisplay: reserve.minDisplay,
+    isNativeSource: isNative,
+  };
+}
+
+/**
+ * Returns the maximum atomic amount that can be sent or converted from
+ * `balanceAtomic`, reserving the network gas buffer when the source asset is NATIVE.
+ */
+export function computeMaxSendableAtomic(params: {
+  networkKey: string;
+  sourceStandard: string;
+  balanceAtomic: bigint;
+}): bigint {
+  if (params.sourceStandard !== "NATIVE") {
+    return params.balanceAtomic > 0n ? params.balanceAtomic : 0n;
+  }
+  const reserve = NETWORK_GAS_RESERVES[params.networkKey];
+  const minReserve = reserve?.minAtomic ?? 0n;
+  return params.balanceAtomic > minReserve
+    ? params.balanceAtomic - minReserve
+    : 0n;
+}

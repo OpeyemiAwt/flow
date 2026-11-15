@@ -3,27 +3,37 @@
 import { useState } from "react";
 import Link from "next/link";
 import { FlowLogo } from "../components/flow-logo";
+import { triggerHaptic } from "../components/haptics";
+import {
+  MotionHeadlineLine,
+  MotionParallaxCard,
+  MotionReveal,
+} from "../components/motion";
 
 const FAQS = [
   {
     q: "What is FLOW?",
-    a: "FLOW is a flexible payment platform that lets individuals and businesses get paid in the asset and network they prefer, while payers use the wallet or asset they already hold.",
+    a: "FLOW is a multi-chain wallet and payment platform across Ethereum, Base, Solana, and NEAR. It lets individuals and businesses get paid in the asset and network they want, while payers use the asset and chain they already hold.",
   },
   {
-    q: "Who can use FLOW?",
-    a: "Creators, freelancers, consultants, and global businesses use FLOW to accept payments via shareable links, QR codes, and invoices across Ethereum, Base, Solana, and NEAR.",
+    q: "How do payment links, QR codes, and cross-chain routing work?",
+    a: "Create a payment link or QR code in seconds and choose your settlement asset. Anyone can pay via guest checkout using a supported wallet or exchange—FLOW quotes the cross-chain route live via NEAR Intents and settles directly into your workspace.",
   },
   {
-    q: "How can I get paid?",
-    a: "Choose your preferred settlement asset—such as USDC, ETH, SOL, or NEAR—and generate a payment link or QR code in seconds. Share it anywhere and receive funds directly in your workspace.",
+    q: "What can I do inside my FLOW account?",
+    a: "You get permanent multi-chain addresses for direct receive, Send & Convert across supported networks, cross-chain Add Money deposits, shareable Payment Links, real-time USD balance tracking, activity history, and instant notifications.",
   },
   {
-    q: "Can I use FLOW for my business?",
-    a: "Yes. FLOW supports dedicated business accounts with multi-member team access, role permissions, invoice tracking, and unified multi-chain activity reporting.",
+    q: "How are FLOW wallets and accounts secured?",
+    a: "Sign in with Google or an 8-digit email verification code. FLOW uses policy-protected custody, step-up verification for sensitive actions, and deterministic multi-chain addresses without exposing raw seed phrases.",
   },
   {
-    q: "Which payment methods are supported?",
-    a: "FLOW supports major digital assets and stablecoins across Ethereum, Base, Solana, and NEAR, with both direct wallet payments and exchange withdrawals.",
+    q: "Can I use FLOW for my business and team?",
+    a: "Yes. FLOW supports dedicated business accounts alongside personal accounts, complete with team invitations, role-based permissions, shared multi-chain balances, and unified activity tracking.",
+  },
+  {
+    q: "Which networks and assets are supported?",
+    a: "FLOW supports Ethereum, Base, Solana, and NEAR, including native assets (ETH, SOL, NEAR) and major stablecoins (USDC, USDT), with cross-chain routing across dozens of supported tokens.",
   },
 ];
 
@@ -120,7 +130,7 @@ export function HomePageClient() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="border-b border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3] dark:bg-[#0B0B0B] px-5 pb-6 pt-2 md:hidden">
+          <div className="flow-anim-fade-up border-b border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3] dark:bg-[#0B0B0B] px-5 pb-6 pt-2 md:hidden">
             <div className="flex flex-col gap-3 text-[15px] font-medium text-[#1F1F1F] dark:text-neutral-200">
               <a
                 href="#experience"
@@ -175,60 +185,82 @@ export function HomePageClient() {
           <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-6">
             <div className="lg:col-span-5">
               <h1 className="font-serif text-[44px] font-normal leading-[1.06] tracking-[-0.025em] text-[#0B0B0B] dark:text-white sm:text-[54px] lg:text-[60px]">
-                Get paid in
+                <MotionHeadlineLine delayMs={0}>
+                  Get paid in
+                </MotionHeadlineLine>
                 <br />
-                what you want
+                <MotionHeadlineLine delayMs={60}>
+                  what you want
+                </MotionHeadlineLine>
                 <br />
-                while others pay
+                <MotionHeadlineLine delayMs={120}>
+                  while others pay
+                </MotionHeadlineLine>
                 <br />
-                <span className="relative inline-block">
-                  with what they have.
-                  <svg
-                    viewBox="0 0 340 14"
-                    fill="none"
-                    className="mt-1 w-full text-[#FF1A1A]"
-                    preserveAspectRatio="none"
-                  >
-                    <path
-                      d="M3 9.5C82 3.5 235 2.5 337 10.5"
-                      stroke="currentColor"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </span>
+                <MotionHeadlineLine delayMs={180}>
+                  <span className="relative inline-block">
+                    with what they have.
+                    <svg
+                      viewBox="0 0 340 14"
+                      fill="none"
+                      className="mt-1 w-full text-[#FF1A1A]"
+                      preserveAspectRatio="none"
+                    >
+                      <path
+                        d="M3 9.5C82 3.5 235 2.5 337 10.5"
+                        stroke="currentColor"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                </MotionHeadlineLine>
               </h1>
 
-              <p className="mt-5 max-w-[420px] text-[15px] leading-[1.6] text-[#4A4A4A] dark:text-neutral-400 sm:text-[16px]">
-                A more flexible way to receive payments, so you can get paid on
-                your terms, from anyone, anywhere.
-              </p>
+              <MotionReveal immediate delayMs={200} distancePx={10}>
+                <p className="mt-5 max-w-[420px] text-[15px] leading-[1.6] text-[#4A4A4A] dark:text-neutral-400 sm:text-[16px]">
+                  A more flexible way to receive payments, so you can get paid
+                  on your terms, from anyone, anywhere.
+                </p>
+              </MotionReveal>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Link
-                  href="/sign-in"
-                  className="flow-liquid-btn-primary inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-[14px] font-semibold"
-                >
-                  <span>Get Started</span>
-                  <span aria-hidden="true">→</span>
-                </Link>
-                <a
-                  href="#experience"
-                  className="flow-liquid-btn inline-flex h-12 items-center justify-center rounded-full px-7 text-[14px] font-semibold text-[#0B0B0B] dark:text-white"
-                >
-                  See How It Works
-                </a>
-              </div>
+              <MotionReveal immediate delayMs={260} distancePx={10}>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <Link
+                    href="/sign-in"
+                    onClick={() => triggerHaptic("medium")}
+                    className="group flow-liquid-btn-primary flow-press inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-[14px] font-semibold"
+                  >
+                    <span>Get Started</span>
+                    <span
+                      aria-hidden="true"
+                      className="flow-anim-arrow-grow transition-transform duration-200 group-hover:translate-x-1"
+                      style={{ animationDelay: "340ms" }}
+                    >
+                      →
+                    </span>
+                  </Link>
+                  <a
+                    href="#experience"
+                    onClick={() => triggerHaptic("light")}
+                    className="flow-liquid-btn flow-press inline-flex h-12 items-center justify-center rounded-full px-7 text-[14px] font-semibold text-[#0B0B0B] dark:text-white"
+                  >
+                    See How It Works
+                  </a>
+                </div>
+              </MotionReveal>
             </div>
 
             <div className="lg:col-span-7">
-              <div className="mx-auto max-w-[680px]">
-                <img
-                  src="/assets/hero-phones.png"
-                  alt="FLOW payment received, brand screen, and QR code scan on three smartphones"
-                  className="h-auto w-full object-contain rounded-3xl"
-                />
-              </div>
+              <MotionReveal immediate delayMs={180} distancePx={14}>
+                <MotionParallaxCard className="mx-auto max-w-[680px]">
+                  <img
+                    src="/assets/hero-phones.png"
+                    alt="FLOW payment received, brand screen, and QR code scan on three smartphones"
+                    className="flow-anim-float h-auto w-full object-contain rounded-3xl"
+                  />
+                </MotionParallaxCard>
+              </MotionReveal>
             </div>
           </div>
         </section>
@@ -276,26 +308,34 @@ export function HomePageClient() {
           id="experience"
           className="mx-auto max-w-[1200px] px-5 py-16 text-center sm:px-8 lg:py-24"
         >
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
-            THE FLOW EXPERIENCE
-          </div>
-          <h2 className="mx-auto mt-3 max-w-[540px] font-serif text-[36px] font-normal leading-[1.1] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[48px]">
-            Payments that work
-            <br />
-            on your terms.
-          </h2>
-          <p className="mx-auto mt-4 max-w-[500px] text-[15px] leading-[1.6] text-[#555555] dark:text-neutral-400 sm:text-[16px]">
-            Receive money the way you want, from the people, platforms, and
-            markets you work with.
-          </p>
+          <MotionReveal>
+            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
+              THE FLOW EXPERIENCE
+            </div>
+            <h2 className="mx-auto mt-3 max-w-[540px] font-serif text-[36px] font-normal leading-[1.1] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[48px]">
+              <MotionHeadlineLine onScroll delayMs={0}>
+                Payments that work
+              </MotionHeadlineLine>
+              <br />
+              <MotionHeadlineLine onScroll delayMs={80}>
+                on your terms.
+              </MotionHeadlineLine>
+            </h2>
+            <p className="mx-auto mt-4 max-w-[500px] text-[15px] leading-[1.6] text-[#555555] dark:text-neutral-400 sm:text-[16px]">
+              Receive money the way you want, from the people, platforms, and
+              markets you work with.
+            </p>
+          </MotionReveal>
 
-          <div className="mx-auto mt-10 max-w-[520px]">
-            <img
-              src="/assets/phone-pedestal.png"
-              alt="FLOW mobile screen showing You're getting paid $249.00 and Receive in USDC"
-              className="h-auto w-full object-contain rounded-3xl"
-            />
-          </div>
+          <MotionReveal delayMs={90} distancePx={14}>
+            <MotionParallaxCard className="mx-auto mt-10 max-w-[520px]">
+              <img
+                src="/assets/phone-pedestal.png"
+                alt="FLOW mobile screen showing You're getting paid $249.00 and Receive in USDC"
+                className="h-auto w-full object-contain rounded-3xl"
+              />
+            </MotionParallaxCard>
+          </MotionReveal>
         </section>
 
         {/* 5. BUILT FOR REAL LIFE */}
@@ -304,24 +344,28 @@ export function HomePageClient() {
           className="mx-auto max-w-[1200px] px-5 pb-16 pt-4 sm:px-8 lg:pb-24"
         >
           <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-12">
-            <div className="lg:col-span-6">
-              <div className="mx-auto max-w-[500px]">
+            <MotionReveal distancePx={56} durationMs={520} className="lg:col-span-6">
+              <MotionParallaxCard className="mx-auto max-w-[500px]">
                 <img
                   src="/assets/phone-hand.png"
                   alt="Hand holding smartphone running FLOW app"
                   className="h-auto w-full object-contain rounded-3xl"
                 />
-              </div>
-            </div>
+              </MotionParallaxCard>
+            </MotionReveal>
 
-            <div className="lg:col-span-6">
+            <MotionReveal delayMs={70} className="lg:col-span-6">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                 BUILT FOR REAL LIFE
               </div>
               <h2 className="mt-3 font-serif text-[34px] font-normal leading-[1.1] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[44px]">
-                A simpler, more
+                <MotionHeadlineLine onScroll delayMs={0}>
+                  A simpler, more
+                </MotionHeadlineLine>
                 <br />
-                flexible way to get paid.
+                <MotionHeadlineLine onScroll delayMs={80}>
+                  flexible way to get paid.
+                </MotionHeadlineLine>
               </h2>
               <p className="mt-4 max-w-[460px] text-[15px] leading-[1.65] text-[#555555] dark:text-neutral-400">
                 Whether you&apos;re a creator, freelancer, business, or a global
@@ -378,7 +422,7 @@ export function HomePageClient() {
                   <span>For individuals and businesses alike</span>
                 </li>
               </ul>
-            </div>
+            </MotionReveal>
           </div>
         </section>
 
@@ -386,13 +430,16 @@ export function HomePageClient() {
         <section className="bg-[#0B0B0B] px-5 py-16 text-white sm:px-8 lg:py-20">
           <div className="mx-auto max-w-[1120px] space-y-5">
             {/* Panel 1 */}
-            <div className="grid items-center overflow-hidden rounded-[26px] border border-white/10 bg-[#121212] md:grid-cols-12">
+            <MotionReveal>
+              <div className="flow-card-lift grid items-center overflow-hidden rounded-[26px] border border-white/10 bg-[#121212] md:grid-cols-12">
               <div className="p-7 sm:p-10 md:col-span-6">
                 <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                   RECEIVE PAYMENTS
                 </div>
                 <h3 className="mt-2.5 font-serif text-[28px] font-normal leading-[1.15] text-white sm:text-[34px]">
-                  Get paid, your way.
+                  <MotionHeadlineLine onScroll delayMs={0}>
+                    Get paid, your way.
+                  </MotionHeadlineLine>
                 </h3>
                 <p className="mt-3 max-w-[360px] text-[14px] leading-[1.6] text-white/65">
                   Accept payments from anyone and receive them in the value that
@@ -407,15 +454,19 @@ export function HomePageClient() {
                 />
               </div>
             </div>
+            </MotionReveal>
 
             {/* Panel 2 */}
-            <div className="grid items-center overflow-hidden rounded-[26px] border border-white/10 bg-[#121212] md:grid-cols-12">
+            <MotionReveal delayMs={70}>
+              <div className="flow-card-lift grid items-center overflow-hidden rounded-[26px] border border-white/10 bg-[#121212] md:grid-cols-12">
               <div className="p-7 sm:p-10 md:col-span-6">
                 <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                   CHECKOUT
                 </div>
                 <h3 className="mt-2.5 font-serif text-[28px] font-normal leading-[1.15] text-white sm:text-[34px]">
-                  A smoother way to pay.
+                  <MotionHeadlineLine onScroll delayMs={0}>
+                    A smoother way to pay.
+                  </MotionHeadlineLine>
                 </h3>
                 <p className="mt-3 max-w-[360px] text-[14px] leading-[1.6] text-white/65">
                   Give your customers a fast, reliable, and beautiful way to pay
@@ -430,17 +481,23 @@ export function HomePageClient() {
                 />
               </div>
             </div>
+            </MotionReveal>
 
             {/* Panel 3 */}
-            <div className="grid items-center overflow-hidden rounded-[26px] border border-white/10 bg-[#121212] md:grid-cols-12">
+            <MotionReveal delayMs={140}>
+              <div className="flow-card-lift grid items-center overflow-hidden rounded-[26px] border border-white/10 bg-[#121212] md:grid-cols-12">
               <div className="p-7 sm:p-10 md:col-span-6">
                 <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                   MOVE VALUE
                 </div>
                 <h3 className="mt-2.5 font-serif text-[28px] font-normal leading-[1.15] text-white sm:text-[34px]">
-                  Move across ecosystems,
+                  <MotionHeadlineLine onScroll delayMs={0}>
+                    Move across ecosystems,
+                  </MotionHeadlineLine>
                   <br />
-                  without the friction.
+                  <MotionHeadlineLine onScroll delayMs={80}>
+                    without the friction.
+                  </MotionHeadlineLine>
                 </h3>
                 <p className="mt-3 max-w-[360px] text-[14px] leading-[1.6] text-white/65">
                   Send, receive, and use your money across different platforms
@@ -455,25 +512,30 @@ export function HomePageClient() {
                 />
               </div>
             </div>
+            </MotionReveal>
           </div>
         </section>
 
         {/* 7. WHY FLOW */}
         <section className="mx-auto max-w-[1200px] px-5 py-16 sm:px-8 lg:py-24">
           <div className="grid items-start gap-8 lg:grid-cols-12">
-            <div className="lg:col-span-4">
+            <MotionReveal className="lg:col-span-4">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                 WHY FLOW
               </div>
               <h2 className="mt-2.5 font-serif text-[32px] font-normal leading-[1.12] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[40px]">
-                More freedom
+                <MotionHeadlineLine onScroll delayMs={0}>
+                  More freedom
+                </MotionHeadlineLine>
                 <br />
-                for the way you work.
+                <MotionHeadlineLine onScroll delayMs={80}>
+                  for the way you work.
+                </MotionHeadlineLine>
               </h2>
-            </div>
+            </MotionReveal>
 
             <div className="grid gap-4 sm:grid-cols-3 lg:col-span-8">
-              <div className="rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
+              <MotionReveal delayMs={40} className="flow-card-lift rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
                 <div className="text-[#FF1A1A]">
                   <svg
                     viewBox="0 0 24 24"
@@ -493,9 +555,9 @@ export function HomePageClient() {
                 <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A] dark:text-neutral-400">
                   Get paid in the value that suits you.
                 </p>
-              </div>
+              </MotionReveal>
 
-              <div className="rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
+              <MotionReveal delayMs={100} className="flow-card-lift rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
                 <div className="text-[#FF1A1A]">
                   <svg
                     viewBox="0 0 24 24"
@@ -513,9 +575,9 @@ export function HomePageClient() {
                 <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A] dark:text-neutral-400">
                   Simple, fast, and frictionless payments.
                 </p>
-              </div>
+              </MotionReveal>
 
-              <div className="rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
+              <MotionReveal delayMs={160} className="flow-card-lift rounded-[24px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-6">
                 <div className="text-[#FF1A1A]">
                   <svg
                     viewBox="0 0 24 24"
@@ -536,7 +598,7 @@ export function HomePageClient() {
                 <p className="mt-1.5 text-[13px] leading-[1.55] text-[#5A5A5A] dark:text-neutral-400">
                   Built for individuals, creators, and growing businesses.
                 </p>
-              </div>
+              </MotionReveal>
             </div>
           </div>
         </section>
@@ -546,17 +608,24 @@ export function HomePageClient() {
           id="get-paid-anywhere"
           className="mx-auto max-w-[1200px] px-5 pb-16 sm:px-8"
         >
+          <MotionReveal>
           <div className="grid items-center gap-8 rounded-[32px] bg-[#F1EEE8] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] p-7 sm:p-12 lg:grid-cols-12">
             <div className="lg:col-span-4">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF1A1A]">
                 GET PAID ANYWHERE
               </div>
               <h2 className="mt-2.5 font-serif text-[32px] font-normal leading-[1.12] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[38px]">
-                Turn any payment
+                <MotionHeadlineLine onScroll delayMs={0}>
+                  Turn any payment
+                </MotionHeadlineLine>
                 <br />
-                into a simple link
+                <MotionHeadlineLine onScroll delayMs={70}>
+                  into a simple link
+                </MotionHeadlineLine>
                 <br />
-                or QR.
+                <MotionHeadlineLine onScroll delayMs={140}>
+                  or QR.
+                </MotionHeadlineLine>
               </h2>
               <p className="mt-4 text-[14px] leading-[1.6] text-[#5A5A5A] dark:text-neutral-400">
                 Share a link, show your QR, or send an invoice — and get paid in
@@ -565,15 +634,17 @@ export function HomePageClient() {
             </div>
 
             <div className="flex justify-center lg:col-span-4">
-              <img
-                src="/assets/qr-standee.png"
-                alt="FLOW Scan to pay QR standee"
-                className="h-auto w-full max-w-[250px] object-contain rounded-2xl"
-              />
+              <MotionParallaxCard>
+                <img
+                  src="/assets/qr-standee.png"
+                  alt="FLOW Scan to pay QR standee"
+                  className="h-auto w-full max-w-[250px] object-contain rounded-2xl"
+                />
+              </MotionParallaxCard>
             </div>
 
             <div className="space-y-3 lg:col-span-4">
-              <div className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
+              <div className="flow-card-lift flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                   <svg
                     viewBox="0 0 24 24"
@@ -596,7 +667,7 @@ export function HomePageClient() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
+              <div className="flow-card-lift flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                   <svg
                     viewBox="0 0 24 24"
@@ -622,7 +693,7 @@ export function HomePageClient() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
+              <div className="flow-card-lift flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1B1B1B] border border-transparent dark:border-white/[0.06] p-4 shadow-2xs">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F8F6F3] dark:bg-white/[0.08] text-[#0B0B0B] dark:text-white">
                   <svg
                     viewBox="0 0 24 24"
@@ -648,6 +719,7 @@ export function HomePageClient() {
               </div>
             </div>
           </div>
+          </MotionReveal>
         </section>
 
         {/* 9. LOVED BY PEOPLE LIKE YOU */}
@@ -658,16 +730,22 @@ export function HomePageClient() {
                 LOVED BY PEOPLE LIKE YOU
               </div>
               <h2 className="mt-2.5 font-serif text-[30px] font-normal leading-[1.15] tracking-[-0.02em] text-[#0B0B0B] dark:text-white sm:text-[36px]">
-                Trusted by creators,
+                <MotionHeadlineLine onScroll delayMs={0}>
+                  Trusted by creators,
+                </MotionHeadlineLine>
                 <br />
-                freelancers, and
+                <MotionHeadlineLine onScroll delayMs={70}>
+                  freelancers, and
+                </MotionHeadlineLine>
                 <br />
-                businesses worldwide.
+                <MotionHeadlineLine onScroll delayMs={140}>
+                  businesses worldwide.
+                </MotionHeadlineLine>
               </h2>
             </div>
 
             <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-center lg:col-span-7">
-              <div className="max-w-[460px]">
+              <div key={testimonialIdx} className="flow-anim-fade-up max-w-[460px]">
                 <p className="text-[16px] leading-[1.6] text-[#1F1F1F] dark:text-neutral-200 sm:text-[18px]">
                   &ldquo;{activeTestimonial.quote}&rdquo;
                 </p>
@@ -698,7 +776,7 @@ export function HomePageClient() {
                         (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length,
                     )
                   }
-                  className="flow-liquid-btn flex h-10 w-10 items-center justify-center rounded-full text-[#0B0B0B] dark:text-white cursor-pointer"
+                  className="flow-liquid-btn flow-press flex h-10 w-10 items-center justify-center rounded-full text-[#0B0B0B] dark:text-white cursor-pointer"
                 >
                   ←
                 </button>
@@ -708,7 +786,7 @@ export function HomePageClient() {
                   onClick={() =>
                     setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length)
                   }
-                  className="flow-liquid-btn-primary flex h-10 w-10 items-center justify-center rounded-full cursor-pointer"
+                  className="flow-liquid-btn-primary flow-press flex h-10 w-10 items-center justify-center rounded-full cursor-pointer"
                 >
                   →
                 </button>
@@ -728,7 +806,9 @@ export function HomePageClient() {
                 FAQ
               </div>
               <h2 className="mt-2 font-serif text-[30px] font-normal leading-[1.15] text-[#0B0B0B] dark:text-white sm:text-[36px]">
-                Frequently asked questions.
+                <MotionHeadlineLine onScroll delayMs={0}>
+                  Frequently asked questions.
+                </MotionHeadlineLine>
               </h2>
             </div>
             <a
@@ -747,7 +827,10 @@ export function HomePageClient() {
                 <div key={item.q}>
                   <button
                     type="button"
-                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    onClick={() => {
+                      triggerHaptic("light");
+                      setOpenFaq(isOpen ? null : idx);
+                    }}
                     className="flex w-full items-center justify-between py-4 text-left text-[14px] font-semibold text-[#0B0B0B] dark:text-white transition hover:text-[#FF1A1A] sm:text-[15px] cursor-pointer"
                   >
                     <span>{item.q}</span>
@@ -756,7 +839,7 @@ export function HomePageClient() {
                     </span>
                   </button>
                   {isOpen && (
-                    <div className="pb-4 pr-8 text-[14px] leading-[1.6] text-[#555555] dark:text-neutral-400">
+                    <div className="flow-anim-fade-up pb-4 pr-8 text-[14px] leading-[1.6] text-[#555555] dark:text-neutral-400">
                       {item.a}
                     </div>
                   )}
@@ -768,12 +851,17 @@ export function HomePageClient() {
 
         {/* 11. FINAL CTA BANNER */}
         <section className="mx-auto max-w-[1200px] px-5 pb-16 sm:px-8">
+          <MotionReveal>
           <div className="grid items-center overflow-hidden rounded-[28px] bg-[#0B0B0B] dark:bg-[#141414] border border-transparent dark:border-white/[0.08] text-white md:grid-cols-12">
             <div className="p-8 sm:p-12 md:col-span-6">
               <h2 className="font-serif text-[32px] font-normal leading-[1.1] text-white sm:text-[40px]">
-                Start getting paid
+                <MotionHeadlineLine onScroll delayMs={0}>
+                  Start getting paid
+                </MotionHeadlineLine>
                 <br />
-                with FLOW.
+                <MotionHeadlineLine onScroll delayMs={80}>
+                  with FLOW.
+                </MotionHeadlineLine>
               </h2>
               <p className="mt-3 max-w-[340px] text-[13px] leading-[1.6] text-white/65 sm:text-[14px]">
                 Join individuals and businesses around the world who get paid on
@@ -804,6 +892,7 @@ export function HomePageClient() {
               />
             </div>
           </div>
+          </MotionReveal>
         </section>
       </main>
 
@@ -928,35 +1017,13 @@ export function HomePageClient() {
 
           <div className="flex items-center gap-4 text-[#0B0B0B] dark:text-white">
             <a
-              href="#top"
-              aria-label="X"
-              className="text-[13px] font-bold hover:text-[#FF1A1A]"
+              href="https://x.com/use_flowapp"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="FLOW on X (formerly Twitter)"
+              className="text-[14px] font-bold hover:text-[#FF1A1A] transition-colors"
             >
               𝕏
-            </a>
-            <a
-              href="#top"
-              aria-label="Instagram"
-              className="hover:text-[#FF1A1A]"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4"
-              >
-                <rect x="2" y="2" width="20" height="20" rx="5" />
-                <circle cx="12" cy="12" r="4" />
-                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" />
-              </svg>
-            </a>
-            <a
-              href="#top"
-              aria-label="LinkedIn"
-              className="text-[12px] font-bold hover:text-[#FF1A1A]"
-            >
-              in
             </a>
           </div>
         </div>

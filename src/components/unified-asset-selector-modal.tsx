@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SegmentedTabPill } from "./motion.tsx";
 import type {
   DiscoveredToken,
   TokenCapability,
@@ -15,6 +16,7 @@ export interface UnifiedAssetSelectorModalProps {
   subtitle?: string;
   filterCapability?: TokenCapability;
   selectableIds?: readonly string[];
+  excludeNearNative?: boolean;
   darkTheme?: boolean;
 }
 
@@ -26,6 +28,7 @@ export function UnifiedAssetSelectorModal({
   subtitle,
   filterCapability,
   selectableIds,
+  excludeNearNative = false,
   darkTheme = false,
 }: UnifiedAssetSelectorModalProps) {
   const [tokens, setTokens] = useState<DiscoveredToken[]>([]);
@@ -68,6 +71,13 @@ export function UnifiedAssetSelectorModal({
   if (!isOpen) return null;
 
   const filtered = tokens.filter((t) => {
+    if (
+      excludeNearNative &&
+      t.networkKey === "near-mainnet" &&
+      t.symbol.toUpperCase() === "NEAR"
+    ) {
+      return false;
+    }
     if (selectableIds && !selectableIds.includes(t.id)) return false;
     // Search filter
     const q = search.trim().toLowerCase();
@@ -104,7 +114,7 @@ export function UnifiedAssetSelectorModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-neutral-950/60 backdrop-blur-xs transition-opacity animate-in fade-in"
+        className="flow-anim-backdrop fixed inset-0 bg-neutral-950/60 backdrop-blur-xs transition-opacity"
         onClick={onClose}
       />
 
@@ -113,7 +123,7 @@ export function UnifiedAssetSelectorModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="asset-selector-title"
-          className={`relative w-full max-w-lg rounded-[28px] border shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-150 ${
+          className={`flow-anim-modal relative w-full max-w-lg rounded-[28px] border shadow-2xl p-6 overflow-hidden ${
             isDark
               ? "bg-[#121212] border-neutral-800 text-white"
               : "bg-white dark:bg-[#141414] border-neutral-200/90 dark:border-neutral-800 text-neutral-950 dark:text-white"
@@ -202,30 +212,18 @@ export function UnifiedAssetSelectorModal({
           </div>
 
           {/* Filter Categories */}
-          <div className="flex items-center gap-1.5 pb-3 overflow-x-auto no-scrollbar">
-            {[
-              { id: "ALL", label: "All assets" },
-              { id: "STABLE", label: "Stablecoins" },
-              { id: "MAJOR", label: "Major tokens" },
-              { id: "NEAR", label: "NEAR Ecosystem" },
-            ].map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setCategory(cat.id as typeof category)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                  category === cat.id
-                    ? isDark
-                      ? "bg-white text-neutral-950 shadow-xs"
-                      : "bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs"
-                    : isDark
-                      ? "bg-[#1e1e1e] text-neutral-400 hover:text-white hover:bg-neutral-800"
-                      : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
+          <div className="pb-3 overflow-x-auto no-scrollbar">
+            <SegmentedTabPill
+              tabs={[
+                { id: "ALL", label: "All assets" },
+                { id: "STABLE", label: "Stablecoins" },
+                { id: "MAJOR", label: "Major tokens" },
+                { id: "NEAR", label: "NEAR Ecosystem" },
+              ] as const}
+              activeTab={category}
+              onChange={setCategory}
+              size="sm"
+            />
           </div>
 
           {/* Token List */}
@@ -292,7 +290,59 @@ export function UnifiedAssetSelectorModal({
                     </div>
                   </div>
 
-                  <div className="text-right"></div>
+                  <div className="text-right shrink-0">
+                    {(() => {
+                      const chain = token.networkName.toLowerCase();
+                      const minUsd =
+                        chain.includes("ethereum") || chain.includes("bitcoin")
+                          ? 5
+                          : 1;
+                      if (token.priceUsd && token.priceUsd > 0) {
+                        const rawMin = minUsd / token.priceUsd;
+                        const formatted =
+                          rawMin >= 100
+                            ? Math.ceil(rawMin).toString()
+                            : rawMin >= 1
+                              ? rawMin.toFixed(2)
+                              : rawMin >= 0.001
+                                ? rawMin.toFixed(4)
+                                : rawMin.toPrecision(2);
+                        return (
+                          <>
+                            <p
+                              className={`text-[11px] font-semibold tabular-nums ${
+                                isDark
+                                  ? "text-neutral-200"
+                                  : "text-neutral-800 dark:text-neutral-200"
+                              }`}
+                            >
+                              Min ~{formatted} {token.symbol}
+                            </p>
+                            <p
+                              className={`text-[10px] tabular-nums ${
+                                isDark
+                                  ? "text-neutral-500"
+                                  : "text-neutral-400 dark:text-neutral-500"
+                              }`}
+                            >
+                              (~${minUsd} NEAR Intents)
+                            </p>
+                          </>
+                        );
+                      }
+                      return (
+                        <p
+                          className={`text-[10px] font-medium ${
+                            isDark
+                              ? "text-neutral-400"
+                              : "text-neutral-500 dark:text-neutral-400"
+                          }`}
+                        >
+                          Min ~${minUsd}
+                        </p>
+                      );
+                    })()}
+                  </div>
                 </button>
               ))
             )}

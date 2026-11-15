@@ -4,6 +4,7 @@
 import { useEffect, useState, useRef, type FormEvent } from "react";
 import Link from "next/link";
 import { FlowLogo } from "../../components/flow-logo.tsx";
+import { triggerHaptic } from "../../components/haptics.ts";
 import {
   describe,
   Feedback,
@@ -23,6 +24,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
   const { seconds, startClock } = useResendClock();
   const codeInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const verifyingRef = useRef(false);
 
   useEffect(() => {
     if (showEmailSignIn && !codeSent) {
@@ -31,6 +33,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
   }, [showEmailSignIn, codeSent]);
 
   async function google() {
+    triggerHaptic("medium");
     setBusy(true);
     setMessage("");
     try {
@@ -39,36 +42,49 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
       });
       googleNavigate(response.url);
     } catch (error) {
+      triggerHaptic("error");
       setMessage(describe(error));
       setBusy(false);
     }
   }
 
   async function start() {
+    triggerHaptic("medium");
     setBusy(true);
     setMessage("");
     try {
       await send("/api/auth/email/start", { email, recovery });
+      triggerHaptic("success");
       startClock();
       setCodeSent(true);
     } catch (error) {
+      triggerHaptic("error");
       setMessage(describe(error));
     } finally {
       setBusy(false);
     }
   }
 
-  async function verify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitVerification(submittedCode: string) {
+    if (verifyingRef.current || submittedCode.length !== 8) return;
+    verifyingRef.current = true;
     setBusy(true);
     setMessage("");
     try {
-      await send("/api/auth/email/verify", { code });
+      await send("/api/auth/email/verify", { code: submittedCode });
+      triggerHaptic("success");
       window.location.replace("/onboarding");
     } catch (error) {
+      triggerHaptic("error");
       setMessage(describe(error));
       setBusy(false);
+      verifyingRef.current = false;
     }
+  }
+
+  async function verify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitVerification(code);
   }
 
   const digits = Array.from({ length: 8 }, (_, idx) => code[idx] ?? "");
@@ -85,7 +101,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
 
         {/* Left Column: Verification Code Form */}
         <main className="relative z-10 flex h-full flex-col justify-center px-6 py-6 sm:px-12 lg:col-span-6 lg:px-16 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[460px]">
+          <div className="flow-anim-slide-forward mx-auto w-full max-w-[460px]">
             <Link href="/" aria-label="FLOW Home" className="inline-block">
               <FlowLogo className="h-8 w-auto sm:h-9" />
             </Link>
@@ -123,7 +139,13 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
                     const sanitized = event.target.value
                       .replace(/\D/g, "")
                       .slice(0, 8);
+                    if (sanitized !== code) {
+                      triggerHaptic("light");
+                    }
                     setCode(sanitized);
+                    if (sanitized.length === 8 && !busy) {
+                      void submitVerification(sanitized);
+                    }
                   }}
                   required
                   autoFocus
@@ -139,13 +161,21 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
                     return (
                       <div
                         key={idx}
-                        className={`flex h-14 items-center justify-center rounded-2xl bg-white dark:bg-[#161616] text-[20px] font-semibold text-[#0B0B0B] dark:text-white shadow-2xs transition sm:h-16 sm:text-[22px] ${
-                          isActive
-                            ? "border-2 border-[#FF1A1A]"
-                            : "border border-[#DCDCDC] dark:border-white/[0.12]"
-                        }`}
+                        className={`flex h-14 items-center justify-center rounded-2xl bg-white dark:bg-[#161616] text-[20px] font-semibold text-[#0B0B0B] dark:text-white shadow-2xs transition-all duration-150 sm:h-16 sm:text-[22px] ${isActive
+                            ? "border-2 border-[#FF1A1A] scale-[1.04]"
+                            : digit
+                              ? "border border-[#0B0B0B]/25 dark:border-white/25"
+                              : "border border-[#DCDCDC] dark:border-white/[0.12]"
+                          }`}
                       >
-                        {digit}
+                        {digit ? (
+                          <span
+                            key={`${idx}-${digit}`}
+                            className="flow-anim-digit-pop"
+                          >
+                            {digit}
+                          </span>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -239,7 +269,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
     <div className="h-screen max-h-screen w-full overflow-hidden bg-white dark:bg-[#0B0B0B] text-[#0B0B0B] dark:text-neutral-100 lg:grid lg:grid-cols-12 transition-colors duration-200">
       {/* Left Column: Access Your Flow Account */}
       <main className="flex h-full flex-col justify-center px-6 py-6 sm:px-12 lg:col-span-6 lg:px-16 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[440px]">
+        <div className="flow-anim-fade-up mx-auto w-full max-w-[440px]">
           <Link href="/" aria-label="FLOW Home" className="inline-block">
             <FlowLogo className="h-8 w-auto sm:h-9" />
           </Link>
@@ -347,7 +377,7 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
                 type="button"
                 onClick={google}
                 disabled={busy}
-                className="flow-liquid-btn mt-5 flex h-12 sm:h-13 w-full items-center justify-center gap-3 rounded-2xl px-5 text-[14px] sm:text-[15px] font-semibold text-[#0B0B0B] dark:text-white disabled:opacity-50 cursor-pointer"
+                className="flow-liquid-btn flow-press mt-5 flex h-12 sm:h-13 w-full items-center justify-center gap-3 rounded-2xl px-5 text-[14px] sm:text-[15px] font-semibold text-[#0B0B0B] dark:text-white disabled:opacity-50 cursor-pointer"
               >
                 <svg
                   width="18"

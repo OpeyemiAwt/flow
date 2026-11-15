@@ -353,3 +353,86 @@ export async function reconcileWalletBalances(
     observations: results,
   };
 }
+
+/**
+ * Fetches a fresh live mainnet balance observation directly from the chain RPC
+ * for a single asset deployment and wallet address.
+ */
+export async function fetchLiveMainnetBalance(params: {
+  readonly networkKey: "ethereum" | "base" | "solana" | "near";
+  readonly standard: "NATIVE" | "ERC20" | "SPL" | "NEP141";
+  readonly contractIdentifier: string;
+  readonly address: string;
+  readonly networkAssetId?: string;
+}): Promise<BalanceObservation> {
+  const rpc = getDefaultRpcConfig("mainnet");
+  const networkAssetId = params.networkAssetId ?? params.contractIdentifier;
+
+  if (params.networkKey === "ethereum") {
+    const primary =
+      rpc.ethereum?.primary ?? "https://ethereum-rpc.publicnode.com";
+    const fallback = rpc.ethereum?.fallback ?? "https://cloudflare-eth.com";
+    return params.standard === "NATIVE"
+      ? fetchBaseNativeBalance(primary, params.address, "1", {
+          networkAssetId,
+          fallbackEndpoint: fallback,
+        })
+      : fetchBaseTokenBalance(
+          primary,
+          params.address,
+          params.contractIdentifier,
+          "1",
+          { networkAssetId, fallbackEndpoint: fallback },
+        );
+  }
+
+  if (params.networkKey === "base") {
+    const primary = rpc.base?.primary ?? "https://mainnet.base.org";
+    const fallback = rpc.base?.fallback;
+    return params.standard === "NATIVE"
+      ? fetchBaseNativeBalance(primary, params.address, "8453", {
+          networkAssetId,
+          fallbackEndpoint: fallback,
+        })
+      : fetchBaseTokenBalance(
+          primary,
+          params.address,
+          params.contractIdentifier,
+          "8453",
+          { networkAssetId, fallbackEndpoint: fallback },
+        );
+  }
+
+  if (params.networkKey === "solana") {
+    const primary =
+      rpc.solana?.primary ?? "https://api.mainnet-beta.solana.com";
+    const fallback = rpc.solana?.fallback;
+    return params.standard === "NATIVE"
+      ? fetchSolanaNativeBalance(primary, params.address, "solana-mainnet", {
+          networkAssetId,
+          fallbackEndpoint: fallback,
+        })
+      : fetchSolanaTokenBalance(
+          primary,
+          params.address,
+          params.contractIdentifier,
+          "solana-mainnet",
+          { networkAssetId, fallbackEndpoint: fallback },
+        );
+  }
+
+  const primary = rpc.near?.primary ?? "https://rpc.mainnet.near.org";
+  const fallback = rpc.near?.fallback;
+  return params.standard === "NATIVE"
+    ? fetchNearNativeBalance(primary, params.address, "near-mainnet", {
+        networkAssetId,
+        fallbackEndpoint: fallback,
+      })
+    : fetchNearTokenBalance(
+        primary,
+        params.address,
+        params.contractIdentifier,
+        "near-mainnet",
+        { networkAssetId, fallbackEndpoint: fallback },
+      );
+}

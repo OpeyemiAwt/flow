@@ -1,0 +1,47 @@
+1
+00:00:00,600 --> 00:00:11,400
+Moving money online should feel effortless. Yet in crypto, holding SOL on Solana while someone else wants NEAR still feels disconnected. What if it didn't have to be?
+
+2
+00:00:12,200 --> 00:00:21,500
+Meet FLOW. The multi-chain wallet and payment platform where you pay with what you hold, and receive what you want.
+
+3
+00:00:22,200 --> 00:00:43,200
+Getting started takes seconds. Continue with Google on the first screen, or click Sign in to use an email code. FLOW sets up your wallet automatically with your Google name and profile photo. One clean loading bar coordinates OutLayer provisioning and NEAR policy sponsorship across Solana, NEAR, Ethereum, and Base.
+
+4
+00:00:44,200 --> 00:01:05,200
+Your wallet dashboard brings your multi-chain balances together in one unified view. Track your total portfolio value alongside your assets across NEAR, Solana, Base, and Ethereum—and jump straight into adding funds, sending transfers, or requesting payments anytime.
+
+5
+00:01:06,200 --> 00:01:21,400
+In Direct Receive, pick any asset from the dropdown—like SOL—and FLOW checks the Solana network to populate only the assets supported on Solana below. Switch to NEAR, and it dynamically populates NEAR's supported assets.
+
+6
+00:01:22,200 --> 00:01:35,400
+In Convert, swap between assets like SOL on Solana and NEAR. Starting cleanly from zero, live quotes update immediately as you type—without waiting to click review first.
+
+7
+00:01:36,200 --> 00:01:41,500
+And for getting paid across chains, FLOW introduces Payment Links.
+
+8
+00:01:42,200 --> 00:02:01,400
+Open Request Payment to get paid on your terms. Suppose you want to receive one hundred and fifty NEAR on NEAR Protocol. Select NEAR as your destination asset, enter the amount, and create a shareable payment link in one click.
+
+9
+00:02:02,200 --> 00:02:17,400
+Your sender opens that link in any browser—no FLOW account needed. Even though you requested NEAR, they hold SOL on Solana. They open the asset selector with over two hundred tokens across thirty-nine chains, and choose SOL on Solana.
+
+10
+00:02:18,200 --> 00:02:31,400
+FLOW fetches a live One Click quote and issues a Solana deposit address. Once they send SOL, FLOW routes the payment and settles one hundred and fifty NEAR directly into your wallet.
+
+11
+00:02:32,200 --> 00:02:51,400
+Every transfer, conversion, and settled payment link is tracked and verified on-chain inside Activity—giving you clear transaction history at a glance. And whenever you need answers, Flow AI gives you an account-aware assistant right inside your wallet to check balances and confirm settlements.
+
+12
+00:02:52,200 --> 00:02:59,800
+Pay with what you hold. Receive what you want. Solana, NEAR, Ethereum, and Base—all in one flow.

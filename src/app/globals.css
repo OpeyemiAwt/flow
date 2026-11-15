@@ -281,8 +281,8 @@ html.dark .flow-liquid-btn::before {
     inset 0 1.5px 0 rgba(255, 255, 255, 1),
     inset 0 -1px 0 rgba(0, 0, 0, 0.04);
   transition:
-    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
-    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 460ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 160ms ease;
 }
 
@@ -433,4 +433,228 @@ html.dark .flow-liquid-btn-primary::before {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ==========================================================================
+   FLOW Global Motion System (GPU-composited transform & opacity primitives)
+   ========================================================================== */
+@keyframes flowFadeUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes flowSlideForward {
+  from {
+    opacity: 0;
+    transform: translate3d(14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes flowSlideBackward {
+  from {
+    opacity: 0;
+    transform: translate3d(-14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes flowMaskReveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 105%, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes flowModalIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes flowDrawerRight {
+  from {
+    opacity: 0.4;
+    transform: translate3d(28px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes flowBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes flowFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+@keyframes flowRouteDash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@keyframes flowPulseRing {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.18);
+  }
+}
+
+.flow-anim-fade-up {
+  animation: flowFadeUp 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flow-anim-slide-forward {
+  animation: flowSlideForward 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flow-anim-slide-backward {
+  animation: flowSlideBackward 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flow-anim-mask-reveal {
+  animation: flowMaskReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flow-anim-modal {
+  animation: flowModalIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flow-anim-drawer-right {
+  animation: flowDrawerRight 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flow-anim-backdrop {
+  animation: flowBackdropIn 200ms ease-out both;
+}
+
+.flow-anim-float {
+  animation: flowFloat 5s ease-in-out infinite;
+}
+
+.flow-anim-route-dash {
+  stroke-dasharray: 5 7;
+  animation: flowRouteDash 1.4s linear infinite;
+}
+
+.flow-anim-pulse-ring {
+  animation: flowPulseRing 1.8s ease-in-out infinite;
+}
+
+.flow-press {
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 180ms ease;
+}
+
+.flow-press:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.flow-card-lift {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms ease;
+}
+
+.flow-card-lift:hover {
+  transform: translate3d(0, -2px, 0);
+}
+
+@keyframes flowDigitPop {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0) scale(0.75);
+  }
+  70% {
+    opacity: 1;
+    transform: translate3d(0, -1px, 0) scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes flowArrowGrowRight {
+  0% {
+    opacity: 0;
+    transform: translate3d(8px, 0, 0) scale(0.35);
+    transform-origin: right center;
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    transform-origin: right center;
+  }
+}
+
+@keyframes flowNavIconPop {
+  0% {
+    transform: scale(0.78);
+  }
+  55% {
+    transform: scale(1.16) translate3d(0, -1px, 0);
+  }
+  100% {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+}
+
+.flow-anim-digit-pop {
+  display: inline-block;
+  animation: flowDigitPop 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flow-anim-arrow-grow {
+  display: inline-block;
+  animation: flowArrowGrowRight 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flow-anim-icon-pop {
+  animation: flowNavIconPop 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }

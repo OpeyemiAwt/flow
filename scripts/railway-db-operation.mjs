@@ -443,6 +443,23 @@ async function migrateProduction() {
   for (const key of Object.keys(migrationEnv)) {
     if (/^FLOW_PRODUCTION_.*_PASSWORD$/.test(key)) delete migrationEnv[key];
   }
+  await new Promise((resolve) => {
+    const resChild = spawn(
+      "node",
+      [
+        "node_modules/prisma/build/index.js",
+        "migrate",
+        "resolve",
+        "--rolled-back",
+        "20261119000000_fix_payment_worker_grants_and_request_lifecycle",
+        "--config",
+        "prisma.config.ts",
+      ],
+      { stdio: "inherit", env: migrationEnv },
+    );
+    resChild.once("error", () => resolve(1));
+    resChild.once("exit", (status) => resolve(status ?? 0));
+  });
   const child = spawn(
     "node",
     [
@@ -2837,6 +2854,505 @@ async function importOwnerWalletSealed() {
   }
 }
 
+async function inspectOwnerAccountProduction() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail("Owner account inspection is restricted to production.");
+  }
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("FLOW_BOOTSTRAP_DATABASE_URL is required.");
+  const prodUrl = new URL(rawUrl);
+  prodUrl.pathname = "/flow_production";
+  prodUrl.search = "?sslmode=require&uselibpqcompat=true";
+
+  const admin = new pg.Client({
+    connectionString: prodUrl.toString(),
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    const authUsers = (
+      await admin.query(
+        "SELECT id, email_verified, created_at FROM flow.auth_users WHERE lower(trim(email)) = 'opeyemimosesawt@gmail.com' ORDER BY created_at ASC",
+      )
+    ).rows;
+    const authIds = authUsers.map((r) => r.id);
+    const authIdentities = authIds.length
+      ? (
+          await admin.query(
+            "SELECT user_id, provider_id, account_id, created_at FROM flow.auth_identities WHERE user_id = ANY($1::text[])",
+            [authIds],
+          )
+        ).rows
+      : [];
+    const users = authIds.length
+      ? (
+          await admin.query(
+            "SELECT id, auth_user_id, active, created_at FROM flow.users WHERE auth_user_id = ANY($1::text[])",
+            [authIds],
+          )
+        ).rows
+      : [];
+    const userIds = users.map((r) => r.id);
+    const accounts = userIds.length
+      ? (
+          await admin.query(
+            "SELECT id, kind::text AS kind, name, personal_owner_id, created_at FROM flow.accounts WHERE personal_owner_id = ANY($1::uuid[])",
+            [userIds],
+          )
+        ).rows
+      : [];
+    const accountIds = accounts.map((r) => r.id);
+    const wallets = accountIds.length
+      ? (
+          await admin.query(
+            "SELECT id, account_id, provider, environment, provider_wallet_id, near_account_id, status::text AS status, policy_state, controller_account_id, created_at FROM flow.wallets WHERE account_id = ANY($1::uuid[])",
+            [accountIds],
+          )
+        ).rows
+      : [];
+    const walletIds = wallets.map((r) => r.id);
+    const walletAddresses = walletIds.length
+      ? (
+          await admin.query(
+            "SELECT wallet_id, network, chain_id, address FROM flow.wallet_addresses WHERE wallet_id = ANY($1::uuid[]) ORDER BY network ASC",
+            [walletIds],
+          )
+        ).rows
+      : [];
+    const positiveBalances = walletIds.length
+      ? (
+          await admin.query(
+            "SELECT wb.wallet_id, na.deployment_id, wb.atomic_balance::text, wb.sync_status, wb.last_synced_at FROM flow.wallet_balances wb JOIN flow.network_assets na ON na.id = wb.network_asset_id WHERE wb.wallet_id = ANY($1::uuid[]) AND wb.atomic_balance > 0",
+            [walletIds],
+          )
+        ).rows
+      : [];
+    const paymentRequests = accountIds.length
+      ? (
+          await admin.query(
+            "SELECT id, public_id, status::text AS status, destination_network, destination_asset_symbol, requested_atomic_amount::text, created_at FROM flow.payment_requests WHERE account_id = ANY($1::uuid[]) ORDER BY created_at DESC LIMIT 20",
+            [accountIds],
+          )
+        ).rows
+      : [];
+    const ledgerAccounts = accountIds.length
+      ? (
+          await admin.query(
+            "SELECT id, account_id, account_code, asset_id, balance_atomic::text FROM flow.ledger_accounts WHERE account_id = ANY($1::uuid[])",
+            [accountIds],
+          )
+        ).rows
+      : [];
+    const activitiesCount = walletIds.length
+      ? (
+          await admin.query(
+            "SELECT COUNT(*)::int AS cnt FROM flow.wallet_activities WHERE wallet_id = ANY($1::uuid[])",
+            [walletIds],
+          )
+        ).rows[0].cnt
+      : 0;
+    const origWalletExists = (
+      await admin.query(
+        "SELECT id, account_id, provider_wallet_id FROM flow.wallets WHERE id = '8b21f3d5-0102-41cf-9897-9eeb16581171'::uuid OR provider_wallet_id = '5ca1fcf6-8999-433f-8662-d6642b5c057d'",
+      )
+    ).rows;
+    console.log(
+      JSON.stringify(
+        {
+          event: "production_owner_account_inspected",
+          authUsers,
+          authIdentities,
+          users,
+          accounts,
+          wallets,
+          walletAddresses,
+          positiveBalances,
+          paymentRequests,
+          ledgerAccounts,
+          activitiesCount,
+          origWalletExists,
+        },
+        null,
+        2,
+      ),
+    );
+  } finally {
+    await admin.end();
+  }
+}
+
+async function restoreOriginalOwnerAccountToProduction() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail("Original owner account restore is restricted to production.");
+  }
+  const sealKey = process.env.FLOW_SEAL_KEY;
+  const sealedEnvelope = process.env.FLOW_SEALED_OWNER_WALLET;
+  const prodEncKey = process.env.FLOW_WALLET_ENCRYPTION_KEY;
+  const prodKeyId = process.env.FLOW_WALLET_KEY_ID || "prod-v1";
+  if (!sealKey || !sealedEnvelope || !prodEncKey) {
+    fail("FLOW_SEAL_KEY, FLOW_SEALED_OWNER_WALLET, and FLOW_WALLET_ENCRYPTION_KEY are required.");
+  }
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("FLOW_BOOTSTRAP_DATABASE_URL is required.");
+  const prodUrl = new URL(rawUrl);
+  prodUrl.pathname = "/flow_production";
+  prodUrl.search = "?sslmode=require&uselibpqcompat=true";
+
+  const bundle = JSON.parse(unsealWithHexKey(sealedEnvelope, sealKey));
+  if (
+    bundle.authUser?.id !== "GJLPa9qu6bbggSQpXIE1JJCgaXumyLez" ||
+    bundle.account?.id !== "cb88c933-b6a9-4de5-a8d8-8cd56cf5696c" ||
+    bundle.wallet?.id !== "8b21f3d5-0102-41cf-9897-9eeb16581171" ||
+    bundle.wallet?.provider_wallet_id !== "5ca1fcf6-8999-433f-8662-d6642b5c057d"
+  ) {
+    fail("Sealed bundle identity/wallet mismatch.");
+  }
+
+  const prodEncryptedCred = sealWithHexKey(
+    bundle.wallet.apiKey,
+    prodEncKey,
+    prodKeyId,
+  );
+  const prodKeyDigest = createHash("sha256")
+    .update(Buffer.from(prodEncKey, "hex"))
+    .digest("hex");
+
+  const admin = new pg.Client({
+    connectionString: prodUrl.toString(),
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    await admin.query("BEGIN");
+    await admin.query(
+      `INSERT INTO flow.auth_users (id, name, email, email_verified, image, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        bundle.authUser.id,
+        bundle.authUser.name,
+        bundle.authUser.email,
+        bundle.authUser.email_verified,
+        bundle.authUser.image,
+        bundle.authUser.created_at,
+        bundle.authUser.updated_at,
+      ],
+    );
+    await admin.query(
+      `INSERT INTO flow.users (id, auth_user_id, active, created_at)
+       VALUES ($1::uuid, $2, $3, $4::timestamptz)
+       ON CONFLICT (auth_user_id) DO NOTHING`,
+      [
+        bundle.flowUser.id,
+        bundle.flowUser.auth_user_id,
+        bundle.flowUser.active,
+        bundle.flowUser.created_at,
+      ],
+    );
+    await admin.query(
+      `INSERT INTO flow.accounts (id, kind, name, personal_owner_id, created_at)
+       VALUES ($1::uuid, $2::flow.account_kind, $3, $4::uuid, $5::timestamptz)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        bundle.account.id,
+        bundle.account.kind,
+        bundle.account.name,
+        bundle.account.personal_owner_id,
+        bundle.account.created_at,
+      ],
+    );
+    for (const j of bundle.jobs || []) {
+      await admin.query(
+        `INSERT INTO flow.wallet_provisioning_jobs (
+          id, account_id, idempotency_key, status, fencing_token,
+          dispatch_attempt_id, dispatched_at, attempts, max_attempts,
+          created_at, updated_at
+        ) VALUES (
+          $1::uuid, $2::uuid, $3::uuid, $4, $5::bigint,
+          $6::uuid, $7::timestamptz, $8, $9,
+          $10::timestamptz, $11::timestamptz
+        ) ON CONFLICT (account_id) DO NOTHING`,
+        [
+          j.id,
+          j.account_id,
+          j.idempotency_key,
+          j.status,
+          j.fencing_token,
+          j.dispatch_attempt_id,
+          j.dispatched_at,
+          j.attempts,
+          j.max_attempts,
+          j.created_at,
+          j.updated_at,
+        ],
+      );
+    }
+    await admin.query(
+      `INSERT INTO flow.wallets (
+        id, account_id, provider, environment, provider_wallet_id,
+        near_account_id, encrypted_credential, key_id, key_digest,
+        status, policy_state, controller_account_id, handoff_url,
+        created_at, updated_at
+      ) VALUES (
+        $1::uuid, $2::uuid, $3, $4, $5,
+        $6, $7, $8, $9,
+        $10::flow.wallet_status, $11, $12, $13,
+        $14::timestamptz, $15::timestamptz
+      ) ON CONFLICT (id) DO NOTHING`,
+      [
+        bundle.wallet.id,
+        bundle.wallet.account_id,
+        bundle.wallet.provider,
+        bundle.wallet.environment,
+        bundle.wallet.provider_wallet_id,
+        bundle.wallet.near_account_id,
+        prodEncryptedCred,
+        prodKeyId,
+        prodKeyDigest,
+        bundle.wallet.status,
+        bundle.wallet.policy_state,
+        bundle.wallet.controller_account_id,
+        bundle.wallet.handoff_url,
+        bundle.wallet.created_at,
+        bundle.wallet.updated_at,
+      ],
+    );
+    for (const a of bundle.addresses || []) {
+      await admin.query(
+        `INSERT INTO flow.wallet_addresses (
+          id, wallet_id, network, chain_id, address, public_key, created_at, updated_at
+        ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::timestamptz, $8::timestamptz)
+        ON CONFLICT (wallet_id, network) DO NOTHING`,
+        [
+          a.id,
+          a.wallet_id,
+          a.network,
+          a.chain_id,
+          a.address,
+          a.public_key,
+          a.created_at,
+          a.updated_at,
+        ],
+      );
+    }
+    for (const c of bundle.capabilities || []) {
+      await admin.query(
+        `INSERT INTO flow.wallet_capabilities (
+          id, wallet_id, network, can_derive_address, can_receive,
+          can_read_native_balance, can_read_intents_balance, can_sign_transfer,
+          broadcast_mode, can_rotate_credentials, verified_at
+        ) VALUES (
+          $1::uuid, $2::uuid, $3, $4, $5,
+          $6, $7, $8,
+          $9, $10, $11::timestamptz
+        ) ON CONFLICT (wallet_id, network) DO NOTHING`,
+        [
+          c.id,
+          c.wallet_id,
+          c.network,
+          c.can_derive_address,
+          c.can_receive,
+          c.can_read_native_balance,
+          c.can_read_intents_balance,
+          c.can_sign_transfer,
+          c.broadcast_mode,
+          c.can_rotate_credentials,
+          c.verified_at,
+        ],
+      );
+    }
+    for (const b of bundle.balances || []) {
+      await admin.query(
+        `INSERT INTO flow.wallet_balances (
+          id, wallet_id, network_asset_id, token_account_address, atomic_balance,
+          block_height, block_timestamp, observed_at, finality, sync_status,
+          last_synced_at, last_error, created_at, updated_at
+        ) VALUES (
+          $1::uuid, $2::uuid, $3::uuid, $4, $5,
+          $6, $7::timestamptz, $8::timestamptz, $9, $10,
+          $11::timestamptz, $12, $13::timestamptz, $14::timestamptz
+        ) ON CONFLICT (id) DO NOTHING`,
+        [
+          b.id,
+          b.wallet_id,
+          b.network_asset_id,
+          b.token_account_address,
+          b.atomic_balance,
+          b.block_height,
+          b.block_timestamp,
+          b.observed_at,
+          b.finality,
+          b.sync_status,
+          b.last_synced_at,
+          b.last_error,
+          b.created_at,
+          b.updated_at,
+        ],
+      );
+    }
+    for (const l of bundle.ledgerAccounts || []) {
+      await admin.query(
+        `INSERT INTO flow.ledger_accounts (
+          id, account_id, account_type, account_code, asset_id,
+          network, decimals, balance_atomic, created_at, updated_at
+        ) VALUES (
+          $1::uuid, $2::uuid, $3, $4, $5,
+          $6, $7, $8, $9::timestamptz, $10::timestamptz
+        ) ON CONFLICT (id) DO NOTHING`,
+        [
+          l.id,
+          l.account_id,
+          l.account_type,
+          l.account_code,
+          l.asset_id,
+          l.network,
+          l.decimals,
+          l.balance_atomic,
+          l.created_at,
+          l.updated_at,
+        ],
+      );
+    }
+    await admin.query("COMMIT");
+    console.log(
+      JSON.stringify({
+        event: "original_owner_account_restored",
+        accountId: bundle.account.id,
+        walletId: bundle.wallet.id,
+        providerWalletId: bundle.wallet.provider_wallet_id,
+        addressesCount: (bundle.addresses || []).length,
+        capabilitiesCount: (bundle.capabilities || []).length,
+        balancesCount: (bundle.balances || []).length,
+        ledgerAccountsCount: (bundle.ledgerAccounts || []).length,
+      }),
+    );
+  } catch (error) {
+    await admin.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    await admin.end();
+  }
+}
+
+async function enrollAndSponsorOwnerWallet() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID ||
+    process.env.FLOW_EXECUTION !== "disabled" ||
+    process.env.FLOW_PROVIDER_COMPATIBILITY_MODE !== "disabled"
+  ) {
+    fail("Owner enrollment & policy trigger is restricted to production.");
+  }
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("FLOW_BOOTSTRAP_DATABASE_URL is required.");
+  const prodUrl = new URL(rawUrl);
+  prodUrl.pathname = "/flow_production";
+  prodUrl.search = "?sslmode=require&uselibpqcompat=true";
+
+  const admin = new pg.Client({
+    connectionString: prodUrl.toString(),
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    await admin.query("BEGIN");
+    const authRes = await admin.query(
+      `UPDATE flow.auth_users
+       SET email_enrolled = true, email_verified = true, updated_at = CURRENT_TIMESTAMP
+       WHERE id = 'GJLPa9qu6bbggSQpXIE1JJCgaXumyLez'
+         AND lower(trim(email)) = 'opeyemimosesawt@gmail.com'
+       RETURNING id, email_enrolled, email_verified`,
+    );
+    const walletRes = await admin.query(
+      `UPDATE flow.wallets
+       SET status = 'PROVISIONING'::flow.wallet_status, updated_at = CURRENT_TIMESTAMP
+       WHERE id = '8b21f3d5-0102-41cf-9897-9eeb16581171'::uuid
+         AND account_id = 'cb88c933-b6a9-4de5-a8d8-8cd56cf5696c'::uuid
+         AND policy_state = 'none'
+       RETURNING id, status::text, policy_state`,
+    );
+    const jobRes = await admin.query(
+      `UPDATE flow.wallet_provisioning_jobs
+       SET status = 'PROVISIONED', updated_at = CURRENT_TIMESTAMP
+       WHERE account_id = 'cb88c933-b6a9-4de5-a8d8-8cd56cf5696c'::uuid
+         AND EXISTS (
+           SELECT 1 FROM flow.wallets w
+           WHERE w.id = '8b21f3d5-0102-41cf-9897-9eeb16581171'::uuid
+             AND w.status = 'PROVISIONING'::flow.wallet_status
+         )
+       RETURNING id, status`,
+    );
+    await admin.query("COMMIT");
+    console.log(
+      JSON.stringify({
+        event: "owner_enrolled_and_policy_queued",
+        authUser: authRes.rows[0] ?? null,
+        wallet: walletRes.rows[0] ?? null,
+        job: jobRes.rows[0] ?? null,
+      }),
+    );
+  } catch (error) {
+    await admin.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    await admin.end();
+  }
+}
+
+async function releaseAmbiguousRejectedJobs() {
+  if (
+    process.env.FLOW_ENV !== "production" ||
+    process.env.RAILWAY_ENVIRONMENT_ID !== PRODUCTION_ENVIRONMENT_ID
+  ) {
+    fail("release-ambiguous-rejected-jobs is restricted to production.");
+  }
+  const rawUrl = process.env.FLOW_BOOTSTRAP_DATABASE_URL;
+  if (!rawUrl) fail("FLOW_BOOTSTRAP_DATABASE_URL is required.");
+  const prodUrl = new URL(rawUrl);
+  prodUrl.pathname = "/flow_production";
+  prodUrl.search = "?sslmode=require&uselibpqcompat=true";
+
+  const admin = new pg.Client({
+    connectionString: prodUrl.toString(),
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    const res = await admin.query(`
+      UPDATE flow.outgoing_transfer_jobs j
+      SET status = 'FAILED',
+          updated_at = CURRENT_TIMESTAMP
+      FROM flow.wallets w
+      WHERE j.wallet_id = w.id
+        AND j.status = 'UNKNOWN_AMBIGUOUS'
+        AND j.error_code = 'CUSTODY_PROVIDER_ERROR'
+        AND j.source_tx_hash IS NULL
+        AND j.provider_request_id IS NULL
+      RETURNING j.id, j.account_id, j.wallet_id, j.source_network, j.source_asset_symbol,
+                j.error_code, j.error_message, w.provider_wallet_id, w.policy_state, w.status::text AS wallet_status
+    `);
+    console.log(
+      JSON.stringify({
+        event: "released_ambiguous_rejected_jobs",
+        count: res.rowCount,
+        jobs: res.rows,
+      }),
+    );
+  } finally {
+    await admin.end();
+  }
+}
+
 function idle() {
   const stagingSafe =
     process.env.FLOW_ENV === "test" &&
@@ -2884,6 +3400,14 @@ else if (operation === "import-owner-wallet-sealed")
   await importOwnerWalletSealed();
 else if (operation === "inspect-production-readiness")
   await inspectProductionReadiness();
+else if (operation === "inspect-owner-account-production")
+  await inspectOwnerAccountProduction();
+else if (operation === "restore-original-owner-account")
+  await restoreOriginalOwnerAccountToProduction();
+else if (operation === "enroll-and-sponsor-owner-wallet")
+  await enrollAndSponsorOwnerWallet();
+else if (operation === "release-ambiguous-rejected-jobs")
+  await releaseAmbiguousRejectedJobs();
 else if (operation === "provision-auth-ticket-role")
   await provisionAuthTicketRole();
 else if (operation === "provision-indexer-heartbeat-role")

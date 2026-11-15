@@ -5,6 +5,32 @@ import type { CatalogTokenDeployment } from "../domain/supported-assets-catalog.
 import type { SerializedWalletBalanceRecord } from "../server/portfolio.ts";
 import { AssetAvatar, ChainBadge } from "./icons.tsx";
 
+function formatApproxDisplay(
+  raw: string | null | undefined,
+  maxDecimals = 6,
+): string {
+  if (!raw) return "0";
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "0" || /^[-+]?0(\.0+)?$/.test(trimmed)) {
+    return "0";
+  }
+  const sign = trimmed.startsWith("-") ? "-" : "";
+  const unsigned = trimmed.replace(/^[-+]/, "");
+  const dotIdx = unsigned.indexOf(".");
+  if (dotIdx === -1) return `${sign}${unsigned}`;
+  const intPart = unsigned.slice(0, dotIdx) || "0";
+  const fracRaw = unsigned.slice(dotIdx + 1).replace(/0+$/, "");
+  if (!fracRaw) return `${sign}${intPart}`;
+  if (fracRaw.length <= maxDecimals) {
+    return `${sign}${intPart}.${fracRaw}`;
+  }
+  const sliced = fracRaw.slice(0, maxDecimals).replace(/0+$/, "");
+  if (intPart !== "0" || sliced.length > 0) {
+    return `~${sign}${intPart}${sliced ? `.${sliced}` : ""}`;
+  }
+  return `<${sign}0.${"0".repeat(Math.max(0, maxDecimals - 1))}1`;
+}
+
 export interface HeldAssetItem {
   deployment: CatalogTokenDeployment;
   balanceRecord?: SerializedWalletBalanceRecord;
@@ -42,7 +68,7 @@ export function AssetsHeldModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-neutral-950/40 backdrop-blur-xs transition-opacity animate-in fade-in"
+        className="flow-anim-backdrop fixed inset-0 bg-neutral-950/40 backdrop-blur-xs transition-opacity"
         onClick={onClose}
       />
 
@@ -51,7 +77,7 @@ export function AssetsHeldModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="assets-held-title"
-          className="relative w-full max-w-md rounded-[28px] bg-white dark:bg-[#141414] border border-neutral-200/90 dark:border-neutral-800 shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-150"
+          className="flow-anim-modal relative w-full max-w-md rounded-[28px] bg-white dark:bg-[#141414] border border-neutral-200/90 dark:border-neutral-800 shadow-2xl p-6 overflow-hidden"
         >
           {/* Header (Matches ChatGPT Image Nov 12, 2026, 05_23_23 AM-2.png) */}
           <div className="flex items-start justify-between pb-4">
@@ -138,7 +164,7 @@ export function AssetsHeldModal({
                           <p className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
                             {hideBalance
                               ? "••••••"
-                              : `${item.displayBalance} ${item.deployment.symbol}`}
+                              : `${formatApproxDisplay(item.displayBalance)} ${item.deployment.symbol}`}
                           </p>
                           <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
                             {hideBalance ? "$••••••" : item.usdValue}
@@ -161,43 +187,54 @@ export function AssetsHeldModal({
                     </div>
 
                     {/* Action Buttons (Matches ChatGPT Image Nov 12, 2026, 05_23_23 AM-2.png) */}
-                    {isExpanded && (
-                      <div className="mt-4 pt-3 border-t border-neutral-200/60 dark:border-neutral-800 grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onSelectAction("receive", item.deployment);
-                            onClose();
-                          }}
-                          className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
+                    {isExpanded && (() => {
+                      const isNativeNear =
+                        item.deployment.networkKey === "near-mainnet" &&
+                        item.deployment.symbol === "NEAR";
+                      return (
+                        <div
+                          className={`mt-4 pt-3 border-t border-neutral-200/60 dark:border-neutral-800 grid ${
+                            isNativeNear ? "grid-cols-2" : "grid-cols-3"
+                          } gap-2`}
                         >
-                          <span>↓</span>
-                          <span>Receive</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onSelectAction("send", item.deployment);
-                            onClose();
-                          }}
-                          className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
-                        >
-                          <span>↗</span>
-                          <span>Send</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onSelectAction("swap_near", item.deployment);
-                            onClose();
-                          }}
-                          className="flow-liquid-btn-primary flex items-center justify-center gap-1.5 py-2 px-2 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer"
-                        >
-                          <span>⇄</span>
-                          <span>Swap to NEAR</span>
-                        </button>
-                      </div>
-                    )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectAction("receive", item.deployment);
+                              onClose();
+                            }}
+                            className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
+                          >
+                            <span>↓</span>
+                            <span>Receive</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectAction("send", item.deployment);
+                              onClose();
+                            }}
+                            className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
+                          >
+                            <span>↗</span>
+                            <span>Send</span>
+                          </button>
+                          {!isNativeNear && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSelectAction("swap_near", item.deployment);
+                                onClose();
+                              }}
+                              className="flow-liquid-btn-primary flex items-center justify-center gap-1.5 py-2 px-2 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer"
+                            >
+                              <span>⇄</span>
+                              <span>Swap to NEAR</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })

@@ -108,7 +108,7 @@ export async function indexEvmAddressActivities(
   }
   const latestBlock = BigInt(blockRes.response.result);
 
-  const maxRange = BigInt(options.maxBlockRange ?? 100);
+  const maxRange = BigInt(options.maxBlockRange ?? 2000);
   const targetToBlock = options.toBlock ?? latestBlock;
   const targetFromBlock =
     options.fromBlock ??

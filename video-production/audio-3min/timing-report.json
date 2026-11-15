@@ -1,0 +1,110 @@
+[
+  {
+    "id": "seg01_hook",
+    "startSec": 0.6,
+    "windowSec": 11.2,
+    "rawDur": 10.92,
+    "tempo": 1.011,
+    "finalDur": 10.78,
+    "endSec": 11.38
+  },
+  {
+    "id": "seg02_logo",
+    "startSec": 12.2,
+    "windowSec": 9.5,
+    "rawDur": 7.18,
+    "tempo": 1,
+    "finalDur": 7.18,
+    "endSec": 19.38
+  },
+  {
+    "id": "seg03_onboarding",
+    "startSec": 22.2,
+    "windowSec": 21.4,
+    "rawDur": 20.02,
+    "tempo": 1,
+    "finalDur": 20.02,
+    "endSec": 42.22
+  },
+  {
+    "id": "seg04_dashboard",
+    "startSec": 44.2,
+    "windowSec": 21.4,
+    "rawDur": 17.71,
+    "tempo": 1,
+    "finalDur": 17.71,
+    "endSec": 61.91
+  },
+  {
+    "id": "seg05_receive",
+    "startSec": 66.2,
+    "windowSec": 15.4,
+    "rawDur": 15.02,
+    "tempo": 1.001,
+    "finalDur": 15.02,
+    "endSec": 81.22
+  },
+  {
+    "id": "seg06_convert",
+    "startSec": 82.2,
+    "windowSec": 13.4,
+    "rawDur": 12.1,
+    "tempo": 1,
+    "finalDur": 12.1,
+    "endSec": 94.3
+  },
+  {
+    "id": "seg07_midtext",
+    "startSec": 96.2,
+    "windowSec": 5.5,
+    "rawDur": 4.58,
+    "tempo": 1,
+    "finalDur": 4.58,
+    "endSec": 100.78
+  },
+  {
+    "id": "seg08_request",
+    "startSec": 102.2,
+    "windowSec": 19.4,
+    "rawDur": 13.49,
+    "tempo": 1,
+    "finalDur": 13.49,
+    "endSec": 115.69
+  },
+  {
+    "id": "seg09_checkout_select",
+    "startSec": 122.2,
+    "windowSec": 15.4,
+    "rawDur": 15.26,
+    "tempo": 1.017,
+    "finalDur": 14.99,
+    "endSec": 137.19
+  },
+  {
+    "id": "seg10_checkout_settle",
+    "startSec": 138.2,
+    "windowSec": 13.4,
+    "rawDur": 12.43,
+    "tempo": 1,
+    "finalDur": 12.43,
+    "endSec": 150.63
+  },
+  {
+    "id": "seg11_activity_ai",
+    "startSec": 152.2,
+    "windowSec": 19.4,
+    "rawDur": 18.89,
+    "tempo": 1,
+    "finalDur": 18.89,
+    "endSec": 171.09
+  },
+  {
+    "id": "seg12_outro",
+    "startSec": 172.2,
+    "windowSec": 7.5,
+    "rawDur": 7.54,
+    "tempo": 1.062,
+    "finalDur": 7.08,
+    "endSec": 179.28
+  }
+]

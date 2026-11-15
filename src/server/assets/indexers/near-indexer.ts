@@ -84,24 +84,111 @@ export async function indexNearAddressActivities(
 
   const activities: RawNearActivityItem[] = [];
 
-  // If specific tx hashes are supplied (e.g. from receipt observation or webhook), inspect and verify via RPC
-  if (options.knownTxHashes && options.knownTxHashes.length > 0) {
-    for (const txHash of options.knownTxHashes) {
+  let txHashesToInspect = options.knownTxHashes ?? [];
+  if (txHashesToInspect.length === 0) {
+    try {
+      const apiBase = options.network.includes("testnet")
+        ? "https://api-testnet.nearblocks.io"
+        : "https://api.nearblocks.io";
+      const res = await fetch(
+        `${apiBase}/v1/account/${encodeURIComponent(accountId)}/txns?per_page=25`,
+        { signal: AbortSignal.timeout(8000) },
+      );
+      if (res.ok) {
+        const json = (await res.json()) as {
+          txns?: Array<{ transaction_hash?: string }>;
+        };
+        txHashesToInspect = (json.txns ?? [])
+          .map((t) => t.transaction_hash?.trim())
+          .filter((h): h is string => Boolean(h));
+      }
+    } catch {
+      // Non-fatal fallback if Nearblocks API is temporarily unreachable
+    }
+  }
+
+  // Inspect and verify each transaction via NEAR RPC (including internal receipts)
+  if (txHashesToInspect.length > 0) {
+    for (const txHash of txHashesToInspect) {
       try {
-        const txRes = await callJsonRpc<NearTxStatusResult>(
-          rpcUrl,
-          "tx",
-          [txHash, accountId],
-          options,
-        );
+        const txRes = await callJsonRpc<
+          NearTxStatusResult & {
+            receipts?: Array<{
+              predecessor_id?: string;
+              receiver_id?: string;
+              receipt?: {
+                Action?: {
+                  actions?: Array<{
+                    Transfer?: { deposit?: string };
+                  }>;
+                };
+              };
+            }>;
+          }
+        >(rpcUrl, "EXPERIMENTAL_tx_status", [txHash, accountId], options);
 
         const tx = txRes.response.result;
         if (!tx) continue;
 
         const signer = tx.transaction.signer_id;
-        const receiver = tx.transaction.receiver_id;
-        const isFromMe = signer.toLowerCase() === accountId.toLowerCase();
-        const isToMe = receiver.toLowerCase() === accountId.toLowerCase();
+        let receiver = tx.transaction.receiver_id;
+        const normAccount = accountId.toLowerCase();
+        const isFromMe = signer.toLowerCase() === normAccount;
+        let isToMe = receiver.toLowerCase() === normAccount;
+
+        let depositAtomic = 0n;
+        for (const action of tx.transaction.actions) {
+          if (action.Transfer?.deposit) {
+            depositAtomic += BigInt(action.Transfer.deposit);
+          }
+        }
+
+        // Check internal receipts (e.g. wrap.near / intents.near 1Click payouts)
+        if (depositAtomic === 0n && Array.isArray(tx.receipts)) {
+          let receiptIncoming = 0n;
+          let receiptFrom = signer;
+          for (const r of tx.receipts) {
+            if (r.receiver_id?.toLowerCase() === normAccount) {
+              for (const act of r.receipt?.Action?.actions ?? []) {
+                if (act.Transfer?.deposit) {
+                  receiptIncoming += BigInt(act.Transfer.deposit);
+                  if (r.predecessor_id) receiptFrom = r.predecessor_id;
+                }
+              }
+            }
+          }
+          if (receiptIncoming > 0n) {
+            depositAtomic = receiptIncoming;
+            receiver = accountId;
+            isToMe = true;
+            activities.push({
+              txHash: tx.transaction.hash,
+              eventIndex: activities.length,
+              fromAddress: receiptFrom,
+              toAddress: accountId,
+              contractAddress: null,
+              atomicAmount: depositAtomic,
+              blockHeight: 0n,
+              blockHash: tx.transaction_outcome.block_hash,
+              blockTimestamp: null,
+              finality: "FINALIZED",
+              direction: "INCOMING",
+              activityType: "ON_CHAIN_TRANSFER",
+              network: "near",
+              chainId: options.network,
+              ecosystem: "near",
+              feeAtomicAmount: BigInt(
+                tx.transaction_outcome.outcome.gas_burnt ?? 0,
+              ),
+              metadata: {
+                signer,
+                receiver: accountId,
+                viaReceipt: true,
+              },
+            });
+            continue;
+          }
+        }
 
         let direction: ActivityDirection = "INTERNAL";
         if (isFromMe && isToMe) {
@@ -110,13 +197,6 @@ export async function indexNearAddressActivities(
           direction = "INCOMING";
         } else if (isFromMe) {
           direction = "OUTGOING";
-        }
-
-        let depositAtomic = 0n;
-        for (const action of tx.transaction.actions) {
-          if (action.Transfer?.deposit) {
-            depositAtomic += BigInt(action.Transfer.deposit);
-          }
         }
 
         activities.push({
@@ -150,6 +230,5 @@ export async function indexNearAddressActivities(
     }
   }
 
-  // Native NEAR RPC returns authentic empty state for addresses with no known transactions
   return activities;
 }

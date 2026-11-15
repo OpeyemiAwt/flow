@@ -513,7 +513,43 @@ export async function verifyNearTransfer(
   const normExpectedRecipient = params.expectedRecipient.trim();
   const normTokenContract = params.expectedTokenContract?.trim() ?? null;
 
-  const txRes = await callJsonRpc<{
+  type NearAction = {
+    Transfer?: {
+      deposit: string;
+    };
+    FunctionCall?: {
+      method_name: string;
+      args: string;
+      deposit: string;
+      gas: number;
+    };
+  };
+
+  type NearReceipt = {
+    receipt_id?: string;
+    predecessor_id?: string;
+    receiver_id: string;
+    receipt?: {
+      Action?: {
+        actions?: NearAction[];
+      };
+    };
+  };
+
+  type NearReceiptOutcome = {
+    id?: string;
+    outcome?: {
+      executor_id?: string;
+      logs?: string[];
+      status?: {
+        SuccessValue?: string;
+        SuccessReceiptId?: string;
+        Failure?: unknown;
+      };
+    };
+  };
+
+  type NearTxResult = {
     status: {
       SuccessValue?: string;
       Failure?: unknown;
@@ -522,17 +558,7 @@ export async function verifyNearTransfer(
       hash: string;
       signer_id: string;
       receiver_id: string;
-      actions: Array<{
-        Transfer?: {
-          deposit: string;
-        };
-        FunctionCall?: {
-          method_name: string;
-          args: string;
-          deposit: string;
-          gas: number;
-        };
-      }>;
+      actions: NearAction[];
     };
     transaction_outcome: {
       block_hash: string;
@@ -543,7 +569,16 @@ export async function verifyNearTransfer(
         };
       };
     };
-  }>(params.rpcUrl, "tx", [params.txHash, params.senderAccountId], options);
+    receipts?: NearReceipt[];
+    receipts_outcome?: NearReceiptOutcome[];
+  };
+
+  const txRes = await callJsonRpc<NearTxResult>(
+    params.rpcUrl,
+    "tx",
+    [params.txHash, params.senderAccountId],
+    options,
+  );
 
   if (txRes.response.error || !txRes.response.result) {
     throw new FlowError(
@@ -552,7 +587,7 @@ export async function verifyNearTransfer(
     );
   }
 
-  const tx = txRes.response.result;
+  let tx = txRes.response.result;
   const isFailed =
     Boolean(tx.status.Failure) ||
     Boolean(tx.transaction_outcome.outcome.status.Failure);
@@ -566,80 +601,207 @@ export async function verifyNearTransfer(
   let atomicAmount = 0n;
   const fromAddress = tx.transaction.signer_id;
   let toAddress = tx.transaction.receiver_id;
-
   let nearEventIndex = 0;
+
+  const ensureExperimentalReceipts = async (): Promise<NearTxResult> => {
+    if (Array.isArray(tx.receipts) && tx.receipts.length > 0) {
+      return tx;
+    }
+    try {
+      const expRes = await callJsonRpc<NearTxResult>(
+        params.rpcUrl,
+        "EXPERIMENTAL_tx_status",
+        [params.txHash, params.senderAccountId],
+        options,
+      );
+      if (!expRes.response.error && expRes.response.result) {
+        tx = expRes.response.result;
+      }
+    } catch {
+      // Fallback gracefully to the base tx response if node rejects EXPERIMENTAL_tx_status.
+    }
+    return tx;
+  };
+
+  const failedReceiptIds = () =>
+    new Set(
+      (tx.receipts_outcome ?? [])
+        .filter((o) => Boolean(o.outcome?.status?.Failure))
+        .map((o) => o.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+
   if (!normTokenContract) {
-    // Native NEAR Transfer
+    // 1) Direct top-level native NEAR Transfer
     const transferActionIndex = tx.transaction.actions.findIndex(
       (a) => a.Transfer,
     );
-    if (transferActionIndex === -1) {
-      throw new FlowError(
-        "RECIPIENT_ADDRESS_MISMATCH",
-        "NEAR transaction has no native Transfer action",
-      );
+    if (transferActionIndex !== -1 && toAddress === normExpectedRecipient) {
+      const transferAction = tx.transaction.actions[transferActionIndex]!;
+      atomicAmount = BigInt(transferAction.Transfer!.deposit);
+      nearEventIndex = transferActionIndex;
+    } else {
+      // 2) Internal receipt Transfer (e.g. 1Click / intents.near / wrap.near payouts)
+      await ensureExperimentalReceipts();
+      const failedIds = failedReceiptIds();
+      let matchedReceiptAmount = 0n;
+      let matchedIndex = -1;
+      for (const [idx, receipt] of (tx.receipts ?? []).entries()) {
+        if (receipt.receipt_id && failedIds.has(receipt.receipt_id)) {
+          continue;
+        }
+        if (receipt.receiver_id !== normExpectedRecipient) {
+          continue;
+        }
+        const actions = receipt.receipt?.Action?.actions ?? [];
+        for (const action of actions) {
+          if (action.Transfer?.deposit) {
+            matchedReceiptAmount += BigInt(action.Transfer.deposit);
+            if (matchedIndex === -1) {
+              matchedIndex = idx;
+            }
+          }
+        }
+      }
+
+      if (matchedReceiptAmount > 0n) {
+        atomicAmount = matchedReceiptAmount;
+        toAddress = normExpectedRecipient;
+        nearEventIndex = matchedIndex >= 0 ? matchedIndex : 0;
+      } else if (transferActionIndex !== -1 && toAddress !== normExpectedRecipient) {
+        throw new FlowError(
+          "RECIPIENT_ADDRESS_MISMATCH",
+          `RECIPIENT_ADDRESS_MISMATCH: NEAR native transfer receiver mismatch: expected ${normExpectedRecipient}, got ${toAddress}`,
+        );
+      } else {
+        throw new FlowError(
+          "RECIPIENT_ADDRESS_MISMATCH",
+          "NEAR transaction has no native Transfer action",
+        );
+      }
     }
-    const transferAction = tx.transaction.actions[transferActionIndex]!;
-    if (!transferAction.Transfer) {
-      throw new FlowError(
-        "RECIPIENT_ADDRESS_MISMATCH",
-        "NEAR transaction has no native Transfer action",
-      );
-    }
-    if (toAddress !== normExpectedRecipient) {
-      throw new FlowError(
-        "RECIPIENT_ADDRESS_MISMATCH",
-        `RECIPIENT_ADDRESS_MISMATCH: NEAR native transfer receiver mismatch: expected ${normExpectedRecipient}, got ${toAddress}`,
-      );
-    }
-    atomicAmount = BigInt(transferAction.Transfer.deposit);
-    nearEventIndex = transferActionIndex;
   } else {
-    // NEP-141 Token Transfer
+    // 1) Direct top-level NEP-141 Token Transfer
     const ftActionIndex = tx.transaction.actions.findIndex(
       (a) =>
         a.FunctionCall &&
         (a.FunctionCall.method_name === "ft_transfer" ||
           a.FunctionCall.method_name === "ft_transfer_call"),
     );
-    if (ftActionIndex === -1) {
-      throw new FlowError(
-        "RECIPIENT_ADDRESS_MISMATCH",
-        "RECIPIENT_ADDRESS_MISMATCH: NEAR transaction has no ft_transfer FunctionCall action",
-      );
-    }
-    const ftAction = tx.transaction.actions[ftActionIndex]!;
-    if (!ftAction.FunctionCall) {
-      throw new FlowError(
-        "RECIPIENT_ADDRESS_MISMATCH",
-        "RECIPIENT_ADDRESS_MISMATCH: NEAR transaction has no ft_transfer FunctionCall action",
-      );
-    }
-    if (toAddress !== normTokenContract) {
-      throw new FlowError(
-        "ASSET_MISMATCH",
-        `ASSET_MISMATCH: NEAR token contract mismatch: expected ${normTokenContract}, got ${toAddress}`,
-      );
-    }
 
-    try {
-      const decodedArgs = JSON.parse(
-        Buffer.from(ftAction.FunctionCall.args, "base64").toString("utf8"),
-      ) as { receiver_id?: string; amount?: string };
-      toAddress = decodedArgs.receiver_id ?? "";
-      if (toAddress !== normExpectedRecipient) {
+    let matchedTopLevel = false;
+    if (ftActionIndex !== -1 && toAddress === normTokenContract) {
+      const ftAction = tx.transaction.actions[ftActionIndex]!;
+      try {
+        const decodedArgs = JSON.parse(
+          Buffer.from(ftAction.FunctionCall!.args, "base64").toString("utf8"),
+        ) as { receiver_id?: string; amount?: string };
+        if (decodedArgs.receiver_id === normExpectedRecipient) {
+          toAddress = decodedArgs.receiver_id;
+          atomicAmount = BigInt(decodedArgs.amount || "0");
+          nearEventIndex = ftActionIndex;
+          matchedTopLevel = true;
+        }
+      } catch (err) {
         throw new FlowError(
-          "RECIPIENT_ADDRESS_MISMATCH",
-          `RECIPIENT_ADDRESS_MISMATCH: NEAR ft_transfer receiver mismatch: expected ${normExpectedRecipient}, got ${toAddress}`,
+          "CUSTODY_PROVIDER_ERROR",
+          `Failed to decode NEAR ft_transfer args: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
-      atomicAmount = BigInt(decodedArgs.amount || "0");
-      nearEventIndex = ftActionIndex;
-    } catch (err) {
-      throw new FlowError(
-        "CUSTODY_PROVIDER_ERROR",
-        `Failed to decode NEAR ft_transfer args: ${err instanceof Error ? err.message : String(err)}`,
-      );
+    }
+
+    if (!matchedTopLevel) {
+      // 2) Internal receipt NEP-141 Transfer or NEP-141 EVENT_JSON ft_transfer log
+      await ensureExperimentalReceipts();
+      const failedIds = failedReceiptIds();
+      let matchedReceiptAmount = 0n;
+      let matchedIndex = -1;
+
+      for (const [idx, receipt] of (tx.receipts ?? []).entries()) {
+        if (receipt.receipt_id && failedIds.has(receipt.receipt_id)) {
+          continue;
+        }
+        if (receipt.receiver_id !== normTokenContract) {
+          continue;
+        }
+        const actions = receipt.receipt?.Action?.actions ?? [];
+        for (const action of actions) {
+          const fc = action.FunctionCall;
+          if (
+            fc &&
+            (fc.method_name === "ft_transfer" ||
+              fc.method_name === "ft_transfer_call")
+          ) {
+            try {
+              const decodedArgs = JSON.parse(
+                Buffer.from(fc.args, "base64").toString("utf8"),
+              ) as { receiver_id?: string; amount?: string };
+              if (decodedArgs.receiver_id === normExpectedRecipient) {
+                matchedReceiptAmount += BigInt(decodedArgs.amount || "0");
+                if (matchedIndex === -1) {
+                  matchedIndex = idx;
+                }
+              }
+            } catch {
+              // Ignore malformed non-ft_transfer args in unrelated receipts
+            }
+          }
+        }
+      }
+
+      if (matchedReceiptAmount === 0n) {
+        for (const [idx, outcome] of (tx.receipts_outcome ?? []).entries()) {
+          if (outcome.outcome?.status?.Failure) continue;
+          if (outcome.outcome?.executor_id !== normTokenContract) continue;
+          for (const log of outcome.outcome?.logs ?? []) {
+            if (!log.startsWith("EVENT_JSON:")) continue;
+            try {
+              const evt = JSON.parse(log.slice("EVENT_JSON:".length)) as {
+                standard?: string;
+                event?: string;
+                data?: Array<{ new_owner_id?: string; amount?: string }>;
+              };
+              if (evt.standard === "nep141" && evt.event === "ft_transfer") {
+                for (const item of evt.data ?? []) {
+                  if (item.new_owner_id === normExpectedRecipient && item.amount) {
+                    matchedReceiptAmount += BigInt(item.amount);
+                    if (matchedIndex === -1) {
+                      matchedIndex = idx;
+                    }
+                  }
+                }
+              }
+            } catch {
+              // Ignore non-JSON EVENT_JSON logs
+            }
+          }
+        }
+      }
+
+      if (matchedReceiptAmount > 0n) {
+        atomicAmount = matchedReceiptAmount;
+        toAddress = normExpectedRecipient;
+        nearEventIndex = matchedIndex >= 0 ? matchedIndex : 0;
+      } else if (ftActionIndex !== -1 && toAddress !== normTokenContract) {
+        throw new FlowError(
+          "ASSET_MISMATCH",
+          `ASSET_MISMATCH: NEAR token contract mismatch: expected ${normTokenContract}, got ${toAddress}`,
+        );
+      } else if (ftActionIndex !== -1) {
+        const ftAction = tx.transaction.actions[ftActionIndex]!;
+        const decodedArgs = JSON.parse(
+          Buffer.from(ftAction.FunctionCall!.args, "base64").toString("utf8"),
+        ) as { receiver_id?: string };
+        throw new FlowError(
+          "RECIPIENT_ADDRESS_MISMATCH",
+          `RECIPIENT_ADDRESS_MISMATCH: NEAR ft_transfer receiver mismatch: expected ${normExpectedRecipient}, got ${decodedArgs.receiver_id ?? ""}`,
+        );
+      } else {
+        throw new FlowError(
+          "RECIPIENT_ADDRESS_MISMATCH",
+          "RECIPIENT_ADDRESS_MISMATCH: NEAR transaction has no ft_transfer FunctionCall action",
+        );
+      }
     }
   }
 

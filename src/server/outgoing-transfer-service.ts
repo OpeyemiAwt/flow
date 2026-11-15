@@ -16,11 +16,15 @@ import {
 } from "../domain/portfolio.ts";
 import type { NetworkId } from "../domain/providers.ts";
 import { isBannedIllustrativeAddress } from "../domain/quote-discovery.ts";
-import { MAINNET_SUPPORTED_DEPLOYMENTS } from "../domain/supported-assets-catalog.ts";
+import {
+  checkNetworkGasBalance,
+  MAINNET_SUPPORTED_DEPLOYMENTS,
+} from "../domain/supported-assets-catalog.ts";
 import { runtime, transaction } from "../foundation/prisma.ts";
 import { access, accountId, principal } from "./accounts.ts";
+import { requestAccountSync } from "./account-sync.ts";
 import { getAccountBalances } from "./assets/asset-service.ts";
-import { requireProof } from "./auth/flows.ts";
+import { fetchLiveMainnetBalance } from "./assets/connectors/multi-chain-reconciler.ts";
 import { ApiFailure, input, reply } from "./http.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import { fetchOneClickCommittedQuote } from "./providers/one-click-adapter.ts";
@@ -141,7 +145,7 @@ async function findTransferByIdempotencyKey(
         source_asset_id, source_asset_symbol, source_decimals,
         source_atomic_amount::text, recipient_address, destination_network,
         destination_asset_id, destination_asset_symbol, destination_decimals,
-        quoted_destination_atomic_amount::text, provider_deposit_address,
+        expected_destination_atomic_amount::text AS quoted_destination_atomic_amount, provider_deposit_address,
         provider_deposit_memo, provider_correlation_id, status,
         source_tx_hash, destination_tx_hash, fee_atomic_amount::text,
         error_code, error_message, broadcast_at, settled_at, created_at, updated_at
@@ -182,14 +186,65 @@ async function computeAvailableBalanceForDeployment(
       isBalanceMatchingDeployment(record, deployment),
   );
   const observedAt = Date.parse(balance?.lastSyncedAt ?? "");
-  if (
+  const isStaleOrUnsynced =
     !balance ||
     balance.syncStatus !== "SYNCED" ||
     !Number.isFinite(observedAt) ||
     Date.now() - observedAt > 120_000 ||
-    balance.finality === "UNKNOWN"
-  ) {
-    throw new ApiFailure(409, "BALANCE_REFRESH_REQUIRED");
+    balance.finality === "UNKNOWN";
+
+  let availableAtomic: bigint;
+  let liveNativeBalanceAtomic: bigint | null = null;
+  const nativeDeployment = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+    (d) => d.networkKey === deployment.networkKey && d.standard === "NATIVE",
+  );
+
+  if (isStaleOrUnsynced) {
+    const walletAddress = getMainnetWalletAddress(
+      portfolio.wallet,
+      deployment.networkKey as NetworkId,
+    );
+    if (!walletAddress) {
+      throw new ApiFailure(409, "ACTIVE_MAINNET_WALLET_REQUIRED");
+    }
+    const networkKey = deployment.networkKey as
+      | "ethereum"
+      | "base"
+      | "solana"
+      | "near";
+    const liveObs = await fetchLiveMainnetBalance({
+      networkKey,
+      standard: deployment.standard,
+      contractIdentifier: deployment.contractIdentifier,
+      address: walletAddress,
+      networkAssetId: balance?.networkAsset.id,
+    });
+    if (liveObs.syncStatus !== "SYNCED" || liveObs.finality === "UNKNOWN") {
+      throw new ApiFailure(409, "BALANCE_REFRESH_REQUIRED");
+    }
+    availableAtomic = BigInt(liveObs.atomicBalance);
+
+    if (deployment.standard === "NATIVE") {
+      liveNativeBalanceAtomic = availableAtomic;
+    } else if (nativeDeployment) {
+      const liveNativeObs = await fetchLiveMainnetBalance({
+        networkKey,
+        standard: nativeDeployment.standard,
+        contractIdentifier: nativeDeployment.contractIdentifier,
+        address: walletAddress,
+      });
+      if (
+        liveNativeObs.syncStatus === "SYNCED" &&
+        liveNativeObs.finality !== "UNKNOWN"
+      ) {
+        liveNativeBalanceAtomic = BigInt(liveNativeObs.atomicBalance);
+      }
+    }
+
+    // Best-effort background DB refresh so the portfolio view stays up to date
+    void requestAccountSync(id, token, "BALANCE_REFRESH").catch(() => {});
+  } else {
+    availableAtomic = BigInt(balance.atomicBalance);
   }
 
   const sourceAssetKey =
@@ -208,17 +263,36 @@ async function computeAvailableBalanceForDeployment(
           'PENDING_CUSTODY',
           'LEASED',
           'SIGNING_IN_PROGRESS',
-          'CONFIRMING',
-          'PROVIDER_SETTLING',
           'UNKNOWN_AMBIGUOUS'
         )
     `;
   });
 
   const reservedAtomic = BigInt(reservedRows[0]?.reserved ?? "0");
-  const spendable = BigInt(balance.atomicBalance) - reservedAtomic;
+  const spendable = availableAtomic - reservedAtomic;
   if (requestedAmountAtomic > spendable) {
     throw new ApiFailure(400, "INSUFFICIENT_SPENDABLE_BALANCE");
+  }
+
+  const nativeGasRecord = nativeDeployment
+    ? portfolio.balances.find(
+        (record) =>
+          record.networkAsset.isVerified &&
+          record.networkAsset.status === "ACTIVE" &&
+          isBalanceMatchingDeployment(record, nativeDeployment),
+      )
+    : undefined;
+  const nativeBalanceAtomic =
+    liveNativeBalanceAtomic ??
+    (nativeGasRecord ? BigInt(nativeGasRecord.atomicBalance) : 0n);
+  const gasCheck = checkNetworkGasBalance({
+    networkKey: deployment.networkKey,
+    sourceStandard: deployment.standard,
+    requestedAmountAtomic,
+    nativeBalanceAtomic,
+  });
+  if (!gasCheck.ok) {
+    throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
   }
 
   return { deployment, sourceAssetKey, portfolio };
@@ -316,14 +390,6 @@ export async function executeSendTransfer(
   } | null = null;
 
   if (isCrossChainSend) {
-    const { auth } = runtime();
-    const hasSecurityCookie = Boolean(
-      request.headers.get("cookie")?.includes(`${auth.cookies.security}=`),
-    );
-    if (!hasSecurityCookie) {
-      throw new ApiFailure(403, "FRESH_PROOF_REQUIRED");
-    }
-
     const ownSourceAddress = getMainnetWalletAddress(
       wallet,
       sourceDeployment.networkKey,
@@ -375,7 +441,6 @@ export async function executeSendTransfer(
   const created = await transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true),
       set_config('flow.current_account_id', ${id}, true)`;
-    await requireProof(tx, request, actor.session, "transfer-authorize", id);
 
     const rows = await tx.$queryRaw<OutgoingTransferRow[]>`
       INSERT INTO flow.outgoing_transfer_jobs (
@@ -394,12 +459,12 @@ export async function executeSendTransfer(
         destination_asset_id,
         destination_asset_symbol,
         destination_decimals,
-        quoted_destination_atomic_amount,
+        expected_destination_atomic_amount,
         provider_deposit_address,
         provider_deposit_memo,
         provider_correlation_id,
         status,
-        authorized_by_user_id
+        created_by_user_id
       )
       VALUES (
         ${publicId}::text,
@@ -428,7 +493,7 @@ export async function executeSendTransfer(
         source_asset_id, source_asset_symbol, source_decimals,
         source_atomic_amount::text, recipient_address, destination_network,
         destination_asset_id, destination_asset_symbol, destination_decimals,
-        quoted_destination_atomic_amount::text, provider_deposit_address,
+        expected_destination_atomic_amount::text AS quoted_destination_atomic_amount, provider_deposit_address,
         provider_deposit_memo, provider_correlation_id, status,
         source_tx_hash, destination_tx_hash, fee_atomic_amount::text,
         error_code, error_message, broadcast_at, settled_at, created_at, updated_at
@@ -528,16 +593,6 @@ export async function executeConvertTransfer(
     throw new ApiFailure(409, "ACTIVE_MAINNET_WALLET_REQUIRED");
   }
 
-  // Verify proof cookie exists before booking external provider liquidity,
-  // then atomically consume it inside the final DB transaction.
-  const { auth } = runtime();
-  const hasSecurityCookie = Boolean(
-    request.headers.get("cookie")?.includes(`${auth.cookies.security}=`),
-  );
-  if (!hasSecurityCookie) {
-    throw new ApiFailure(403, "FRESH_PROOF_REQUIRED");
-  }
-
   const committed = await fetchOneClickCommittedQuote({
     originAsset: sourceQuoteAsset.assetId,
     destinationAsset: destinationQuoteAsset.assetId,
@@ -568,7 +623,6 @@ export async function executeConvertTransfer(
   const created = await transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true),
       set_config('flow.current_account_id', ${id}, true)`;
-    await requireProof(tx, request, actor.session, "transfer-authorize", id);
 
     const rows = await tx.$queryRaw<OutgoingTransferRow[]>`
       INSERT INTO flow.outgoing_transfer_jobs (
@@ -587,12 +641,12 @@ export async function executeConvertTransfer(
         destination_asset_id,
         destination_asset_symbol,
         destination_decimals,
-        quoted_destination_atomic_amount,
+        expected_destination_atomic_amount,
         provider_deposit_address,
         provider_deposit_memo,
         provider_correlation_id,
         status,
-        authorized_by_user_id
+        created_by_user_id
       )
       VALUES (
         ${publicId}::text,
@@ -621,7 +675,7 @@ export async function executeConvertTransfer(
         source_asset_id, source_asset_symbol, source_decimals,
         source_atomic_amount::text, recipient_address, destination_network,
         destination_asset_id, destination_asset_symbol, destination_decimals,
-        quoted_destination_atomic_amount::text, provider_deposit_address,
+        expected_destination_atomic_amount::text AS quoted_destination_atomic_amount, provider_deposit_address,
         provider_deposit_memo, provider_correlation_id, status,
         source_tx_hash, destination_tx_hash, fee_atomic_amount::text,
         error_code, error_message, broadcast_at, settled_at, created_at, updated_at
@@ -651,7 +705,7 @@ export async function listOutgoingTransfers(
         source_asset_id, source_asset_symbol, source_decimals,
         source_atomic_amount::text, recipient_address, destination_network,
         destination_asset_id, destination_asset_symbol, destination_decimals,
-        quoted_destination_atomic_amount::text, provider_deposit_address,
+        expected_destination_atomic_amount::text AS quoted_destination_atomic_amount, provider_deposit_address,
         provider_deposit_memo, provider_correlation_id, status,
         source_tx_hash, destination_tx_hash, fee_atomic_amount::text,
         error_code, error_message, broadcast_at, settled_at, created_at, updated_at
@@ -688,7 +742,7 @@ export async function getOutgoingTransfer(
         source_asset_id, source_asset_symbol, source_decimals,
         source_atomic_amount::text, recipient_address, destination_network,
         destination_asset_id, destination_asset_symbol, destination_decimals,
-        quoted_destination_atomic_amount::text, provider_deposit_address,
+        expected_destination_atomic_amount::text AS quoted_destination_atomic_amount, provider_deposit_address,
         provider_deposit_memo, provider_correlation_id, status,
         source_tx_hash, destination_tx_hash, fee_atomic_amount::text,
         error_code, error_message, broadcast_at, settled_at, created_at, updated_at

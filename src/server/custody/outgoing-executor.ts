@@ -743,9 +743,7 @@ async function processNextQueuedOutgoingJob(
   }
 
   const targetAddress =
-    job.job_kind === "CONVERT"
-      ? job.provider_deposit_address
-      : job.recipient_address;
+    job.provider_deposit_address ?? job.recipient_address;
 
   if (!targetAddress) {
     await db.$executeRaw`
@@ -844,7 +842,17 @@ async function processNextQueuedOutgoingJob(
       error instanceof Error
         ? error.message
         : "Outgoing custody transfer failed.";
-    const status = signingStarted ? "UNKNOWN_AMBIGUOUS" : "FAILED";
+    const isPreSignProviderRejection =
+      code === "CUSTODY_PROVIDER_ERROR" &&
+      (message.startsWith("OutLayer authentication failed") ||
+        message.startsWith("OutLayer rejected the request") ||
+        message.startsWith("OutLayer rate limit exceeded") ||
+        message.startsWith("Requested OutLayer resource was not found") ||
+        message.startsWith("Bitcoin is unsupported"));
+    const status =
+      signingStarted && !isPreSignProviderRejection
+        ? "UNKNOWN_AMBIGUOUS"
+        : "FAILED";
     await db.$executeRaw`
       SELECT flow.fail_outgoing_transfer_before_broadcast(
         ${job.id}::uuid,
@@ -932,9 +940,17 @@ async function confirmSingleOutgoingJob(
         }
       }
     } else if (job.source_network.startsWith("near-")) {
+      const [nearAddressRow] = await db.$queryRaw<Array<{ address: string }>>`
+        SELECT address
+        FROM flow.wallet_addresses
+        WHERE wallet_id = ${job.wallet_id}::uuid
+          AND network = 'near'
+        LIMIT 1
+      `;
+      const senderAccountId = nearAddressRow?.address ?? job.recipient_address;
       const txRes = await callJsonRpc<{
         status?: { SuccessValue?: string; Failure?: unknown };
-      }>(primary, "tx", [job.source_tx_hash, job.recipient_address], {
+      }>(primary, "tx", [job.source_tx_hash, senderAccountId], {
         fallbackEndpoint: fallback,
       });
       if (txRes.response.result?.status?.SuccessValue !== undefined) {

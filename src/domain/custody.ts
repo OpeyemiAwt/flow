@@ -1063,101 +1063,103 @@ export function verifyCustodyPolicyEvidence(
     );
   }
 
-  // Evaluate documented OutLayer OpenAPI 0.1.0-alpha.4 Capabilities if present
-  if (
-    record.capabilities !== undefined &&
-    record.capabilities !== null &&
-    typeof record.capabilities === "object" &&
-    !Array.isArray(record.capabilities)
-  ) {
-    const capsObj = record.capabilities as Record<string, unknown>;
-    for (const capKey of FUND_MOVING_OUTLAYER_CAPABILITIES) {
-      const entry = capsObj[capKey];
-      if (entry === true) {
-        throw new FlowError(
-          "POLICY_VERIFICATION_FAILED",
-          `Custody policy capability '${capKey}' must not be enabled while FLOW_EXECUTION=disabled.`,
-        );
-      }
-      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-        const capRecord = entry as Record<string, unknown>;
-        if (capRecord.allowed === true || capRecord.raw_tx === true) {
+  if (isFinancialExecutionDisabled()) {
+    // Evaluate documented OutLayer OpenAPI 0.1.0-alpha.4 Capabilities if present
+    if (
+      record.capabilities !== undefined &&
+      record.capabilities !== null &&
+      typeof record.capabilities === "object" &&
+      !Array.isArray(record.capabilities)
+    ) {
+      const capsObj = record.capabilities as Record<string, unknown>;
+      for (const capKey of FUND_MOVING_OUTLAYER_CAPABILITIES) {
+        const entry = capsObj[capKey];
+        if (entry === true) {
           throw new FlowError(
             "POLICY_VERIFICATION_FAILED",
             `Custody policy capability '${capKey}' must not be enabled while FLOW_EXECUTION=disabled.`,
           );
         }
+        if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+          const capRecord = entry as Record<string, unknown>;
+          if (capRecord.allowed === true || capRecord.raw_tx === true) {
+            throw new FlowError(
+              "POLICY_VERIFICATION_FAILED",
+              `Custody policy capability '${capKey}' must not be enabled while FLOW_EXECUTION=disabled.`,
+            );
+          }
+        }
       }
     }
-  }
 
-  // Check explicit transfer-signing flags
-  if (
-    rulesObj.transferSigning === "enabled" ||
-    rulesObj.allowTransfers === true
-  ) {
-    throw new FlowError(
-      "POLICY_VERIFICATION_FAILED",
-      "Custody policy rules must not enable transfer signing while FLOW_EXECUTION=disabled.",
-    );
-  }
-
-  // Check documented OutLayer PolicyRules (`transaction_types` allowlist and `limits` spending caps)
-  let hasOutLayerZeroSpendCap = false;
-  if (
-    rulesObj.limits &&
-    typeof rulesObj.limits === "object" &&
-    !Array.isArray(rulesObj.limits)
-  ) {
-    const limits = rulesObj.limits as Record<string, unknown>;
-    const perTx =
-      limits.per_transaction &&
-      typeof limits.per_transaction === "object" &&
-      !Array.isArray(limits.per_transaction)
-        ? (limits.per_transaction as Record<string, unknown>)
-        : null;
-    const daily =
-      limits.daily &&
-      typeof limits.daily === "object" &&
-      !Array.isArray(limits.daily)
-        ? (limits.daily as Record<string, unknown>)
-        : null;
-    if (perTx?.["*"] === "0" && (!daily || daily["*"] === "0")) {
-      hasOutLayerZeroSpendCap = true;
+    // Check explicit transfer-signing flags
+    if (
+      rulesObj.transferSigning === "enabled" ||
+      rulesObj.allowTransfers === true
+    ) {
+      throw new FlowError(
+        "POLICY_VERIFICATION_FAILED",
+        "Custody policy rules must not enable transfer signing while FLOW_EXECUTION=disabled.",
+      );
     }
-  }
 
-  let hasOutLayerNonFundTxTypeAllowlist = false;
-  if (Array.isArray(rulesObj.transaction_types)) {
-    for (const txType of rulesObj.transaction_types) {
-      if (
-        typeof txType !== "string" ||
-        FUND_MOVING_OUTLAYER_REQUEST_TYPES.has(txType)
-      ) {
-        throw new FlowError(
-          "POLICY_VERIFICATION_FAILED",
-          `Custody policy rules.transaction_types must not permit fund-moving operation '${String(txType)}' while FLOW_EXECUTION=disabled.`,
-        );
+    // Check documented OutLayer PolicyRules (`transaction_types` allowlist and `limits` spending caps)
+    let hasOutLayerZeroSpendCap = false;
+    if (
+      rulesObj.limits &&
+      typeof rulesObj.limits === "object" &&
+      !Array.isArray(rulesObj.limits)
+    ) {
+      const limits = rulesObj.limits as Record<string, unknown>;
+      const perTx =
+        limits.per_transaction &&
+        typeof limits.per_transaction === "object" &&
+        !Array.isArray(limits.per_transaction)
+          ? (limits.per_transaction as Record<string, unknown>)
+          : null;
+      const daily =
+        limits.daily &&
+        typeof limits.daily === "object" &&
+        !Array.isArray(limits.daily)
+          ? (limits.daily as Record<string, unknown>)
+          : null;
+      if (perTx?.["*"] === "0" && (!daily || daily["*"] === "0")) {
+        hasOutLayerZeroSpendCap = true;
       }
     }
-    hasOutLayerNonFundTxTypeAllowlist = true;
-  }
 
-  const hasExplicitDenyRule =
-    rulesObj.defaultAction === "DENY" ||
-    (hasOutLayerZeroSpendCap && hasOutLayerNonFundTxTypeAllowlist) ||
-    (hasOutLayerNonFundTxTypeAllowlist &&
-      rulesObj.transaction_types &&
-      (rulesObj.transaction_types as unknown[]).length === 0);
+    let hasOutLayerNonFundTxTypeAllowlist = false;
+    if (Array.isArray(rulesObj.transaction_types)) {
+      for (const txType of rulesObj.transaction_types) {
+        if (
+          typeof txType !== "string" ||
+          FUND_MOVING_OUTLAYER_REQUEST_TYPES.has(txType)
+        ) {
+          throw new FlowError(
+            "POLICY_VERIFICATION_FAILED",
+            `Custody policy rules.transaction_types must not permit fund-moving operation '${String(txType)}' while FLOW_EXECUTION=disabled.`,
+          );
+        }
+      }
+      hasOutLayerNonFundTxTypeAllowlist = true;
+    }
 
-  if (
-    !hasExplicitDenyRule ||
-    (rulesObj.defaultAction !== undefined && rulesObj.defaultAction !== "DENY")
-  ) {
-    throw new FlowError(
-      "POLICY_VERIFICATION_FAILED",
-      "Custody policy verification requires default-deny rules (rules.defaultAction === 'DENY' or OutLayer PolicyRules with empty transaction_types / zero spend limits).",
-    );
+    const hasExplicitDenyRule =
+      rulesObj.defaultAction === "DENY" ||
+      (hasOutLayerZeroSpendCap && hasOutLayerNonFundTxTypeAllowlist) ||
+      (hasOutLayerNonFundTxTypeAllowlist &&
+        rulesObj.transaction_types &&
+        (rulesObj.transaction_types as unknown[]).length === 0);
+
+    if (
+      !hasExplicitDenyRule ||
+      (rulesObj.defaultAction !== undefined && rulesObj.defaultAction !== "DENY")
+    ) {
+      throw new FlowError(
+        "POLICY_VERIFICATION_FAILED",
+        "Custody policy verification requires default-deny rules (rules.defaultAction === 'DENY' or OutLayer PolicyRules with empty transaction_types / zero spend limits).",
+      );
+    }
   }
 
   return {
@@ -1575,6 +1577,34 @@ export function buildDefaultDenyCustodyPolicy(options?: {
   }
 
   return base;
+}
+
+/**
+ * Builds an OutLayer custody policy enabling live multi-chain transfers and
+ * swap/withdraw signing when `FLOW_EXECUTION=enabled`.
+ */
+export function buildLiveExecutionCustodyPolicy(): Record<string, unknown> {
+  return {
+    rules: {
+      transaction_types: ["transfer", "call"],
+      addresses: {
+        mode: "blacklist",
+        list: [],
+      },
+    },
+    capabilities: {
+      raw_sign: { allowed: false },
+      evm_sign: { allowed: true, raw_tx: true },
+      solana_sign: { allowed: true, raw_tx: true },
+      swap: { allowed: true },
+      cross_chain_withdraw: { allowed: true },
+      limit_order: { allowed: false },
+      payment_check: { allowed: false },
+      confidential: { allowed: false },
+      intents_call: { allowed: true },
+      sign_message: { allowed: false },
+    },
+  };
 }
 
 export interface OnChainWalletPolicyView {

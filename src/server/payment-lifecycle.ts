@@ -270,10 +270,19 @@ export async function commitPaymentAttempt(
       resolveQuoteAsset(attempt.source_asset_id),
       resolveQuoteAsset(row.destination_asset_id),
       readPaymentWalletAddresses(publicId),
-      db.$queryRaw<Array<{ payer_memo_required: boolean }>>`
-          SELECT payer_memo_required FROM flow.get_public_payment_request(${publicId})
+      db.$queryRaw<Array<{ payer_memo_required: boolean; status: string }>>`
+          SELECT payer_memo_required, status::text FROM flow.get_public_payment_request(${publicId})
         `,
     ]);
+    if (invoice?.status === "DISABLED") {
+      throw new ApiFailure(409, "PAYMENT_REQUEST_PAUSED");
+    }
+    if (invoice?.status === "COMPLETED") {
+      throw new ApiFailure(409, "PAYMENT_REQUEST_COMPLETED");
+    }
+    if (invoice?.status === "EXPIRED") {
+      throw new ApiFailure(409, "PAYMENT_REQUEST_EXPIRED");
+    }
     if (
       !sourceDeployment ||
       !destinationDeployment ||

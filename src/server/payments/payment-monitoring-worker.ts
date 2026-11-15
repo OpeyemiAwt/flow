@@ -7,12 +7,15 @@ import {
   getEquivalentNetworkTokens,
 } from "../../domain/supported-assets-catalog.ts";
 import {
+  getNetworkRpcUrl,
   recordVerificationInDatabase,
   verifyOnChainTransfer,
   type EvidenceSource,
   type VerifiedTransferResult,
   type VerifyOnChainTransferParams,
 } from "./on-chain-verifier.ts";
+import { indexEvmAddressActivities } from "../assets/indexers/evm-indexer.ts";
+import { indexSolanaAddressActivities } from "../assets/indexers/solana-indexer.ts";
 import { fetchOneClickExecutionStatus } from "../providers/one-click-adapter.ts";
 
 export { isValidTransactionHash };
@@ -387,9 +390,181 @@ export class PaymentMonitoringWorker {
       };
     }
 
+    if (attempt.routeType === "DIRECT_TRANSFER" && attempt.depositAddress) {
+      return await this.scanDirectTransfer(attempt);
+    }
+
     return {
       status: "PENDING",
     };
+  }
+
+  private async isTxAlreadyClaimed(txHash: string): Promise<boolean> {
+    const existing = await this.workerDb.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text
+      FROM flow.payment_verifications
+      WHERE tx_hash = ${txHash}
+      LIMIT 1
+    `;
+    return existing.length > 0;
+  }
+
+  /**
+   * Scans the destination chain for an incoming direct (same-asset) payment
+   * sent directly to the FLOW user's address (`attempt.depositAddress`).
+   */
+  private async scanDirectTransfer(
+    attempt: MonitoredAttemptRecord,
+  ): Promise<ProviderExecutionEvidence> {
+    const recipient = attempt.depositAddress?.trim();
+    if (!recipient) {
+      return { status: "PENDING" };
+    }
+
+    const network = attempt.destinationNetwork.toLowerCase().trim();
+    const minAmount = BigInt(
+      attempt.quotedDestinationAtomicAmount ||
+        attempt.quotedSourceAtomicAmount ||
+        "1",
+    );
+    const tokenContract = await this.resolveTokenContract(
+      attempt.destinationNetwork,
+      attempt.destinationAssetId,
+    );
+    const rpcUrl = getNetworkRpcUrl(network);
+
+    try {
+      if (network.startsWith("solana")) {
+        const solanaNetwork =
+          network === "solana-devnet" ? "solana-devnet" : "solana-mainnet";
+        const items = await indexSolanaAddressActivities(rpcUrl, recipient, {
+          network: solanaNetwork,
+          limit: 20,
+        });
+        for (const item of items) {
+          if (
+            item.direction !== "INCOMING" ||
+            (item.finality !== "CONFIRMED" && item.finality !== "FINALIZED")
+          ) {
+            continue;
+          }
+          if (tokenContract) {
+            if (item.contractAddress !== tokenContract) continue;
+          } else if (item.contractAddress) {
+            continue;
+          }
+          if (item.atomicAmount < minAmount) continue;
+          if (await this.isTxAlreadyClaimed(item.txHash)) continue;
+          return {
+            status: "SETTLED",
+            sourceTxHash: item.txHash,
+            destinationTxHash: item.txHash,
+            fromAddress: item.fromAddress,
+            toAddress: recipient,
+            evidenceSource: "CHAIN_RPC_DIRECT",
+          };
+        }
+        return { status: "PENDING" };
+      }
+
+      if (network.startsWith("base") || network.startsWith("ethereum")) {
+        const chainId =
+          network === "base-mainnet"
+            ? "8453"
+            : network === "base-sepolia"
+              ? "84532"
+              : network === "ethereum-sepolia"
+                ? "11155111"
+                : "1";
+        const items = await indexEvmAddressActivities(rpcUrl, recipient, {
+          network,
+          chainId,
+        });
+        for (const item of items) {
+          if (
+            item.direction !== "INCOMING" ||
+            (item.finality !== "CONFIRMED" && item.finality !== "FINALIZED")
+          ) {
+            continue;
+          }
+          if (tokenContract) {
+            if (
+              item.contractAddress?.toLowerCase() !==
+              tokenContract.toLowerCase()
+            ) {
+              continue;
+            }
+          } else if (item.contractAddress) {
+            continue;
+          }
+          if (item.atomicAmount < minAmount) continue;
+          if (await this.isTxAlreadyClaimed(item.txHash)) continue;
+          return {
+            status: "SETTLED",
+            sourceTxHash: item.txHash,
+            destinationTxHash: item.txHash,
+            fromAddress: item.fromAddress,
+            toAddress: recipient,
+            evidenceSource: "CHAIN_RPC_DIRECT",
+          };
+        }
+        return { status: "PENDING" };
+      }
+
+      if (network.startsWith("near")) {
+        const apiBase = network.includes("testnet")
+          ? "https://api-testnet.nearblocks.io"
+          : "https://api.nearblocks.io";
+        const res = await fetch(
+          `${apiBase}/v1/account/${encodeURIComponent(recipient)}/txns?per_page=15`,
+          { signal: AbortSignal.timeout(8000) },
+        );
+        if (!res.ok) {
+          return { status: "PENDING" };
+        }
+        const json = (await res.json()) as {
+          txns?: Array<{
+            transaction_hash?: string;
+            predecessor_account_id?: string;
+            receiver_account_id?: string;
+          }>;
+        };
+        for (const tx of json.txns ?? []) {
+          const txHash = tx.transaction_hash?.trim();
+          if (!txHash) continue;
+          if (await this.isTxAlreadyClaimed(txHash)) continue;
+          try {
+            const verified = await this.onChainVerifier({
+              network,
+              txHash,
+              expectedRecipient: recipient,
+              expectedAssetId: attempt.destinationAssetId,
+              expectedTokenContract: tokenContract,
+              minimumAtomicAmount: minAmount,
+            });
+            return {
+              status: "SETTLED",
+              sourceTxHash: verified.txHash,
+              destinationTxHash: verified.txHash,
+              fromAddress: verified.fromAddress,
+              toAddress: verified.toAddress,
+              evidenceSource: "CHAIN_RPC_DIRECT",
+            };
+          } catch {
+            // Skip unrelated/insufficient txs
+          }
+        }
+        return { status: "PENDING" };
+      }
+    } catch (err) {
+      log("info", "direct_transfer_scan_failed", {
+        attemptPublicId: attempt.attemptPublicId,
+        network,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    return { status: "PENDING" };
   }
 
   /**
@@ -861,9 +1036,10 @@ export class PaymentMonitoringWorker {
             expectedRecipient: intent.destination_address,
             expectedAssetId: "near-mainnet:NEAR",
             expectedTokenContract: null,
-            minimumAtomicAmount: BigInt(
-              intent.quoted_destination_atomic_amount || "1",
-            ),
+            // Allow up to 3% slippage vs indicative quote when settling user add-money deposits
+            minimumAtomicAmount:
+              (BigInt(intent.quoted_destination_atomic_amount || "1") * 97n) /
+                100n || 1n,
           });
           if (verified.finality === "FINALIZED") {
             nextStatus = "SETTLED";

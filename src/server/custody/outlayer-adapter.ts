@@ -98,10 +98,18 @@ export function classifyProviderError(
       ...metadata,
     };
   }
-  if (safeStatus === 401 || safeStatus === 403) {
+  if (safeStatus === 401) {
     return {
       classification: "AUTHENTICATION_FAILED",
-      safeMessage: "OutLayer authentication failed or credentials rejected.",
+      safeMessage: "OutLayer authentication failed (HTTP 401): API key rejected.",
+      ...metadata,
+    };
+  }
+  if (safeStatus === 403) {
+    return {
+      classification: "AUTHENTICATION_FAILED",
+      safeMessage:
+        "OutLayer rejected the request (HTTP 403): wallet policy or permission check failed.",
       ...metadata,
     };
   }
@@ -135,6 +143,42 @@ export function classifyProviderError(
     safeMessage: "OutLayer communication failed due to a network error.",
     ...metadata,
   };
+}
+
+async function logSafeOutlayerFailure(
+  response: Response,
+  endpoint: OutLayerEndpoint,
+  chain?: OutLayerChain,
+): Promise<string | undefined> {
+  const raw = await response.text().catch(() => "");
+  let detail: string | undefined;
+  try {
+    const parsed = JSON.parse(raw) as {
+      error?: unknown;
+      message?: unknown;
+      code?: unknown;
+    };
+    const msg =
+      typeof parsed.error === "string"
+        ? parsed.error
+        : typeof parsed.message === "string"
+          ? parsed.message
+          : typeof parsed.code === "string"
+            ? parsed.code
+            : undefined;
+    if (msg) detail = msg.slice(0, 200);
+  } catch {
+    if (raw && !raw.trimStart().startsWith("<")) {
+      detail = raw.trim().slice(0, 200);
+    }
+  }
+  log("error", "outlayer_http_error", {
+    endpoint,
+    ...(chain ? { chain } : {}),
+    httpStatus: response.status,
+    ...(detail ? { detail } : {}),
+  });
+  return detail;
 }
 
 /**
@@ -1032,11 +1076,19 @@ export class OutLayerAdapter {
     });
 
     if (!response.ok) {
+      const detail = await logSafeOutlayerFailure(
+        response,
+        "/wallet/v1/transfer",
+        "near",
+      );
       const sanitized = classifyProviderError(response.status, {
         endpoint: "/wallet/v1/transfer",
         chain: "near",
       });
-      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        detail ? `${sanitized.safeMessage} (${detail})` : sanitized.safeMessage,
+      );
     }
 
     const json = await response.json().catch(() => {
@@ -1090,11 +1142,19 @@ export class OutLayerAdapter {
     });
 
     if (!response.ok) {
+      const detail = await logSafeOutlayerFailure(
+        response,
+        "/wallet/v1/call",
+        "near",
+      );
       const sanitized = classifyProviderError(response.status, {
         endpoint: "/wallet/v1/call",
         chain: "near",
       });
-      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        detail ? `${sanitized.safeMessage} (${detail})` : sanitized.safeMessage,
+      );
     }
 
     const json = await response.json().catch(() => {
@@ -1148,11 +1208,19 @@ export class OutLayerAdapter {
     );
 
     if (!response.ok) {
+      const detail = await logSafeOutlayerFailure(
+        response,
+        "/wallet/v1/evm/sign-transaction",
+        input.chain,
+      );
       const sanitized = classifyProviderError(response.status, {
         endpoint: "/wallet/v1/evm/sign-transaction",
         chain: input.chain,
       });
-      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        detail ? `${sanitized.safeMessage} (${detail})` : sanitized.safeMessage,
+      );
     }
 
     const json = await response.json().catch(() => {
@@ -1199,11 +1267,19 @@ export class OutLayerAdapter {
     );
 
     if (!response.ok) {
+      const detail = await logSafeOutlayerFailure(
+        response,
+        "/wallet/v1/solana/sign-transaction",
+        "solana",
+      );
       const sanitized = classifyProviderError(response.status, {
         endpoint: "/wallet/v1/solana/sign-transaction",
         chain: "solana",
       });
-      throw new FlowError("CUSTODY_PROVIDER_ERROR", sanitized.safeMessage);
+      throw new FlowError(
+        "CUSTODY_PROVIDER_ERROR",
+        detail ? `${sanitized.safeMessage} (${detail})` : sanitized.safeMessage,
+      );
     }
 
     const json = await response.json().catch(() => {

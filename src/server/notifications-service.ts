@@ -125,6 +125,50 @@ export async function getAccountNotifications(
     });
   }
 
+  // 2b. Fetch recent incoming on-chain deposits
+  const incomingDeposits = await db.$queryRaw<
+    Array<{
+      id: string;
+      chain_id: string;
+      asset_symbol: string;
+      atomic_amount: string;
+      decimals: number;
+      block_timestamp: Date | null;
+      observed_at: Date;
+    }>
+  >`
+      SELECT
+        id,
+        chain_id,
+        asset_symbol,
+        atomic_amount::text AS atomic_amount,
+        decimals,
+        block_timestamp,
+        observed_at
+      FROM flow.wallet_activities
+      WHERE account_id = ${accountId}::uuid
+        AND direction = 'INCOMING'
+        AND finality IN ('CONFIRMED', 'FINALIZED')
+        AND atomic_amount > 0
+      ORDER BY COALESCE(block_timestamp, observed_at) DESC
+      LIMIT 15
+  `;
+
+  for (const dep of incomingDeposits) {
+    const amount = formatAtomicToDisplay(dep.atomic_amount, dep.decimals);
+    notifications.push({
+      id: `notif_deposit_${dep.id}`,
+      accountId,
+      category: "payments",
+      type: "DEPOSIT_DETECTED",
+      title: "Deposit received",
+      description: `+${amount} ${dep.asset_symbol} on ${dep.chain_id.replace("-mainnet", "")}`,
+      link: `/accounts/${accountId}?view=activity`,
+      isRead: false,
+      createdAt: (dep.block_timestamp ?? dep.observed_at).toISOString(),
+    });
+  }
+
   // 3. Balance sync notices from wallet balances
   const syncErrors = await db.$queryRaw<
     Array<{

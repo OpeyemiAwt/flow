@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { TermsPage } from "../legal-content";
 
 export const metadata: Metadata = {
-  title: "Terms | FLOW",
+  title: "Terms of Service | FLOW",
   description:
-    "Draft terms for the FLOW application, pending owner and legal review.",
+    "Terms governing multi-chain wallet access, payment links, and cross-chain routing on FLOW.",
 };
 
 export default function Page() {

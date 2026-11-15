@@ -6,8 +6,8 @@ import {
   ChainBadge,
   IconLock,
   IconShield,
-  IconSwap,
 } from "./icons.tsx";
+import { CrossChainFlowVisual } from "./motion";
 
 interface RouteOption {
   readonly id: string;
@@ -162,14 +162,11 @@ export function MarketingRoutePreview() {
         </div>
 
         {/* Center Route Connector */}
-        <div className="relative flex items-center justify-center py-0.5">
-          <div className="h-px w-full bg-[var(--border-subtle)]" />
-          <div className="absolute inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-[var(--surface-card)] px-3 py-1 text-[11px] font-semibold text-[#0B0B0B] dark:text-white shadow-xs">
-            <IconSwap size={13} className="text-[#FF1A1A]" />
-            {source.networkLabel} ({source.symbol}) → {dest.networkLabel} (
-            {dest.symbol})
-          </div>
-        </div>
+        <CrossChainFlowVisual
+          fromLabel={`${source.symbol} · ${source.networkLabel}`}
+          toLabel={`${dest.symbol} · ${dest.networkLabel}`}
+          active
+        />
 
         {/* Recipient Destination Box */}
         <div className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--surface-subtle)]/70 p-4">

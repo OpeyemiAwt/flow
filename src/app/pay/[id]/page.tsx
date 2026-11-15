@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { isFinancialExecutionDisabled } from "../../../domain/custody.ts";
 import { readPublicPaymentRequest } from "../../../server/payment-requests.ts";
@@ -20,11 +21,22 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
 
   let data;
   try {
-    // Construct local request to query public payment request
-    const dummyReq = new Request(
-      `http://127.0.0.1/api/pay/${id}${attemptParam}`,
+    const incomingHeaders = await headers();
+    const host =
+      incomingHeaders.get("x-forwarded-host") ||
+      incomingHeaders.get("host") ||
+      process.env.RAILWAY_PUBLIC_DOMAIN ||
+      "127.0.0.1";
+    const proto =
+      incomingHeaders.get("x-forwarded-proto") ||
+      (host.startsWith("127.0.0.1") || host.startsWith("localhost")
+        ? "http"
+        : "https");
+    const req = new Request(
+      `${proto}://${host}/api/pay/${id}${attemptParam}`,
+      { headers: incomingHeaders },
     );
-    const res = await readPublicPaymentRequest(dummyReq, id);
+    const res = await readPublicPaymentRequest(req, id);
 
     if (res.status === 404) {
       notFound();

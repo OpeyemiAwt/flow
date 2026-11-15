@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { FlowLogo } from "./flow-logo.tsx";
+import { triggerHaptic } from "./haptics.ts";
 import { FlowAiMascot, IconMoon, IconSun } from "./icons.tsx";
 import { UserAvatar } from "./user-avatar.tsx";
 import {
@@ -25,6 +26,7 @@ export type NavTabId =
   | "send"
   | "receive"
   | "request"
+  | "earn"
   | "activity"
   | "settings";
 
@@ -41,7 +43,7 @@ export interface FloatingNavProps {
 }
 
 interface NavTabItem {
-  id: Exclude<NavTabId, "settings">;
+  id: "dashboard" | "send" | "receive" | "request" | "earn";
   label: string;
   icon: ReactNode;
 }
@@ -124,8 +126,8 @@ const TABS: NavTabItem[] = [
     ),
   },
   {
-    id: "activity",
-    label: "Activity",
+    id: "earn",
+    label: "Earn",
     icon: (
       <svg
         width="20"
@@ -137,9 +139,9 @@ const TABS: NavTabItem[] = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <line x1="18" y1="20" x2="18" y2="10" />
-        <line x1="12" y1="20" x2="12" y2="4" />
-        <line x1="6" y1="20" x2="6" y2="14" />
+        <circle cx="12" cy="12" r="9" />
+        <path d="M14.8 9A2 2 0 0 0 13 8h-2a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4h-2a2 2 0 0 1-1.8-1" />
+        <path d="M12 6v2m0 8v2" />
       </svg>
     ),
   },
@@ -160,7 +162,6 @@ export function FloatingNav({
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentUserName, setCurrentUserName] = useState(effectiveUserName);
   const [isDark, setIsDark] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -172,6 +173,30 @@ export function FloatingNav({
     width: number;
     visible: boolean;
   }>({ left: 0, width: 0, visible: false });
+  const [pillGliding, setPillGliding] = useState(false);
+  const prevTabRef = useRef<NavTabId>(activeTab);
+
+  const mobileNavRef = useRef<HTMLElement>(null);
+  const mobileTabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [mobilePillGeometry, setMobilePillGeometry] = useState<{
+    left: number;
+    width: number;
+    visible: boolean;
+  }>({ left: 0, width: 0, visible: false });
+  const [mobilePillGliding, setMobilePillGliding] = useState(false);
+
+  useEffect(() => {
+    if (prevTabRef.current !== activeTab) {
+      prevTabRef.current = activeTab;
+      setPillGliding(true);
+      setMobilePillGliding(true);
+      const timer = window.setTimeout(() => {
+        setPillGliding(false);
+        setMobilePillGliding(false);
+      }, 260);
+      return () => window.clearTimeout(timer);
+    }
+  }, [activeTab]);
 
   const syncPillGeometry = useCallback(() => {
     const activeButton =
@@ -205,6 +230,39 @@ export function FloatingNav({
       window.removeEventListener("resize", syncPillGeometry);
     };
   }, [syncPillGeometry]);
+
+  const syncMobilePillGeometry = useCallback(() => {
+    const activeButton =
+      activeTab === "settings" ? null : mobileTabButtonRefs.current[activeTab];
+    const container = mobileNavRef.current;
+    if (!activeButton || !container) {
+      setMobilePillGeometry((prev) =>
+        prev.visible ? { ...prev, visible: false } : prev,
+      );
+      return;
+    }
+    setMobilePillGeometry({
+      left: activeButton.offsetLeft,
+      width: activeButton.offsetWidth,
+      visible: true,
+    });
+  }, [activeTab]);
+
+  useLayoutEffect(() => {
+    syncMobilePillGeometry();
+  }, [syncMobilePillGeometry]);
+
+  useEffect(() => {
+    const container = mobileNavRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => syncMobilePillGeometry());
+    observer.observe(container);
+    window.addEventListener("resize", syncMobilePillGeometry);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", syncMobilePillGeometry);
+    };
+  }, [syncMobilePillGeometry]);
 
   useEffect(() => {
     const sync = () =>
@@ -258,7 +316,8 @@ export function FloatingNav({
   }, [profileOpen]);
 
   return (
-    <header className="sticky top-0 z-40 w-full px-4 sm:px-8 pt-4 pb-3">
+    <>
+      <header className="sticky top-0 z-40 w-full bg-white dark:bg-black border-b border-neutral-100/90 dark:border-white/[0.08] px-4 sm:px-8 pt-3.5 pb-3 transition-colors">
       <div className="mx-auto flex md:grid md:grid-cols-[1fr_auto_1fr] max-w-7xl items-center justify-between gap-4">
         {/* Brand Logo (Left Column) */}
         <div className="flex items-center justify-self-start">
@@ -284,7 +343,7 @@ export function FloatingNav({
               className="flow-nav-active-pill pointer-events-none absolute top-1.5 bottom-1.5 left-0 rounded-full"
               style={{
                 width: `${pillGeometry.width}px`,
-                transform: `translate3d(${pillGeometry.left}px, 0, 0)`,
+                transform: `translate3d(${pillGeometry.left}px, 0, 0) scale(${pillGliding ? 0.86 : 1})`,
               }}
             />
           )}
@@ -298,9 +357,12 @@ export function FloatingNav({
                   tabButtonRefs.current[tab.id] = el;
                 }}
                 type="button"
-                onClick={() => onTabChange(tab.id)}
+                onClick={() => {
+                  triggerHaptic("light");
+                  onTabChange(tab.id);
+                }}
                 aria-current={isActive ? "page" : undefined}
-                className={`relative z-10 flex items-center gap-2.5 px-4 lg:px-5 py-2.5 rounded-full text-[13.5px] font-semibold transition-colors duration-200 cursor-pointer select-none ${
+                className={`flow-press relative z-10 flex items-center gap-2.5 px-4 lg:px-5 py-2.5 rounded-full text-[13.5px] font-semibold transition-colors duration-200 cursor-pointer select-none ${
                   isActive
                     ? pillGeometry.visible
                       ? "text-[#0B0B0B]"
@@ -309,9 +371,10 @@ export function FloatingNav({
                 }`}
               >
                 <span
+                  key={isActive ? `icon-active-${tab.id}` : `icon-${tab.id}`}
                   className={`transition-transform duration-200 ${
                     isActive
-                      ? "text-[#0B0B0B] scale-[1.04]"
+                      ? "text-[#0B0B0B] flow-anim-icon-pop"
                       : "text-neutral-500 dark:text-neutral-400"
                   }`}
                 >
@@ -364,7 +427,9 @@ export function FloatingNav({
                 <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
               </svg>
               {unreadCount > 0 && (
-                <span className="absolute top-2.5 right-2.5 flex h-2 w-2 rounded-full bg-[#FF1A1A] ring-2 ring-white dark:ring-[#18181B]" />
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#FF1A1A] text-white text-[10px] font-bold leading-none ring-2 ring-white dark:ring-[#18181B]">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
               )}
             </button>
           )}
@@ -406,7 +471,7 @@ export function FloatingNav({
 
             {/* Profile Dropdown Menu: Profile, Settings, Instant Appearance Toggle, Sign out */}
             {profileOpen && (
-              <div className="absolute right-0 mt-2.5 w-60 rounded-2xl bg-white/95 dark:bg-[#161618]/95 backdrop-blur-xl border border-neutral-200/90 dark:border-white/10 shadow-2xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="flow-anim-fade-up absolute right-0 mt-2.5 w-60 rounded-2xl bg-white/95 dark:bg-[#161618]/95 backdrop-blur-xl border border-neutral-200/90 dark:border-white/10 shadow-2xl p-1.5 z-50">
                 <div className="px-3 py-2.5 border-b border-neutral-100 dark:border-white/[0.08] mb-1">
                   <p className="text-xs font-bold text-neutral-900 dark:text-white truncate">
                     {currentUserName}
@@ -437,6 +502,31 @@ export function FloatingNav({
                     </svg>
                     <span>Profile</span>
                   </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      onTabChange("activity");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left cursor-pointer"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                    <span>Activity</span>
+                  </button>
 
                   <Link
                     href="/security"
@@ -512,65 +602,67 @@ export function FloatingNav({
               </div>
             )}
           </div>
-
-          {/* Mobile Menu Hamburger */}
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen((prev) => !prev)}
-            aria-label="Toggle navigation menu"
-            className="flow-liquid-btn md:hidden flex h-11 w-11 items-center justify-center rounded-full text-neutral-700 dark:text-neutral-200 cursor-pointer"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.1"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              {mobileMenuOpen ? (
-                <path d="M18 6L6 18M6 6l12 12" />
-              ) : (
-                <path d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
-          </button>
         </div>
       </div>
+      </header>
 
-      {/* Mobile Drawer Navigation */}
-      {mobileMenuOpen && (
-        <div className="md:hidden mt-2.5 p-2 rounded-3xl flow-nav-glass shadow-xl space-y-1">
+      {/* Bottom Floating Liquid Glass Pill Navigation (Mobile) */}
+      <div className="md:hidden fixed bottom-4 inset-x-0 z-50 flex justify-center px-3 pointer-events-none">
+        <nav
+          ref={mobileNavRef}
+          aria-label="Mobile navigation"
+          className="relative pointer-events-auto w-full max-w-md flex items-center justify-between gap-1 p-1.5 rounded-full flow-nav-glass shadow-xl"
+        >
+          {/* Animated White Glossy Active Indicator */}
+          {mobilePillGeometry.visible && (
+            <span
+              aria-hidden="true"
+              className="flow-nav-active-pill pointer-events-none absolute top-1.5 bottom-1.5 left-0 rounded-full"
+              style={{
+                width: `${mobilePillGeometry.width}px`,
+                transform: `translate3d(${mobilePillGeometry.left}px, 0, 0) scale(${mobilePillGliding ? 0.86 : 1})`,
+              }}
+            />
+          )}
+
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
+                ref={(el) => {
+                  mobileTabButtonRefs.current[tab.id] = el;
+                }}
                 type="button"
                 onClick={() => {
+                  triggerHaptic("light");
                   onTabChange(tab.id);
-                  setMobileMenuOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer ${
+                aria-label={tab.label}
+                aria-current={isActive ? "page" : undefined}
+                className={`flow-press relative z-10 flex-1 flex items-center justify-center py-3 px-2 rounded-full transition-colors duration-200 cursor-pointer select-none ${
                   isActive
-                    ? "flow-nav-active-pill text-[#0B0B0B]"
-                    : "text-neutral-700 dark:text-neutral-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                    ? mobilePillGeometry.visible
+                      ? "text-[#0B0B0B]"
+                      : "flow-nav-active-pill text-[#0B0B0B]"
+                    : "text-neutral-600 dark:text-neutral-300/80 hover:text-neutral-950 dark:hover:text-white"
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <span>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                </div>
-                {isActive && (
-                  <span className="h-2 w-2 rounded-full bg-[#FF1A1A]" />
-                )}
+                <span
+                  key={isActive ? `m-icon-active-${tab.id}` : `m-icon-${tab.id}`}
+                  className={`transition-transform duration-200 ${
+                    isActive
+                      ? "text-[#0B0B0B] flow-anim-icon-pop"
+                      : "text-neutral-500 dark:text-neutral-400"
+                  }`}
+                >
+                  {tab.icon}
+                </span>
               </button>
             );
           })}
-        </div>
-      )}
-    </header>
+        </nav>
+      </div>
+    </>
   );
 }

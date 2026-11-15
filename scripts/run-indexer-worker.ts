@@ -74,6 +74,14 @@ async function main(): Promise<void> {
     ? Math.max(250, Math.min(5_000, Math.trunc(rawPollMs)))
     : 400;
 
+  const rawPeriodicMs = Number(
+    process.env.FLOW_INDEXER_PERIODIC_SYNC_INTERVAL_MS ?? "10000",
+  );
+  const periodicSyncIntervalMs = Number.isFinite(rawPeriodicMs)
+    ? Math.max(5_000, Math.min(300_000, Math.trunc(rawPeriodicMs)))
+    : 10_000;
+  let lastPeriodicSyncAt = 0;
+
   while (!controller.signal.aborted) {
     try {
       const jobs = await db.$queryRaw<
@@ -90,6 +98,47 @@ async function main(): Promise<void> {
       `;
       const job = jobs[0];
       if (!job) {
+        if (Date.now() - lastPeriodicSyncAt >= periodicSyncIntervalMs) {
+          lastPeriodicSyncAt = Date.now();
+          const activeWallets = await db.$queryRaw<
+            Array<{ id: string }>
+          >`
+            SELECT DISTINCT wallet_id AS id
+            FROM flow.wallet_addresses
+            LIMIT 20
+          `;
+          for (const activeWallet of activeWallets) {
+            if (controller.signal.aborted) break;
+            const [walletMeta] = await db.$queryRaw<
+              Array<{ environment: "mainnet" | "testnet" }>
+            >`
+              SELECT environment FROM flow.wallets WHERE id = ${activeWallet.id}::uuid
+            `;
+            const rpcConfig = getDefaultRpcConfig(walletMeta?.environment ?? "mainnet");
+            try {
+              await reconcileWalletBalances(db, activeWallet.id, rpcConfig);
+            } catch (err) {
+              log("info", "indexer_periodic_sync_error", {
+                workerId,
+                walletId: activeWallet.id,
+                phase: "balance",
+                errorCode: errorCode(err),
+                errorMessage: err instanceof Error ? err.message.slice(0, 200) : String(err),
+              });
+            }
+            try {
+              await ingestWalletActivities(db, activeWallet.id, { rpcConfig });
+            } catch (err) {
+              log("info", "indexer_periodic_sync_error", {
+                workerId,
+                walletId: activeWallet.id,
+                phase: "activity",
+                errorCode: errorCode(err),
+                errorMessage: err instanceof Error ? err.message.slice(0, 200) : String(err),
+              });
+            }
+          }
+        }
         await sleep(pollIntervalMs, controller.signal);
         continue;
       }
@@ -136,6 +185,7 @@ async function main(): Promise<void> {
       log("error", "indexer_worker_loop_error", {
         workerId,
         errorCode: errorCode(error),
+        errorMessage: error instanceof Error ? error.message.slice(0, 200) : String(error),
       });
       await sleep(2_000, controller.signal);
     }

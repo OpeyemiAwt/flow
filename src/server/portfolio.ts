@@ -73,6 +73,11 @@ export async function refreshPortfolio(
     actor.session.token,
     "BALANCE_REFRESH",
   );
+  void requestAccountSync(
+    accountId,
+    actor.session.token,
+    "ACTIVITY_SYNC",
+  ).catch(() => {});
   if (job?.job_status === "RATE_LIMITED") {
     throw new ApiFailure(429, "RATE_LIMIT_EXCEEDED");
   }

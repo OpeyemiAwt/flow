@@ -28,6 +28,42 @@ import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { access, principal } from "./accounts.ts";
 import { clientBudget } from "./auth/limits.ts";
 import { ApiFailure, reply } from "./http.ts";
+
+function resolvePublicOrigin(request: Request): string {
+  const configuredOrigin =
+    process.env.FLOW_APP_ORIGIN?.trim() ||
+    process.env.NEXT_PUBLIC_APP_ORIGIN?.trim();
+  if (configuredOrigin) {
+    return configuredOrigin.replace(/\/+$/, "");
+  }
+
+  const forwardedHost = request.headers.get("x-forwarded-host")?.trim();
+  const hostHeader = request.headers.get("host")?.trim();
+  const candidateHost = forwardedHost || hostHeader;
+  if (
+    candidateHost &&
+    !candidateHost.startsWith("127.0.0.1") &&
+    !candidateHost.startsWith("localhost")
+  ) {
+    const proto = request.headers.get("x-forwarded-proto")?.trim() || "https";
+    return `${proto}://${candidateHost}`;
+  }
+
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  if (railwayDomain) {
+    return `https://${railwayDomain}`;
+  }
+
+  const fallbackOrigin = new URL(request.url).origin;
+  if (
+    process.env.NODE_ENV === "production" &&
+    (fallbackOrigin.includes("127.0.0.1") || fallbackOrigin.includes("localhost"))
+  ) {
+    return "https://flow.devhub.forum";
+  }
+
+  return fallbackOrigin;
+}
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import { validateProviderAddress } from "./providers/one-click-preview.ts";
 
@@ -139,7 +175,7 @@ export async function createPaymentRequest(
 
   const publicId = generatePublicPaymentId();
   const payerMemoRequired = Boolean(body.payerMemoRequired);
-  const origin = new URL(request.url).origin;
+  const origin = resolvePublicOrigin(request);
 
   const result = await db.$transaction(async (tx: FlowDb) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${actor.session.token}, true)`;
@@ -247,7 +283,7 @@ export async function listPaymentRequests(
 
   const limit = Math.min(100, Math.max(1, isNaN(limitParam) ? 20 : limitParam));
   const offset = Math.max(0, isNaN(offsetParam) ? 0 : offsetParam);
-  const origin = url.origin;
+  const origin = resolvePublicOrigin(request);
 
   const result = await db.$transaction(async (tx: FlowDb) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${actor.session.token}, true)`;
@@ -342,7 +378,7 @@ export async function getPaymentRequest(
     throw new ApiFailure(401, "AUTH_REQUIRED");
   }
 
-  const origin = new URL(request.url).origin;
+  const origin = resolvePublicOrigin(request);
 
   const result = await db.$transaction(async (tx: FlowDb) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${actor.session.token}, true)`;
@@ -429,7 +465,7 @@ export async function updatePaymentRequest(
     throw new ApiFailure(400, "INVALID_JSON");
   }
 
-  const origin = new URL(request.url).origin;
+  const origin = resolvePublicOrigin(request);
 
   const result = await db.$transaction(async (tx: FlowDb) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${actor.session.token}, true)`;
@@ -655,7 +691,7 @@ export async function readPublicPaymentRequest(
   }
 
   const { db } = runtime();
-  const origin = new URL(request.url).origin;
+  const origin = resolvePublicOrigin(request);
 
   const rows = await db.$queryRaw<Array<PublicPaymentRequestDbRow>>`
     SELECT *
@@ -668,28 +704,27 @@ export async function readPublicPaymentRequest(
 
   const row = rows[0]!;
 
-  if (row.status === "DISABLED") {
-    throw new ApiFailure(404, "PAYMENT_REQUEST_UNAVAILABLE");
-  }
-
   // Resolve verified permanent recipient wallet address for destination network
+  // unless the link is paused (DISABLED).
   let recipientAddress: string | null = null;
   let activeAttempt: PaymentDepositInstructions | null = null;
-  try {
-    const recipientWalletRows = await readPaymentWalletAddresses(publicId);
-    recipientAddress =
-      recipientWalletRows.find(
-        (rowAddress) =>
-          canonicalizeNetworkId(rowAddress.chain_id) ===
-          row.destination_network,
-      )?.address ?? null;
-    activeAttempt = await readPaymentAttempt(
-      publicId,
-      new URL(request.url).searchParams.get("attempt"),
-      recipientWalletRows,
-    );
-  } catch {
-    // Non-fatal if worker DB is unavailable in unit context
+  if (row.status !== "DISABLED") {
+    try {
+      const recipientWalletRows = await readPaymentWalletAddresses(publicId);
+      recipientAddress =
+        recipientWalletRows.find(
+          (rowAddress) =>
+            canonicalizeNetworkId(rowAddress.chain_id) ===
+            row.destination_network,
+        )?.address ?? null;
+      activeAttempt = await readPaymentAttempt(
+        publicId,
+        new URL(request.url).searchParams.get("attempt"),
+        recipientWalletRows,
+      );
+    } catch {
+      // Non-fatal if worker DB is unavailable in unit context
+    }
   }
 
   const publicData: PublicPaymentRequest = serializePublicPaymentRequest(

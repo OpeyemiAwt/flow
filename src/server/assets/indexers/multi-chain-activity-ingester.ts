@@ -114,68 +114,71 @@ export async function ingestWalletActivities(
   const allRawActivities: UnifiedRawActivity[] = [];
   let unavailableNetworkCount = 0;
 
-  // 4. Query indexers per registered address
-  for (const addr of addresses) {
-    try {
-      if (addr.network === "base" || addr.network === "ethereum") {
-        const primaryRpc =
-          addr.network === "ethereum"
-            ? process.env.FLOW_ETHEREUM_RPC_URL ||
-              process.env.FLOW_ETH_RPC_URL ||
-              "https://ethereum-rpc.publicnode.com"
-            : (rpc.base?.primary ?? "https://sepolia.base.org");
-        const fallbackRpc =
-          addr.network === "ethereum"
-            ? "https://cloudflare-eth.com"
-            : rpc.base?.fallback;
+  // 4. Query indexers per registered address in parallel
+  await Promise.all(
+    addresses.map(async (addr) => {
+      try {
+        if (addr.network === "base" || addr.network === "ethereum") {
+          const primaryRpc =
+            addr.network === "ethereum"
+              ? process.env.FLOW_ETHEREUM_RPC_URL ||
+                process.env.FLOW_ETH_RPC_URL ||
+                "https://ethereum-rpc.publicnode.com"
+              : (rpc.base?.primary ?? "https://sepolia.base.org");
+          const fallbackRpc =
+            addr.network === "ethereum"
+              ? "https://cloudflare-eth.com"
+              : rpc.base?.fallback;
 
-        const items = await indexEvmAddressActivities(
-          primaryRpc,
-          addr.address,
-          {
-            chainId: addr.chain_id,
-            network: addr.network,
-            fallbackEndpoint: fallbackRpc,
-            maxBlockRange: options?.maxBlockRange,
-          },
-        );
-        allRawActivities.push(...items);
-      } else if (addr.network === "solana") {
-        const primaryRpc =
-          rpc.solana?.primary ?? "https://api.devnet.solana.com";
-        const fallbackRpc = rpc.solana?.fallback;
+          const items = await indexEvmAddressActivities(
+            primaryRpc,
+            addr.address,
+            {
+              chainId: addr.chain_id,
+              network: addr.network,
+              fallbackEndpoint: fallbackRpc,
+              maxBlockRange: options?.maxBlockRange,
+            },
+          );
+          allRawActivities.push(...items);
+        } else if (addr.network === "solana") {
+          const primaryRpc =
+            rpc.solana?.primary ?? "https://api.devnet.solana.com";
+          const fallbackRpc = rpc.solana?.fallback;
 
-        const items = await indexSolanaAddressActivities(
-          primaryRpc,
-          addr.address,
-          {
-            network: addr.chain_id as "solana-mainnet" | "solana-devnet",
-            fallbackEndpoint: fallbackRpc,
-            limit: options?.solanaLimit ?? 25,
-          },
-        );
-        allRawActivities.push(...items);
-      } else if (addr.network === "near") {
-        const primaryRpc = rpc.near?.primary ?? "https://rpc.testnet.near.org";
-        const fallbackRpc = rpc.near?.fallback;
+          const items = await indexSolanaAddressActivities(
+            primaryRpc,
+            addr.address,
+            {
+              network: addr.chain_id as "solana-mainnet" | "solana-devnet",
+              fallbackEndpoint: fallbackRpc,
+              limit: options?.solanaLimit ?? 25,
+            },
+          );
+          allRawActivities.push(...items);
+        } else if (addr.network === "near") {
+          const primaryRpc =
+            rpc.near?.primary ?? "https://rpc.testnet.near.org";
+          const fallbackRpc = rpc.near?.fallback;
 
-        const items = await indexNearAddressActivities(
-          primaryRpc,
-          addr.address,
-          {
-            network: addr.chain_id as "near-mainnet" | "near-testnet",
-            fallbackEndpoint: fallbackRpc,
-            knownTxHashes: options?.nearTxHashes,
-          },
-        );
-        allRawActivities.push(...items);
+          const items = await indexNearAddressActivities(
+            primaryRpc,
+            addr.address,
+            {
+              network: addr.chain_id as "near-mainnet" | "near-testnet",
+              fallbackEndpoint: fallbackRpc,
+              knownTxHashes: options?.nearTxHashes,
+            },
+          );
+          allRawActivities.push(...items);
+        }
+      } catch {
+        // A partial provider outage must not be reported as a complete sync.
+        unavailableNetworkCount += 1;
+        console.warn("[ActivityIngester] Network query failed; sync will retry.");
       }
-    } catch {
-      // A partial provider outage must not be reported as a complete sync.
-      unavailableNetworkCount += 1;
-      console.warn("[ActivityIngester] Network query failed; sync will retry.");
-    }
-  }
+    }),
+  );
 
   if (unavailableNetworkCount > 0) {
     throw new FlowError(
@@ -199,8 +202,8 @@ export async function ingestWalletActivities(
           item.contractAddress.toLowerCase(),
     );
 
-    if (!matchedAsset) {
-      // Fallback to native asset of that network & chain
+    if (!matchedAsset && !item.contractAddress) {
+      // Fallback to native asset only when the transfer has no token contract
       matchedAsset = networkAssets.find(
         (na) =>
           na.network === item.network &&
@@ -211,8 +214,12 @@ export async function ingestWalletActivities(
 
     const assetId = matchedAsset ? matchedAsset.asset_id : null;
     const networkAssetId = matchedAsset ? matchedAsset.id : null;
-    const assetSymbol = matchedAsset ? matchedAsset.symbol : "UNKNOWN";
-    const decimals = matchedAsset ? matchedAsset.decimals : 18;
+    const assetSymbol = matchedAsset ? matchedAsset.symbol : "TOKEN";
+    const itemDecimals =
+      "decimals" in item && typeof item.decimals === "number"
+        ? item.decimals
+        : undefined;
+    const decimals = matchedAsset ? matchedAsset.decimals : (itemDecimals ?? 6);
 
     const metadataJson = JSON.stringify(item.metadata ?? {});
 

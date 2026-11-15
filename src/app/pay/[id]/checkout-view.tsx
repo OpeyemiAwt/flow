@@ -9,6 +9,7 @@ import type {
 } from "../../../domain/quote-discovery.ts";
 import { FlowLogo } from "../../../components/flow-logo.tsx";
 import { QrCode } from "../../../components/qr-code.tsx";
+import { useToast } from "../../../components/toast-provider.tsx";
 import {
   AssetAvatar,
   ChainBadge,
@@ -23,10 +24,28 @@ import type { DiscoveredToken } from "../../../server/providers/near-intents-dis
 import { CombinedAssetNetworkPicker } from "../../../components/combined-asset-network-picker.tsx";
 import { useQuotePreview } from "../../../components/use-quote-preview.ts";
 import { parseDisplayToAtomic } from "../../../domain/atomic-amounts.ts";
+import { getExplorerUrl } from "../../../domain/activities.ts";
 import {
   supportsQuoteAddress,
   validateQuoteAddress,
 } from "../../../domain/quote-addresses.ts";
+
+function formatNetworkDisplay(network: string | null | undefined): string {
+  const norm = (network ?? "").toLowerCase().trim();
+  if (norm.startsWith("near")) {
+    return norm.includes("testnet") ? "NEAR Testnet" : "NEAR Mainnet";
+  }
+  if (norm.startsWith("solana")) {
+    return norm.includes("devnet") ? "Solana Devnet" : "Solana Mainnet";
+  }
+  if (norm.startsWith("base")) {
+    return norm.includes("sepolia") ? "Base Sepolia" : "Base Mainnet";
+  }
+  if (norm.startsWith("ethereum")) {
+    return norm.includes("sepolia") ? "Ethereum Sepolia" : "Ethereum Mainnet";
+  }
+  return network || "Supported Network";
+}
 import {
   MAINNET_SUPPORTED_DEPLOYMENTS,
   isSamePaymentDeployment,
@@ -102,12 +121,24 @@ export function CheckoutView({
   // Copy Feedback State
   const [copiedRecipientAddress, setCopiedRecipientAddress] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
+  const { pushToast } = useToast();
+
+  useEffect(() => {
+    if (commitError) {
+      pushToast({
+        title: "Payment quote error",
+        description: commitError,
+        variant: "error",
+      });
+    }
+  }, [commitError, pushToast]);
 
   const handleCopyLink = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       void navigator.clipboard.writeText(request.shareUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+      pushToast({ title: "Payment link copied", variant: "success", durationMs: 2500 });
     }
   };
 
@@ -122,6 +153,7 @@ export function CheckoutView({
       void navigator.clipboard.writeText(request.recipientAddress);
       setCopiedRecipientAddress(true);
       setTimeout(() => setCopiedRecipientAddress(false), 2000);
+      pushToast({ title: "Recipient address copied", variant: "success", durationMs: 2500 });
     }
   };
 
@@ -136,6 +168,7 @@ export function CheckoutView({
       void navigator.clipboard.writeText(amt);
       setCopiedAmount(true);
       setTimeout(() => setCopiedAmount(false), 2000);
+      pushToast({ title: "Amount copied", variant: "success", durationMs: 2500 });
     }
   };
 
@@ -551,7 +584,7 @@ export function CheckoutView({
           <button
             onClick={handleCopyLink}
             type="button"
-            className="flow-liquid-btn inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
+            className="flow-liquid-btn flow-press inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
           >
             {copiedLink ? (
               <>
@@ -569,7 +602,7 @@ export function CheckoutView({
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 mx-auto max-w-[1140px] px-4 sm:px-8 pt-4 pb-20 space-y-7">
+      <main className="flow-anim-fade-up relative z-10 mx-auto max-w-[1140px] px-4 sm:px-8 pt-4 pb-20 space-y-7">
         {/* Heading */}
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#FF1A1A]">
@@ -708,7 +741,7 @@ export function CheckoutView({
                   Destination Network
                 </span>
                 <span className="font-semibold text-neutral-900 dark:text-neutral-100">
-                  Base Mainnet
+                  {formatNetworkDisplay(request.destinationNetwork)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -750,10 +783,13 @@ export function CheckoutView({
               {instructions?.sourceTxHash && (
                 <div className="flex justify-between items-center pt-2 border-t border-neutral-200 dark:border-white/[0.08]">
                   <span className="text-neutral-500 dark:text-neutral-400">
-                    Source Transaction (Solana)
+                    Source Transaction ({formatNetworkDisplay(instructions.sourceNetwork)})
                   </span>
                   <a
-                    href={`https://solscan.io/tx/${instructions.sourceTxHash}`}
+                    href={getExplorerUrl(
+                      instructions.sourceNetwork,
+                      instructions.sourceTxHash,
+                    )}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 font-mono text-[#FF1A1A] hover:underline"
@@ -769,10 +805,13 @@ export function CheckoutView({
               {instructions?.destinationTxHash && (
                 <div className="flex justify-between items-center">
                   <span className="text-neutral-500 dark:text-neutral-400">
-                    Settlement Transaction (Base)
+                    Settlement Transaction ({formatNetworkDisplay(request.destinationNetwork)})
                   </span>
                   <a
-                    href={`https://basescan.org/tx/${instructions.destinationTxHash}`}
+                    href={getExplorerUrl(
+                      request.destinationNetwork,
+                      instructions.destinationTxHash,
+                    )}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 font-mono text-[#FF1A1A] hover:underline"
@@ -798,18 +837,45 @@ export function CheckoutView({
             </div>
           </div>
         ) : isReadOnly && !instructions ? (
-          <div className="rounded-[28px] border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 text-sm text-neutral-700 dark:text-neutral-300">
-            {isExpired
-              ? "This invoice is available for reference."
-              : "Quote unavailable. This payment request cannot accept payments."}
+          <div className="mx-auto max-w-lg rounded-[28px] border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-8 text-center shadow-sm space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+              <IconAlertTriangle size={26} />
+            </div>
+            <h2 className="font-serif text-2xl text-neutral-950 dark:text-white">
+              {request.status === "DISABLED"
+                ? "This payment link is paused"
+                : request.status === "COMPLETED"
+                  ? "Payment settled & link dormant"
+                  : isExpired
+                    ? "This payment link has expired"
+                    : "Payment link unavailable"}
+            </h2>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              {request.status === "DISABLED"
+                ? "The recipient has temporarily paused this payment link. New quotes and deposits are disabled until it is resumed."
+                : request.status === "COMPLETED"
+                  ? "This payment request has already been paid and settled on-chain. The link is now expired and dormant."
+                  : isExpired
+                    ? "The payment window for this invoice has closed and it can no longer accept payments."
+                    : "Quote unavailable. This payment request cannot accept payments."}
+            </p>
             {request.displayAmount && (
-              <p className="mt-3 font-semibold text-neutral-950 dark:text-white">
+              <p className="pt-1 font-semibold text-neutral-950 dark:text-white">
                 {request.displayAmount} {request.destinationAssetSymbol}
               </p>
             )}
-            <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-              {request.destinationNetwork}
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              {formatNetworkDisplay(request.destinationNetwork)}
             </p>
+            <div className="pt-2">
+              <Link
+                href="/"
+                prefetch={false}
+                className="flow-liquid-btn inline-flex items-center justify-center rounded-full px-6 py-2.5 text-xs font-semibold text-neutral-900 dark:text-white"
+              >
+                Return to Flow
+              </Link>
+            </div>
           </div>
         ) : (
           /* ===================================================================
@@ -859,7 +925,8 @@ export function CheckoutView({
                       <span>Back to Payment Selection</span>
                     </button>
                     <span
-                      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${
+                      key={instructions.status}
+                      className={`flow-anim-fade-up inline-flex items-center gap-1.5 text-[11px] font-semibold ${
                         isFundedOrProcessing
                           ? "text-blue-700 dark:text-blue-400"
                           : isUnderReview
@@ -1195,7 +1262,16 @@ export function CheckoutView({
                             : "flow-liquid-btn text-neutral-700 dark:text-neutral-200"
                         }`}
                       >
-                        <span className="text-amber-500">✦</span>
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="text-amber-500 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 2l2.4 7.2L21.6 12l-7.2 2.4L12 21.6l-2.4-7.2L2.4 12l7.2-2.4z" />
+                        </svg>
                         <span>Pay with any token</span>
                       </button>
                     </div>
@@ -1294,9 +1370,11 @@ export function CheckoutView({
                           </span>
                           <span
                             aria-hidden="true"
-                            className="text-neutral-500 dark:text-neutral-400"
+                            className="text-neutral-500 dark:text-neutral-400 inline-flex items-center"
                           >
-                            ⌄
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
                           </span>
                         </button>
                       </div>
@@ -1392,8 +1470,10 @@ export function CheckoutView({
                       />
                       {refundAddress.trim().length > 0 &&
                         !refundValidationMessage && (
-                          <span className="absolute right-3.5 text-emerald-500 font-bold text-sm">
-                            ✓
+                          <span className="absolute right-3.5 flex items-center justify-center text-emerald-500">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
                           </span>
                         )}
                     </div>
@@ -1624,8 +1704,10 @@ export function CheckoutView({
                         </div>
                       </div>
                       <div className="pt-1 flex justify-center">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-                          <span>⚡</span>
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                          </svg>
                           <span>
                             {isDirect
                               ? "Direct route"
@@ -1837,7 +1919,8 @@ export function CheckoutView({
                       </h2>
                     </div>
                     <span
-                      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${
+                      key={instructions.status}
+                      className={`flow-anim-fade-up inline-flex items-center gap-1.5 text-[11px] font-semibold ${
                         isFundedOrProcessing
                           ? "text-blue-700 dark:text-blue-400"
                           : isUnderReview
@@ -2160,7 +2243,7 @@ export function CheckoutView({
                       </strong>{" "}
                       Payments automatically convert and settle into{" "}
                       {request.destinationAssetSymbol} on{" "}
-                      {request.destinationNetwork}.
+                      {formatNetworkDisplay(request.destinationNetwork)}.
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5">

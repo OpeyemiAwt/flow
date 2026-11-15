@@ -50,7 +50,10 @@ export default async function AccountsPage() {
               }
               className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-[13px] font-medium text-neutral-400 hover:bg-white/5 hover:text-white transition-all"
             >
-              <span>⌂</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
               <span>Home</span>
             </Link>
             <Link
@@ -58,7 +61,12 @@ export default async function AccountsPage() {
               href="/accounts"
               className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-[13px] font-medium bg-gradient-to-r from-[#450A0A] via-[#7F1D1D] to-[#991B1B] text-white border border-[#EF4444]/40 shadow-sm"
             >
-              <span>▣</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect width="7" height="7" x="3" y="3" rx="1" />
+                <rect width="7" height="7" x="14" y="3" rx="1" />
+                <rect width="7" height="7" x="14" y="14" rx="1" />
+                <rect width="7" height="7" x="3" y="14" rx="1" />
+              </svg>
               <span>Workspaces</span>
             </Link>
             <Link
@@ -66,7 +74,10 @@ export default async function AccountsPage() {
               href="/security"
               className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-[13px] font-medium text-neutral-400 hover:bg-white/5 hover:text-white transition-all"
             >
-              <span>⚙</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
               <span>Settings</span>
             </Link>
           </nav>
@@ -160,7 +171,10 @@ export default async function AccountsPage() {
                         <div className="flex flex-wrap items-center justify-between gap-4">
                           <div className="flex items-center gap-3.5">
                             <span className="inline-flex h-11 w-11 items-center justify-center rounded-[14px] bg-red-50 dark:bg-red-950/40 text-[#FF1A1A] font-bold">
-                              👤
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                              </svg>
                             </span>
                             <div>
                               <div className="flex items-center gap-2">
@@ -205,7 +219,19 @@ export default async function AccountsPage() {
                           <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="flex items-center gap-3.5">
                               <span className="inline-flex h-11 w-11 items-center justify-center rounded-[14px] bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-bold">
-                                🏢
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <rect width="16" height="20" x="4" y="2" rx="2" ry="2" />
+                                  <path d="M9 22v-4h6v4" />
+                                  <path d="M8 6h.01" />
+                                  <path d="M16 6h.01" />
+                                  <path d="M12 6h.01" />
+                                  <path d="M12 10h.01" />
+                                  <path d="M12 14h.01" />
+                                  <path d="M16 10h.01" />
+                                  <path d="M16 14h.01" />
+                                  <path d="M8 10h.01" />
+                                  <path d="M8 14h.01" />
+                                </svg>
                               </span>
                               <div>
                                 <div className="flex items-center gap-2">

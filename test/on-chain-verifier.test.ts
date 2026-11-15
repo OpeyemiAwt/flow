@@ -432,6 +432,106 @@ describe("on-chain-verifier: genuine multi-chain transfer verification", () => {
     }
   });
 
+  it("verifies NEAR native payout executed via internal receipt (intents.near / wrap.near)", async () => {
+    const recipient = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
+    const validNearHash = "8y7zA9bC1dE2fG3hI4jK5lM6nO7pQ8rS9tU0vW1xY2z";
+
+    const server = http.createServer((req, res) => {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", () => {
+        const json = JSON.parse(body);
+        if (json.method === "tx") {
+          res.end(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: json.id,
+              result: {
+                status: { SuccessValue: "" },
+                transaction: {
+                  hash: validNearHash,
+                  signer_id: "solver.near",
+                  receiver_id: "intents.near",
+                  actions: [{ FunctionCall: { method_name: "execute_intents", args: "e30=", deposit: "0", gas: 100000 } }],
+                },
+                transaction_outcome: {
+                  block_hash: "block_near_1",
+                  outcome: { status: { SuccessReceiptId: "rcpt_1" } },
+                },
+              },
+            }),
+          );
+          return;
+        }
+        if (json.method === "EXPERIMENTAL_tx_status") {
+          res.end(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: json.id,
+              result: {
+                status: { SuccessValue: "" },
+                transaction: {
+                  hash: validNearHash,
+                  signer_id: "solver.near",
+                  receiver_id: "intents.near",
+                  actions: [{ FunctionCall: { method_name: "execute_intents", args: "e30=", deposit: "0", gas: 100000 } }],
+                },
+                transaction_outcome: {
+                  block_hash: "block_near_1",
+                  outcome: { status: { SuccessReceiptId: "rcpt_1" } },
+                },
+                receipts: [
+                  {
+                    receipt_id: "rcpt_2",
+                    predecessor_id: "wrap.near",
+                    receiver_id: recipient,
+                    receipt: {
+                      Action: {
+                        actions: [{ Transfer: { deposit: "2500000000000000000000000" } }],
+                      },
+                    },
+                  },
+                ],
+                receipts_outcome: [
+                  {
+                    id: "rcpt_2",
+                    outcome: { status: { SuccessValue: "" } },
+                  },
+                ],
+              },
+            }),
+          );
+          return;
+        }
+        res.statusCode = 404;
+        res.end();
+      });
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    const rpcUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      const result = await verifyNearTransfer({
+        rpcUrl,
+        network: "near-mainnet",
+        txHash: validNearHash,
+        senderAccountId: recipient,
+        expectedRecipient: recipient,
+        expectedAssetId: "near-mainnet:NEAR",
+        expectedTokenContract: null,
+        minimumAtomicAmount: 2000000000000000000000000n,
+      });
+
+      assert.equal(result.isSuccess, true);
+      assert.equal(result.toAddress, recipient);
+      assert.equal(result.atomicAmount, 2500000000000000000000000n);
+    } finally {
+      server.close();
+    }
+  });
+
   it("detects on-chain reorganizations when canonical block hash diverges", async () => {
     const server = http.createServer((req, res) => {
       let body = "";

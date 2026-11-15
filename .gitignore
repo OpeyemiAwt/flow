@@ -27,3 +27,7 @@ coverage/
 work/
 outputs/
 public/assets/reference/
+video-production/**/*.wav
+video-production/**/*.aiff
+video-production/assets/
+video-production/renders/*.png

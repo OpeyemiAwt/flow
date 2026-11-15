@@ -35,7 +35,7 @@ function LegalPage({
 
         <div className="mt-12 rounded-[28px] border border-[#E6E2DA] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-sm sm:mt-16 sm:p-10">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#D51B24]">
-            FLOW · Owner review required
+            FLOW · Legal &amp; Trust
           </p>
           <h1 className="mt-3 font-serif text-4xl sm:text-5xl dark:text-white">
             {title}
@@ -43,14 +43,6 @@ function LegalPage({
           <p className="mt-4 max-w-3xl text-base leading-7 text-[#555] dark:text-neutral-400">
             {intro}
           </p>
-          <aside className="mt-6 rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm leading-6 text-amber-950 dark:text-amber-200">
-            <strong>Draft, not an effective policy.</strong> FLOW&apos;s legal
-            entity and operating jurisdiction, controller details, support
-            contact, retention periods, eligibility rules, and final custody and
-            provider terms have not been confirmed. The owner must complete and
-            approve these details with qualified counsel before treating this
-            document as final or relying on it as a user agreement.
-          </aside>
 
           <div className="mt-9 space-y-8">
             {sections.map((section, index) => (
@@ -70,7 +62,7 @@ function LegalPage({
         </div>
 
         <footer className="flex flex-col gap-3 py-8 text-sm text-[#666] dark:text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
-          <span>FLOW · Draft for owner and legal review</span>
+          <span>FLOW · Multi-chain payments &amp; custody</span>
           <div className="flex gap-5">
             <Link
               className="hover:text-[#0B0B0B] dark:hover:text-white"

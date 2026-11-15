@@ -1,0 +1,68 @@
+[
+  {
+    "id": "earn01_hook",
+    "startSec": 0.5,
+    "windowSec": 8.2,
+    "text": "Idle crypto shouldn't sit still. With FLOW Earn, you can put your assets to work on NEAR Protocol and earn yield directly inside your wallet.",
+    "rawDur": 8.74,
+    "finalDur": 7.88,
+    "endSec": 8.38,
+    "tempo": 1.106,
+    "wavPath": "/Users/user/Documents/Codex/2026-11-06/th/work/codex-release/video-production/audio-earn/segments/earn01_hook.wav"
+  },
+  {
+    "id": "earn02_logo",
+    "startSec": 9.2,
+    "windowSec": 6.4,
+    "text": "Introducing FLOW Earn. Native liquid staking and DeFi yield, built into one seamless interface.",
+    "rawDur": 7.15,
+    "finalDur": 6.15,
+    "endSec": 15.35,
+    "tempo": 1.16,
+    "wavPath": "/Users/user/Documents/Codex/2026-11-06/th/work/codex-release/video-production/audio-earn/segments/earn02_logo.wav"
+  },
+  {
+    "id": "earn03_ui",
+    "startSec": 16.2,
+    "windowSec": 11.4,
+    "text": "Open Earn directly from the navigation bar. Stake NEAR with LiNEAR Protocol at six point two six percent variable APY, or supply to Burrow Finance for up to nine point two percent APY.",
+    "rawDur": 12.41,
+    "finalDur": 11.08,
+    "endSec": 27.28,
+    "tempo": 1.118,
+    "wavPath": "/Users/user/Documents/Codex/2026-11-06/th/work/codex-release/video-production/audio-earn/segments/earn03_ui.wav"
+  },
+  {
+    "id": "earn04_swap",
+    "startSec": 28.2,
+    "windowSec": 10.4,
+    "text": "Holding SOL on Solana or USDC on Base? Click Swap now to convert any asset into native NEAR in one step via NEAR Intents.",
+    "rawDur": 8.71,
+    "finalDur": 8.71,
+    "endSec": 36.91,
+    "tempo": 1,
+    "wavPath": "/Users/user/Documents/Codex/2026-11-06/th/work/codex-release/video-production/audio-earn/segments/earn04_swap.wav"
+  },
+  {
+    "id": "earn05_deposit",
+    "startSec": 39.2,
+    "windowSec": 11.4,
+    "text": "Click Deposit, choose your amount, and preview your annual return. Confirm in one click to deploy on-chain, track your live earning balance, and withdraw anytime.",
+    "rawDur": 10.49,
+    "finalDur": 10.49,
+    "endSec": 49.69,
+    "tempo": 1,
+    "wavPath": "/Users/user/Documents/Codex/2026-11-06/th/work/codex-release/video-production/audio-earn/segments/earn05_deposit.wav"
+  },
+  {
+    "id": "earn06_outro",
+    "startSec": 51.2,
+    "windowSec": 5.5,
+    "text": "Swap, stake, and earn on NEAR—all in one flow.",
+    "rawDur": 3.84,
+    "finalDur": 3.84,
+    "endSec": 55.04,
+    "tempo": 1,
+    "wavPath": "/Users/user/Documents/Codex/2026-11-06/th/work/codex-release/video-production/audio-earn/segments/earn06_outro.wav"
+  }
+]

@@ -199,10 +199,6 @@ async function sendCode(
       antiEnumerationReason = "MAILBOX_PAUSED";
       return;
     }
-    if (login && user && !user.emailEnrolled) {
-      antiEnumerationReason = "EMAIL_NOT_ENROLLED";
-      return;
-    }
     if (login?.recovery && !user) {
       antiEnumerationReason = "RECOVERY_ACCOUNT_NOT_FOUND";
       return;
@@ -396,10 +392,10 @@ async function verifyCode(
   const user = await db.authUser.findUnique({
     where: { email: intent.email },
   });
-  if (user && (!user.emailEnrolled || user.mailboxPaused)) {
+  if (user && user.mailboxPaused) {
     log("info", "otp_verify_diagnostic", {
       operation: "login-verify",
-      reason: user.mailboxPaused ? "MAILBOX_PAUSED" : "EMAIL_NOT_ENROLLED",
+      reason: "MAILBOX_PAUSED",
     });
     throw new ApiFailure(401, "INVALID_PROOF");
   }

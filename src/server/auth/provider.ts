@@ -323,7 +323,8 @@ export function provider(
       updateAccountOnSignIn: false,
       accountLinking: {
         enabled: true,
-        disableImplicitLinking: true,
+        disableImplicitLinking: false,
+        trustedProviders: ["google"],
         allowDifferentEmails: false,
       },
     },
@@ -495,7 +496,7 @@ export function provider(
               ) {
                 throw new ApiFailure(403, "SIGNUP_UNAVAILABLE");
               }
-              return { data: { ...user, emailEnrolled: !!context.emailLogin } };
+              return { data: { ...user, emailEnrolled: true } };
             } catch (error) {
               return logAuthHookError("user.create.before", error);
             }
@@ -533,11 +534,17 @@ export function provider(
                   where: { id: session.userId },
                 });
                 if (
-                  !user?.emailEnrolled ||
+                  !user ||
                   user.mailboxPaused ||
                   user.email !== context.emailLogin
                 ) {
                   throw new ApiFailure(401, "INVALID_PROOF");
+                }
+                if (!user.emailEnrolled) {
+                  await db.authUser.update({
+                    where: { id: user.id },
+                    data: { emailEnrolled: true },
+                  });
                 }
                 if (context.emailSlot && context.emailDigest) {
                   const authDb = getPrismaClient("auth");

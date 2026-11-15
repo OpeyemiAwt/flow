@@ -8,9 +8,15 @@ import {
 } from "node:crypto";
 import {
   buildDefaultDenyCustodyPolicy,
+  buildLiveExecutionCustodyPolicy,
+  isFinancialExecutionDisabled,
   isValidNearAddress,
   type OnChainWalletPolicyView,
 } from "../../domain/custody.ts";
+import {
+  decryptSecret,
+  deserializeEnvelope,
+} from "../../foundation/crypto-envelope.ts";
 import { FlowError } from "../../foundation/errors.ts";
 import { log } from "../../foundation/logger.ts";
 import type { FlowDb } from "../../foundation/prisma.ts";
@@ -18,6 +24,7 @@ import {
   MAX_HARD_PER_WALLET_SPONSOR_YOCTO,
   OUTLAYER_POLICY_CONTRACT_ID,
   type PolicySponsorConfig,
+  type WalletConfig,
 } from "../../foundation/wallet-environment.ts";
 import type { OutLayerAdapter } from "./outlayer-adapter.ts";
 
@@ -305,7 +312,7 @@ export interface StoreWalletPolicyTxArgs {
   readonly version: number;
   readonly locked: boolean;
   readonly valid_until: number;
-  readonly storage_refund_to: string;
+  readonly storage_refund_to?: string;
 }
 
 export interface BuildStoreWalletPolicyTxInput {
@@ -369,7 +376,10 @@ export function buildStoreWalletPolicyTransactionBytes(
       `Policy storage deposit (${input.depositYocto}) exceeds capped limit (${cappedLimit}).`,
     );
   }
-  if (input.args.storage_refund_to !== input.signerId) {
+  if (
+    input.args.storage_refund_to !== undefined &&
+    input.args.storage_refund_to !== input.signerId
+  ) {
     throw new FlowError(
       "POLICY_SPONSOR_TARGET_DENIED",
       "storage_refund_to must strictly equal sponsorAccountId.",
@@ -389,7 +399,9 @@ export function buildStoreWalletPolicyTransactionBytes(
     version: input.args.version,
     locked: input.args.locked,
     valid_until: input.args.valid_until,
-    storage_refund_to: input.args.storage_refund_to,
+    ...(input.args.storage_refund_to !== undefined
+      ? { storage_refund_to: input.args.storage_refund_to }
+      : {}),
   });
 
   const w = new BorshWriter();
@@ -857,6 +869,7 @@ export interface SponsorPolicyInput {
   readonly apiKey: string;
   readonly walletPubkey: string;
   readonly allowTestContractOverride?: boolean;
+  readonly forceReapply?: boolean;
 }
 
 export interface SponsorPolicyOutcome {
@@ -909,27 +922,28 @@ export async function sponsorAndStoreWalletPolicy(
   const existingSponsorship = existingRows[0];
 
   let existingOnChain: OnChainWalletPolicyView | null = null;
-  for (const candidatePubkey of formatWalletPublicKeyCandidates(
-    walletPubkey,
-    providerWalletId,
-    existingSponsorship?.wallet_pubkey,
-  )) {
-    existingOnChain = await nearRpc.getOnChainWalletPolicy(candidatePubkey);
-    if (existingOnChain) break;
-  }
-  if (existingOnChain) {
-    await db.$executeRaw`
-      UPDATE flow.custody_policy_sponsorships
-      SET status = 'FINALIZED', finalized_at = COALESCE(finalized_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
-      WHERE wallet_id = ${walletId}::uuid AND status IN ('PREPARED', 'BROADCASTING', 'AMBIGUOUS')
-    `;
-    return {
-      status: "ALREADY_ON_CHAIN",
-      controllerAccountId: existingOnChain.owner,
-    };
-  }
+  if (!input.forceReapply) {
+    for (const candidatePubkey of formatWalletPublicKeyCandidates(
+      walletPubkey,
+      providerWalletId,
+      existingSponsorship?.wallet_pubkey,
+    )) {
+      existingOnChain = await nearRpc.getOnChainWalletPolicy(candidatePubkey);
+      if (existingOnChain) break;
+    }
+    if (existingOnChain) {
+      await db.$executeRaw`
+        UPDATE flow.custody_policy_sponsorships
+        SET status = 'FINALIZED', finalized_at = COALESCE(finalized_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+        WHERE wallet_id = ${walletId}::uuid AND status IN ('PREPARED', 'BROADCASTING', 'AMBIGUOUS')
+      `;
+      return {
+        status: "ALREADY_ON_CHAIN",
+        controllerAccountId: existingOnChain.owner,
+      };
+    }
 
-  if (existingSponsorship?.tx_hash) {
+    if (existingSponsorship?.tx_hash) {
     const reconciled = await nearRpc.queryTransactionStatus(
       existingSponsorship.tx_hash,
       config.sponsorAccountId,
@@ -965,6 +979,7 @@ export async function sponsorAndStoreWalletPolicy(
       );
     }
   }
+  }
 
   // 3. Persistent circuit breaker check
   const circuitRows = await db.$queryRaw<
@@ -982,11 +997,13 @@ export async function sponsorAndStoreWalletPolicy(
     );
   }
 
-  // 4. Encrypt strict default-deny policy & request keystore policy signature
-  const policyPayload = buildDefaultDenyCustodyPolicy({
-    approvalAccountId: config.approvalAccountId,
-    lockPolicy: config.lockInitialPolicy,
-  });
+  // 4. Encrypt custody policy (default-deny when execution disabled, live execution when enabled) & request keystore policy signature
+  const policyPayload = isFinancialExecutionDisabled()
+    ? buildDefaultDenyCustodyPolicy({
+        approvalAccountId: config.approvalAccountId,
+        lockPolicy: config.lockInitialPolicy,
+      })
+    : buildLiveExecutionCustodyPolicy();
   const encrypted = await adapter.encryptPolicy(apiKey, {
     walletId: providerWalletId,
     policy: policyPayload,
@@ -1187,7 +1204,9 @@ export async function sponsorAndStoreWalletPolicy(
         version: signRes.version,
         locked: signRes.locked,
         valid_until: signRes.valid_until,
-        storage_refund_to: config.sponsorAccountId,
+        ...(input.forceReapply
+          ? {}
+          : { storage_refund_to: config.sponsorAccountId }),
       },
     });
 
@@ -1382,4 +1401,133 @@ export async function sponsorAndStoreWalletPolicy(
     actualFeeYocto: outcome.netFeeYocto.toString(),
     controllerAccountId: config.sponsorAccountId,
   };
+}
+
+function isLiveExecutionPolicyActive(policyResponse: {
+  readonly policy?: string;
+  readonly rules?: Record<string, unknown>;
+  readonly capabilities?: Record<string, unknown>;
+}): boolean {
+  if (policyResponse.policy !== "stored" || !policyResponse.rules) {
+    return false;
+  }
+  const txTypes = policyResponse.rules.transaction_types;
+  const hasTransferAndCall =
+    Array.isArray(txTypes) &&
+    txTypes.includes("transfer") &&
+    txTypes.includes("call");
+  const caps = policyResponse.capabilities ?? {};
+  const evmAllowed =
+    caps.evm_sign === true ||
+    (typeof caps.evm_sign === "object" &&
+      caps.evm_sign !== null &&
+      (caps.evm_sign as Record<string, unknown>).allowed === true);
+  const solAllowed =
+    caps.solana_sign === true ||
+    (typeof caps.solana_sign === "object" &&
+      caps.solana_sign !== null &&
+      (caps.solana_sign as Record<string, unknown>).allowed === true);
+  return hasTransferAndCall && evmAllowed && solAllowed;
+}
+
+/**
+ * Upgrades any ACTIVE mainnet wallets still carrying a default-deny policy to the
+ * live-execution custody policy when `FLOW_EXECUTION=enabled`.
+ */
+export async function upgradeActiveWalletsToLiveExecutionPolicy(params: {
+  readonly db: FlowDb;
+  readonly adapter: OutLayerAdapter;
+  readonly sponsorConfig: Extract<PolicySponsorConfig, { enabled: true }>;
+  readonly walletConfig: Pick<WalletConfig, "encryptionKey" | "keyId"> & {
+    readonly fallbackEncryptionKey?: string;
+  };
+}): Promise<void> {
+  if (isFinancialExecutionDisabled()) return;
+
+  const { db, adapter, sponsorConfig, walletConfig } = params;
+  const nearRpc = new HttpNearSponsorRpcClient(sponsorConfig);
+
+  // Reset transient circuit breaker from prior startup attempts before upgrading policies
+  await db.$executeRaw`
+    UPDATE flow.custody_sponsor_circuit
+    SET circuit_open = false,
+        consecutive_failures = 0,
+        opened_reason = NULL,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = 'DEFAULT'
+      AND circuit_open = true
+  `;
+  const wallets = await db.$queryRaw<
+    Array<{
+      wallet_id: string;
+      account_id: string;
+      provider_wallet_id: string;
+      near_account_id: string;
+      encrypted_credential: string;
+      key_id: string;
+      job_id: string | null;
+    }>
+  >`
+    SELECT
+      w.id::text AS wallet_id,
+      w.account_id::text AS account_id,
+      w.provider_wallet_id,
+      w.near_account_id,
+      w.encrypted_credential,
+      w.key_id,
+      j.id::text AS job_id
+    FROM flow.wallets w
+    LEFT JOIN flow.wallet_provisioning_jobs j ON j.account_id = w.account_id
+    WHERE w.status = 'ACTIVE'::flow.wallet_status
+      AND w.environment = 'mainnet'
+      AND w.policy_state = 'stored'
+      AND w.provider_wallet_id IS NOT NULL
+      AND w.near_account_id IS NOT NULL
+      AND w.encrypted_credential IS NOT NULL
+  `;
+
+  for (const wallet of wallets) {
+    try {
+      const keyHex =
+        wallet.key_id === walletConfig.keyId
+          ? walletConfig.encryptionKey
+          : (walletConfig.fallbackEncryptionKey ?? walletConfig.encryptionKey);
+      const apiKey = decryptSecret(
+        deserializeEnvelope(wallet.encrypted_credential),
+        keyHex,
+      );
+      const currentPolicy = await adapter.getPolicy(
+        apiKey,
+        wallet.provider_wallet_id,
+      );
+      if (isLiveExecutionPolicyActive(currentPolicy)) {
+        continue;
+      }
+      const outcome = await sponsorAndStoreWalletPolicy({
+        db,
+        adapter,
+        nearRpc,
+        config: sponsorConfig,
+        accountId: wallet.account_id,
+        walletId: wallet.wallet_id,
+        jobId: wallet.job_id ?? wallet.wallet_id,
+        fencingToken: 1n,
+        providerWalletId: wallet.provider_wallet_id,
+        apiKey,
+        walletPubkey: wallet.near_account_id,
+        forceReapply: true,
+      });
+      log("info", "wallet_policy_upgraded_to_live_execution", {
+        walletId: wallet.wallet_id,
+        providerWalletId: wallet.provider_wallet_id,
+        status: outcome.status,
+        txHash: outcome.txHash ?? null,
+      });
+    } catch (error: unknown) {
+      log("error", "wallet_policy_upgrade_failed", {
+        walletId: wallet.wallet_id,
+        reason: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      });
+    }
+  }
 }

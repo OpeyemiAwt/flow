@@ -243,8 +243,10 @@ export function CombinedAssetNetworkPicker({
                     </div>
 
                     {isSelected && (
-                      <span className="text-[#FF1A1A] font-bold text-xs shrink-0">
-                        ✓
+                      <span className="text-[#FF1A1A] shrink-0 flex items-center justify-center">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
                       </span>
                     )}
                   </button>

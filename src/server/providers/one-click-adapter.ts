@@ -58,6 +58,7 @@ export interface OneClickDryQuoteResult {
   ok: boolean;
   routeStatus: RouteAvailabilityStatus;
   amountInAtomic?: string;
+  minAmountInAtomic?: string;
   amountOutAtomic?: string;
   minAmountOutAtomic?: string;
   timeEstimateSeconds?: number | null;
@@ -270,6 +271,7 @@ export async function fetchOneClickDryQuote(params: {
       ok: true,
       routeStatus: "SUPPORTED_AND_QUOTABLE",
       amountInAtomic: quote.amountIn,
+      minAmountInAtomic: quote.minAmountIn,
       amountOutAtomic: quote.amountOut,
       minAmountOutAtomic: quote.minAmountOut,
       timeEstimateSeconds:

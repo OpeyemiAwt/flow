@@ -1,0 +1,23 @@
+Moving money online should feel effortless. Yet in crypto, holding SOL on Solana while someone else wants NEAR still feels disconnected. What if it didn't have to be?
+
+Meet FLOW. The multi-chain wallet and payment platform where you pay with what you hold, and receive what you want.
+
+Getting started takes seconds. Continue with Google on the first screen, or click Sign in to use an email code. FLOW sets up your wallet automatically with your Google name and profile photo. One clean loading bar coordinates OutLayer provisioning and NEAR policy sponsorship across Solana, NEAR, Ethereum, and Base.
+
+Your wallet dashboard brings your multi-chain balances together in one unified view. Track your total portfolio value alongside your assets across NEAR, Solana, Base, and Ethereum—and jump straight into adding funds, sending transfers, or requesting payments anytime.
+
+In Direct Receive, pick any asset from the dropdown—like SOL—and FLOW checks the Solana network to populate only the assets supported on Solana below. Switch to NEAR, and it dynamically populates NEAR's supported assets.
+
+In Convert, swap between assets like SOL on Solana and NEAR. Starting cleanly from zero, live quotes update immediately as you type—without waiting to click review first.
+
+And for getting paid across chains, FLOW introduces Payment Links.
+
+Open Request Payment to get paid on your terms. Suppose you want to receive one hundred and fifty NEAR on NEAR Protocol. Select NEAR as your destination asset, enter the amount, and create a shareable payment link in one click.
+
+Your sender opens that link in any browser—no FLOW account needed. Even though you requested NEAR, they hold SOL on Solana. They open the asset selector with over two hundred tokens across thirty-nine chains, and choose SOL on Solana.
+
+FLOW fetches a live One Click quote and issues a Solana deposit address. Once they send SOL, FLOW routes the payment and settles one hundred and fifty NEAR directly into your wallet.
+
+Every transfer, conversion, and settled payment link is tracked and verified on-chain inside Activity—giving you clear transaction history at a glance. And whenever you need answers, Flow A I gives you an account-aware assistant right inside your wallet to check balances and confirm settlements.
+
+Pay with what you hold. Receive what you want. Solana, NEAR, Ethereum, and Base—all in one flow.
