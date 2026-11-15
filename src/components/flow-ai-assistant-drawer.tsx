@@ -165,16 +165,14 @@ export function FlowAIAssistantDrawer({
             {messages.map((msg, idx) => (
               <div
                 key={msg.id ?? idx}
-                className={`flex flex-col ${
-                  msg.role === "user" ? "items-end" : "items-start"
-                }`}
+                className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"
+                  }`}
               >
                 <div
-                  className={`max-w-[88%] rounded-2xl p-3.5 text-xs leading-relaxed ${
-                    msg.role === "user"
-                      ? "bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 rounded-br-xs shadow-xs"
-                      : "bg-neutral-100 dark:bg-neutral-800/80 text-neutral-900 dark:text-neutral-100 rounded-bl-xs"
-                  }`}
+                  className={`max-w-[88%] rounded-2xl p-3.5 text-xs leading-relaxed ${msg.role === "user"
+                    ? "bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 rounded-br-xs shadow-xs"
+                    : "bg-neutral-100 dark:bg-neutral-800/80 text-neutral-900 dark:text-neutral-100 rounded-bl-xs"
+                    }`}
                 >
                   <p className="whitespace-pre-wrap">{msg.content}</p>
 
@@ -312,7 +310,7 @@ export function FlowAIAssistantDrawer({
                   )}
                 </div>
                 <span className="text-[10px] text-neutral-400 mt-1 px-1">
-                  {new Date(msg.timestamp).toLocaleTimeString([], {
+                  {new Date(msg.timestamp ?? Date.now()).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}

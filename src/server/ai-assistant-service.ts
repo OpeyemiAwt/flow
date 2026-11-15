@@ -5,6 +5,7 @@ import {
 import {
   canonicalizeNetworkId,
   MAINNET_SUPPORTED_DEPLOYMENTS,
+  type CatalogTokenDeployment,
 } from "../domain/supported-assets-catalog.ts";
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
@@ -15,6 +16,8 @@ export interface AssistantActionCard {
     | "BALANCE_SUMMARY"
     | "DRAFT_PAYMENT_LINK"
     | "PREVIEW_SWAP"
+    | "SEND_PREVIEW"
+    | "RECEIVE_ADDRESS"
     | "PAYMENT_STATUS"
     | "ROUTE_EXPLANATION";
   readonly title: string;
@@ -28,74 +31,236 @@ export interface AssistantMessage {
   readonly role: "user" | "assistant";
   readonly content: string;
   readonly card?: AssistantActionCard | null;
-  readonly timestamp: string;
+  readonly timestamp?: string;
+}
+
+function findMentionedDeployment(
+  text: string,
+  fallback?: CatalogTokenDeployment,
+): CatalogTokenDeployment | undefined {
+  const lower = text.toLowerCase();
+  const exact = MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => {
+    const symMatch = new RegExp(`\\b${d.symbol.toLowerCase()}\\b`).test(lower);
+    const netPrefix = d.networkKey.split("-")[0] ?? "";
+    const netMatch =
+      (netPrefix && lower.includes(netPrefix)) ||
+      lower.includes(d.networkName.toLowerCase());
+    return symMatch && netMatch;
+  });
+  if (exact) return exact;
+
+  const byNetwork = MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => {
+    const netPrefix = d.networkKey.split("-")[0] ?? "";
+    return (
+      (netPrefix && new RegExp(`\\b${netPrefix}\\b`).test(lower)) ||
+      lower.includes(d.networkName.toLowerCase())
+    );
+  });
+  const bySymbol = MAINNET_SUPPORTED_DEPLOYMENTS.find((d) =>
+    new RegExp(`\\b${d.symbol.toLowerCase()}\\b`).test(lower),
+  );
+  if (byNetwork && !bySymbol) {
+    return (
+      MAINNET_SUPPORTED_DEPLOYMENTS.find(
+        (d) =>
+          d.networkKey === byNetwork.networkKey && d.symbol === "USDC",
+      ) ?? byNetwork
+    );
+  }
+  return bySymbol ?? fallback;
+}
+
+function extractRecipientAddress(rawPrompt: string): string | null {
+  const evm = rawPrompt.match(/\b0x[a-fA-F0-9]{40}\b/);
+  if (evm) return evm[0];
+  const nearNamed = rawPrompt.match(/\b[a-z0-9_-]{2,64}\.near\b/i);
+  if (nearNamed) return nearNamed[0].toLowerCase();
+  const nearImplicit = rawPrompt.match(/\b[a-f0-9]{64}\b/i);
+  if (nearImplicit) return nearImplicit[0].toLowerCase();
+  const solana = rawPrompt.match(/\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/);
+  if (solana) return solana[0];
+  return null;
+}
+
+function findLastCard(
+  history: AssistantMessage[] | undefined,
+): AssistantActionCard | null {
+  if (!history || history.length === 0) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    if (msg?.role === "assistant" && msg.card) {
+      return msg.card;
+    }
+  }
+  return null;
+}
+
+function findLastUserPrompt(history: AssistantMessage[] | undefined): string {
+  if (!history || history.length === 0) return "";
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    if (msg?.role === "user" && msg.content.trim()) {
+      return msg.content.trim();
+    }
+  }
+  return "";
 }
 
 export async function processAssistantQuery(params: {
   accountId: string;
   prompt: string;
+  history?: AssistantMessage[];
   db?: FlowDb;
 }): Promise<AssistantMessage> {
   const db = params.db ?? runtime().db;
-  const prompt = params.prompt.trim().toLowerCase();
+  const rawPrompt = params.prompt.trim();
+  const prompt = rawPrompt.toLowerCase();
+  const lastCard = findLastCard(params.history);
+  const lastUserPrompt = findLastUserPrompt(params.history).toLowerCase();
 
-  // 1. Fetch account context (balances, payment requests, recent activities)
-  const balances = await db.$queryRaw<
-    Array<{
-      network: string;
-      symbol: string;
-      atomic_balance: string;
-      decimals: number;
-    }>
-  >`
-    SELECT na.network, COALESCE(na.symbol_override,a.symbol) AS symbol, wb.atomic_balance::text, na.decimals
-    FROM flow.wallet_balances wb
-    JOIN flow.network_assets na ON na.id = wb.network_asset_id
-    JOIN flow.assets a ON a.id = na.asset_id
-    JOIN flow.wallets w ON w.id = wb.wallet_id
-    WHERE w.account_id = ${params.accountId}::uuid
-      AND wb.atomic_balance > 0 AND wb.sync_status = 'SYNCED'
-      AND w.status = 'ACTIVE' AND w.environment = 'mainnet' AND na.is_verified AND na.status = 'ACTIVE'
-  `;
+  // 1. Fetch account context (balances + wallet addresses)
+  const [balances, walletAddresses] = await Promise.all([
+    db.$queryRaw<
+      Array<{
+        network: string;
+        symbol: string;
+        atomic_balance: string;
+        decimals: number;
+      }>
+    >`
+      SELECT na.network, COALESCE(na.symbol_override,a.symbol) AS symbol, wb.atomic_balance::text, na.decimals
+      FROM flow.wallet_balances wb
+      JOIN flow.network_assets na ON na.id = wb.network_asset_id
+      JOIN flow.assets a ON a.id = na.asset_id
+      JOIN flow.wallets w ON w.id = wb.wallet_id
+      WHERE w.account_id = ${params.accountId}::uuid
+        AND wb.atomic_balance > 0 AND wb.sync_status = 'SYNCED'
+        AND w.status = 'ACTIVE' AND w.environment = 'mainnet' AND na.is_verified AND na.status = 'ACTIVE'
+    `,
+    db.$queryRaw<
+      Array<{ network: string; chain_id: string; address: string }>
+    >`
+      SELECT wa.network, wa.chain_id, wa.address
+      FROM flow.wallet_addresses wa
+      JOIN flow.wallets w ON w.id = wa.wallet_id
+      WHERE w.account_id = ${params.accountId}::uuid
+        AND w.status = 'ACTIVE'
+        AND w.environment = 'mainnet'
+      ORDER BY wa.network ASC
+    `,
+  ]);
 
   const nonZero = balances.map((row) => ({
     ...row,
     displayBalance: formatAtomicToDisplay(row.atomic_balance, row.decimals),
   }));
 
-  // Intent A: Balance check
+  const isFollowUpModification =
+    /^(what about|how about|instead|make it|change it|use |try )/.test(
+      prompt,
+    ) ||
+    (prompt.length < 40 &&
+      (Boolean(prompt.match(/\b(ethereum|base|solana|near)\b/)) ||
+        Boolean(prompt.match(/^\$?\d+(\.\d+)?$/))) &&
+      lastCard !== null);
+
+  // Follow-up context carry-over for DRAFT_PAYMENT_LINK
+  if (isFollowUpModification && lastCard?.type === "DRAFT_PAYMENT_LINK") {
+    const amountMatch = prompt.match(/\b(\d+(?:\.\d+)?)\b/);
+    const prevAmount = String(lastCard.data.amount ?? "10.00");
+    const rawAmount = amountMatch ? amountMatch[1]! : prevAmount;
+    const formattedAmount = rawAmount.includes(".")
+      ? rawAmount
+      : `${rawAmount}.00`;
+    const prevDeployment = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+      (d) =>
+        d.networkKey === String(lastCard.data.network ?? "") &&
+        d.symbol === String(lastCard.data.assetSymbol ?? ""),
+    );
+    const selectedDeployment =
+      findMentionedDeployment(prompt, prevDeployment) ??
+      MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
+    const title = String(lastCard.data.title ?? "Payment request");
+
+    return {
+      role: "assistant",
+      content: `Updated your payment link draft to ${formattedAmount} ${selectedDeployment.symbol} on ${selectedDeployment.networkName}. Click "Create Payment Link" below when you're ready to publish it.`,
+      card: {
+        type: "DRAFT_PAYMENT_LINK",
+        title: "Draft Payment Link",
+        data: {
+          title,
+          destinationAsset: `${selectedDeployment.symbol} on ${selectedDeployment.networkName}`,
+          destinationAssetId: selectedDeployment.id,
+          assetSymbol: selectedDeployment.symbol,
+          network: selectedDeployment.networkKey,
+          amount: formattedAmount,
+        },
+        ctaLabel: "Create Payment Link",
+        ctaView: "request",
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // Follow-up context carry-over for SEND_PREVIEW (e.g. user supplies missing address or updates amount/network)
+  const extractedAddress = extractRecipientAddress(rawPrompt);
+  const previousAskedForRecipient =
+    lastUserPrompt.includes("send") ||
+    lastUserPrompt.includes("pay ") ||
+    lastCard?.type === "SEND_PREVIEW";
+
+  // Intent A: Balance check (including network-filtered follow-ups like "what about Solana?")
   if (
     prompt.includes("balance") ||
     prompt.includes("how much") ||
     prompt.includes("my funds") ||
-    prompt.includes("holdings")
+    prompt.includes("holdings") ||
+    (isFollowUpModification && lastCard?.type === "BALANCE_SUMMARY")
   ) {
-    if (nonZero.length === 0) {
+    const networkHint = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+      (d) =>
+        prompt.includes(d.networkKey.split("-")[0] ?? "") ||
+        prompt.includes(d.networkName.toLowerCase()),
+    );
+    const filtered = networkHint
+      ? nonZero.filter(
+          (b) =>
+            canonicalizeNetworkId(b.network) === networkHint.networkKey,
+        )
+      : nonZero;
+
+    if (filtered.length === 0) {
       return {
         role: "assistant",
-        content:
-          "No funded balance was found in the synced holdings. Open Home to check wallet and balance status.",
+        content: networkHint
+          ? `You currently have 0 funded balance on ${networkHint.networkName}. You can add money directly or cross-chain from another network.`
+          : "You currently have no funded balance in your synced holdings. Use Add Money on Home to deposit funds.",
         timestamp: new Date().toISOString(),
       };
     }
 
-    const summaryText = nonZero
+    const summaryText = filtered
       .map((b) => `${b.displayBalance} ${b.symbol} on ${b.network}`)
       .join(", ");
 
     return {
       role: "assistant",
-      content: `Here is your current verified portfolio: you hold ${summaryText}.`,
+      content: networkHint
+        ? `Your verified ${networkHint.networkName} balance: ${summaryText}.`
+        : `Here is your current verified portfolio: ${summaryText}.`,
       card: {
         type: "BALANCE_SUMMARY",
-        title: "Verified Portfolio Holdings",
+        title: networkHint
+          ? `${networkHint.networkName} Holdings`
+          : "Verified Portfolio Holdings",
         data: {
           totalUsd: "Live balance",
-          balances: nonZero.map((b) => ({
+          balances: filtered.map((b) => ({
             asset: `${b.symbol} (${b.network})`,
             balance: b.displayBalance,
           })),
-          assets: nonZero.map((b) => ({
+          assets: filtered.map((b) => ({
             symbol: b.symbol,
             network: b.network,
             balance: b.displayBalance,
@@ -108,32 +273,104 @@ export async function processAssistantQuery(params: {
     };
   }
 
-  // Intent B: Swap / Convert preview with live 1Click dry quote when possible
+  // Intent B: Send / Pay someone (actionable SEND_PREVIEW with Confirm & Send button)
+  const looksLikeSend =
+    /\b(send|pay|transfer)\b/.test(prompt) &&
+    !prompt.includes("can i pay") &&
+    !prompt.includes("link") &&
+    !prompt.includes("status") &&
+    !prompt.includes("recent") &&
+    !prompt.includes("settlement");
+
+  if (looksLikeSend || (previousAskedForRecipient && extractedAddress)) {
+    const contextText =
+      previousAskedForRecipient && extractedAddress && !looksLikeSend
+        ? `${lastUserPrompt} ${rawPrompt}`
+        : rawPrompt;
+    const amountMatch = contextText.match(/\$?\b(\d+(?:\.\d+)?)\b/);
+    const amount = amountMatch?.[1] ?? null;
+    const recipient = extractedAddress;
+
+    const firstHeld = nonZero[0]
+      ? MAINNET_SUPPORTED_DEPLOYMENTS.find(
+          (d) =>
+            d.networkKey === nonZero[0]!.network &&
+            d.symbol.toUpperCase() === nonZero[0]!.symbol.toUpperCase(),
+        )
+      : undefined;
+    const deployment =
+      findMentionedDeployment(
+        contextText,
+        firstHeld ??
+          MAINNET_SUPPORTED_DEPLOYMENTS.find(
+            (d) => d.id === "base-mainnet:USDC",
+          ),
+      ) ?? MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
+
+    if (!amount || !recipient) {
+      const missingParts = [
+        !amount ? "how much you want to send (e.g. `10 USDC`)" : null,
+        !recipient
+          ? "the recipient wallet address (0x..., Solana address, or .near)"
+          : null,
+      ].filter(Boolean);
+      return {
+        role: "assistant",
+        content: `I can prepare that ${deployment.symbol} (${deployment.networkName}) payment for you. Please provide ${missingParts.join(" and ")}.`,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    const held = nonZero.find(
+      (b) =>
+        canonicalizeNetworkId(b.network) === deployment.networkKey &&
+        b.symbol.toUpperCase() === deployment.symbol.toUpperCase(),
+    );
+    const availableBalance = held?.displayBalance ?? "0";
+    const requestedAtomic = parseDisplayToAtomic(amount, deployment.decimals);
+    const heldAtomic = held ? BigInt(held.atomic_balance) : 0n;
+    const sufficientBalance =
+      requestedAtomic > 0n && heldAtomic >= requestedAtomic;
+
+    return {
+      role: "assistant",
+      content: sufficientBalance
+        ? `Ready to send ${amount} ${deployment.symbol} on ${deployment.networkName} to ${recipient}. Review the details below and click "Confirm & Send" to execute.`
+        : `Prepared payment preview for ${amount} ${deployment.symbol} on ${deployment.networkName}, but your synced ${deployment.networkName} ${deployment.symbol} balance is ${availableBalance}.`,
+      card: {
+        type: "SEND_PREVIEW",
+        title: "Confirm Payment",
+        data: {
+          sourceDeploymentId: deployment.id,
+          destinationDeploymentId: deployment.id,
+          assetSymbol: deployment.symbol,
+          network: deployment.networkKey,
+          networkName: deployment.networkName,
+          amount,
+          recipientAddress: recipient,
+          availableBalance,
+          sufficientBalance,
+        },
+        ctaLabel: "Confirm & Send",
+        ctaView: "send",
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // Intent C: Swap / Convert preview (with Confirm & Convert execution)
   if (
     prompt.includes("swap") ||
     prompt.includes("convert") ||
-    prompt.includes("exchange")
+    prompt.includes("exchange") ||
+    (isFollowUpModification && lastCard?.type === "PREVIEW_SWAP")
   ) {
     const amountMatch = prompt.match(/\b(\d+(?:\.\d+)?)\b/);
-    const requestedAmount = amountMatch?.[1] ?? "10";
-
-    const findMentionedDeployment = (fragment: string, fallbackId: string) => {
-      const lower = fragment.toLowerCase();
-      const mentioned = MAINNET_SUPPORTED_DEPLOYMENTS.find(
-        (d) =>
-          lower.includes(d.symbol.toLowerCase()) &&
-          (lower.includes(d.networkKey.split("-")[0] ?? "") ||
-            lower.includes(d.networkName.toLowerCase())),
-      );
-      if (mentioned) return mentioned;
-      const bySymbol = MAINNET_SUPPORTED_DEPLOYMENTS.find((d) =>
-        new RegExp(`\\b${d.symbol.toLowerCase()}\\b`).test(lower),
-      );
-      return (
-        bySymbol ??
-        MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => d.id === fallbackId)!
-      );
-    };
+    const requestedAmount =
+      amountMatch?.[1] ??
+      (lastCard?.type === "PREVIEW_SWAP"
+        ? String(lastCard.data.amount ?? "10")
+        : "10");
 
     const splitIdx = Math.max(prompt.indexOf(" to "), prompt.indexOf(" into "));
     const srcPart = splitIdx > 0 ? prompt.slice(0, splitIdx) : prompt;
@@ -147,27 +384,27 @@ export async function processAssistantQuery(params: {
         )
       : undefined;
 
-    const srcDep = findMentionedDeployment(
-      srcPart,
-      firstHeld?.id ?? "base-mainnet:USDC",
-    );
-    const dstDep = findMentionedDeployment(dstPart, "near-mainnet:NEAR");
+    const srcDep =
+      findMentionedDeployment(
+        srcPart,
+        firstHeld ??
+          MAINNET_SUPPORTED_DEPLOYMENTS.find(
+            (d) => d.id === "base-mainnet:USDC",
+          ),
+      ) ?? MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
+    const dstDep =
+      findMentionedDeployment(
+        dstPart,
+        MAINNET_SUPPORTED_DEPLOYMENTS.find(
+          (d) => d.id === "near-mainnet:NEAR",
+        ),
+      ) ?? MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
 
     let routeText = `${requestedAmount} ${srcDep.symbol} (${srcDep.networkName}) → ${dstDep.symbol} (${dstDep.networkName})`;
-    let assistantSummary = `Open Convert in Send & Transfer to review a live NEAR Intents quote from ${srcDep.symbol} (${srcDep.networkName}) to ${dstDep.symbol} (${dstDep.networkName}).`;
+    let assistantSummary = `Prepared a conversion preview for ${requestedAmount} ${srcDep.symbol} (${srcDep.networkName}) → ${dstDep.symbol} (${dstDep.networkName}). Review and click "Confirm & Convert" below to execute.`;
 
-    if (srcDep.id !== dstDep.id && amountMatch) {
+    if (srcDep.id !== dstDep.id && requestedAmount) {
       try {
-        const walletAddresses = await db.$queryRaw<
-          Array<{ network: string; chain_id: string; address: string }>
-        >`
-          SELECT wa.network, wa.chain_id, wa.address
-          FROM flow.wallet_addresses wa
-          JOIN flow.wallets w ON w.id = wa.wallet_id
-          WHERE w.account_id = ${params.accountId}::uuid
-            AND w.status = 'ACTIVE'
-            AND w.environment = 'mainnet'
-        `;
         const refundTo = walletAddresses.find(
           (w) =>
             (canonicalizeNetworkId(w.chain_id) ??
@@ -197,7 +434,7 @@ export async function processAssistantQuery(params: {
             });
             if (preview.ok) {
               routeText = `${requestedAmount} ${srcDep.symbol} → ~${preview.quote.recipientDisplayAmount} ${dstDep.symbol}`;
-              assistantSummary = `Live exchange quote: ${requestedAmount} ${srcDep.symbol} (${srcDep.networkName}) → ~${preview.quote.recipientDisplayAmount} ${dstDep.symbol} (${dstDep.networkName}). Confirm with a verification code in Convert before sending.`;
+              assistantSummary = `Live exchange quote: ${requestedAmount} ${srcDep.symbol} (${srcDep.networkName}) → ~${preview.quote.recipientDisplayAmount} ${dstDep.symbol} (${dstDep.networkName}). Click "Confirm & Convert" below to execute.`;
             }
           }
         }
@@ -213,21 +450,23 @@ export async function processAssistantQuery(params: {
         type: "PREVIEW_SWAP",
         title: "Cross-Chain Swap Preview",
         data: {
+          sourceDeploymentId: srcDep.id,
+          destinationDeploymentId: dstDep.id,
           fromAsset: `${srcDep.symbol} (${srcDep.networkName})`,
           toAsset: `${dstDep.symbol} (${dstDep.networkName})`,
           amount: requestedAmount,
           route: routeText,
           safetyNotice:
-            "Preview only — conversions require explicit review and step-up verification before signing.",
+            "Review the route and amount carefully before confirming execution.",
         },
-        ctaLabel: "Review Swap Quote",
+        ctaLabel: "Confirm & Convert",
         ctaView: "send",
       },
       timestamp: new Date().toISOString(),
     };
   }
 
-  // Intent C: Create Payment Link
+  // Intent D: Draft / Create Payment Link
   if (
     prompt.includes("link") ||
     prompt.includes("invoice") ||
@@ -235,38 +474,27 @@ export async function processAssistantQuery(params: {
     prompt.includes("get paid")
   ) {
     const amountMatch = prompt.match(/\b\d+(\.\d+)?\b/);
-    const rawAmount = amountMatch ? amountMatch[0] : "100";
+    const rawAmount = amountMatch ? amountMatch[0] : "10";
     const formattedAmount = rawAmount.includes(".")
       ? rawAmount
       : `${rawAmount}.00`;
 
-    let selectedDeployment =
-      MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => d.id === "base-mainnet:USDC") ??
-      MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
-    for (const dep of MAINNET_SUPPORTED_DEPLOYMENTS) {
-      const symMatch = new RegExp(`\\b${dep.symbol.toLowerCase()}\\b`).test(
+    const selectedDeployment =
+      findMentionedDeployment(
         prompt,
-      );
-      const netHint =
-        prompt.includes(dep.networkKey.split("-")[0] ?? "") ||
-        prompt.includes(dep.networkName.toLowerCase());
-      if (symMatch && netHint) {
-        selectedDeployment = dep;
-        break;
-      }
-      if (symMatch) {
-        selectedDeployment = dep;
-      }
-    }
+        MAINNET_SUPPORTED_DEPLOYMENTS.find(
+          (d) => d.id === "base-mainnet:USDC",
+        ),
+      ) ?? MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
 
     const titleMatch =
-      params.prompt.match(
+      rawPrompt.match(
         /(?:called|titled|named|for)\s+"([A-Za-z0-9][A-Za-z0-9 &,'-]{1,48})"/i,
       ) ??
-      params.prompt.match(
+      rawPrompt.match(
         /(?:called|titled|named)\s+([A-Za-z0-9][A-Za-z0-9 &,'-]{2,48})/i,
       ) ??
-      params.prompt.match(
+      rawPrompt.match(
         /(?:for\s+)(?!\d|\$\d)([A-Za-z0-9][A-Za-z0-9 &,'-]{2,48})/i,
       );
     const cleanedTitle = titleMatch?.[1]
@@ -277,61 +505,117 @@ export async function processAssistantQuery(params: {
 
     return {
       role: "assistant",
-      content: `I've prepared a draft payment link for ${formattedAmount} ${selectedDeployment.symbol} on ${selectedDeployment.networkName}. Payers can settle using stablecoins or supported tokens across Ethereum, Base, Solana, and NEAR.`,
+      content: `I've prepared a payment link for ${formattedAmount} ${selectedDeployment.symbol} on ${selectedDeployment.networkName}. Click "Create Payment Link" below to publish it right now, or ask me to adjust the amount or network.`,
       card: {
         type: "DRAFT_PAYMENT_LINK",
         title: "Draft Payment Link",
         data: {
           title: cleanedTitle || "Payment request",
           destinationAsset: `${selectedDeployment.symbol} on ${selectedDeployment.networkName}`,
+          destinationAssetId: selectedDeployment.id,
           assetSymbol: selectedDeployment.symbol,
           network: selectedDeployment.networkKey,
           amount: formattedAmount,
         },
-        ctaLabel: "Open Payment Links",
+        ctaLabel: "Create Payment Link",
         ctaView: "request",
       },
       timestamp: new Date().toISOString(),
     };
   }
 
-  // Intent D: Payment & Transfer Status
+  // Intent E: Payment, Settlement & Activity Status (checks ALL transaction tables!)
   if (
     prompt.includes("status") ||
-    prompt.includes("settled") ||
+    prompt.includes("settle") ||
     prompt.includes("recent") ||
     prompt.includes("paid") ||
-    prompt.includes("transfer") ||
-    prompt.includes("activity")
+    prompt.includes("history") ||
+    prompt.includes("activity") ||
+    prompt.includes("transaction")
   ) {
-    const latestAttempt = await db.$queryRaw<
-      Array<{
-        title: string;
-        public_id: string;
-        status: string;
-        amount: string;
-        destination_asset_symbol: string;
-        destination_decimals: number;
-        destination_tx_hash?: string | null;
-        settled_at: Date | null;
-      }>
-    >`
-      SELECT pr.title, pa.attempt_public_id as public_id, pa.status,
-             pa.quoted_destination_atomic_amount as amount,
-             pr.destination_asset_symbol, pr.destination_decimals,
-             pa.destination_tx_hash, pa.settled_at
-      FROM flow.payment_attempts pa
-      JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
-      WHERE pr.account_id = ${params.accountId}::uuid
-      ORDER BY pa.created_at DESC
-      LIMIT 1
-    `;
+    const [latestAttempts, latestOutgoing, latestAddMoney] = await Promise.all([
+      db.$queryRaw<
+        Array<{
+          title: string;
+          public_id: string;
+          status: string;
+          amount: string;
+          destination_asset_symbol: string;
+          destination_decimals: number;
+          destination_tx_hash: string | null;
+          settled_at: Date | null;
+          created_at: Date;
+        }>
+      >`
+        SELECT pr.title, pa.attempt_public_id as public_id, pa.status,
+               pa.quoted_destination_atomic_amount as amount,
+               pr.destination_asset_symbol, pr.destination_decimals,
+               pa.destination_tx_hash, pa.settled_at, pa.created_at
+        FROM flow.payment_attempts pa
+        JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
+        WHERE pr.account_id = ${params.accountId}::uuid
+        ORDER BY pa.created_at DESC
+        LIMIT 1
+      `,
+      db.$queryRaw<
+        Array<{
+          public_id: string;
+          job_kind: string;
+          status: string;
+          source_atomic_amount: string;
+          source_decimals: number;
+          source_asset_symbol: string;
+          destination_asset_symbol: string;
+          source_tx_hash: string | null;
+          destination_tx_hash: string | null;
+          settled_at: Date | null;
+          created_at: Date;
+        }>
+      >`
+        SELECT public_id, job_kind, status, source_atomic_amount::text, source_decimals,
+               source_asset_symbol, destination_asset_symbol,
+               source_tx_hash, destination_tx_hash, settled_at, created_at
+        FROM flow.outgoing_transfer_jobs
+        WHERE account_id = ${params.accountId}::uuid
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      db.$queryRaw<
+        Array<{
+          id: string;
+          status: string;
+          source_asset_symbol: string;
+          quoted_source_display_amount: string;
+          destination_asset_symbol: string;
+          destination_tx_hash: string | null;
+          settled_at: Date | null;
+          created_at: Date;
+        }>
+      >`
+        SELECT id::text, status, source_asset_symbol, quoted_source_display_amount,
+               destination_asset_symbol, destination_tx_hash, settled_at, created_at
+        FROM flow.add_money_intents
+        WHERE account_id = ${params.accountId}::uuid
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+    ]);
 
-    if (latestAttempt.length > 0 && latestAttempt[0]) {
-      const a = latestAttempt[0];
-      return {
-        role: "assistant",
-        content: `Your latest payment attempt (${a.public_id}) for "${a.title}" is ${a.status}.`,
+    const candidates: Array<{
+      at: number;
+      content: string;
+      card: AssistantActionCard;
+    }> = [];
+
+    const toMillis = (d?: Date | string | null) =>
+      d ? new Date(d).getTime() : 0;
+
+    if (latestAttempts?.[0]) {
+      const a = latestAttempts[0];
+      candidates.push({
+        at: toMillis(a.created_at) || toMillis(a.settled_at),
+        content: `Your latest checkout settlement (${a.public_id}) for "${a.title}" is ${a.status}.`,
         card: {
           type: "PAYMENT_STATUS",
           title: `Payment: ${a.title}`,
@@ -340,46 +624,22 @@ export async function processAssistantQuery(params: {
             status: a.status,
             amount: `Quoted: ${formatAtomicToDisplay(a.amount, a.destination_decimals)} ${a.destination_asset_symbol}`,
             settlementTxHash: a.destination_tx_hash ?? null,
-            settledAt: a.settled_at ? a.settled_at.toISOString() : null,
+            settledAt: a.settled_at ? new Date(a.settled_at).toISOString() : null,
           },
           ctaLabel: "View in Activity",
           ctaView: "activity",
         },
-        timestamp: new Date().toISOString(),
-      };
+      });
     }
 
-    const latestOutgoing = await db.$queryRaw<
-      Array<{
-        public_id: string;
-        job_kind: string;
-        status: string;
-        source_atomic_amount: string;
-        source_decimals: number;
-        source_asset_symbol: string;
-        destination_asset_symbol: string;
-        source_tx_hash: string | null;
-        destination_tx_hash: string | null;
-        settled_at: Date | null;
-      }>
-    >`
-      SELECT public_id, job_kind, status, source_atomic_amount::text, source_decimals,
-             source_asset_symbol, destination_asset_symbol,
-             source_tx_hash, destination_tx_hash, settled_at
-      FROM flow.outgoing_transfer_jobs
-      WHERE account_id = ${params.accountId}::uuid
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-
-    if (latestOutgoing.length > 0 && latestOutgoing[0]) {
+    if (latestOutgoing?.[0]) {
       const t = latestOutgoing[0];
       const formatted = formatAtomicToDisplay(
         t.source_atomic_amount,
         t.source_decimals,
       );
-      return {
-        role: "assistant",
+      candidates.push({
+        at: toMillis(t.created_at) || toMillis(t.settled_at),
         content: `Your latest ${t.job_kind.toLowerCase()} (${t.public_id}) of ${formatted} ${t.source_asset_symbol} is ${t.status}.`,
         card: {
           type: "PAYMENT_STATUS",
@@ -389,36 +649,128 @@ export async function processAssistantQuery(params: {
             status: t.status,
             amount: `${formatted} ${t.source_asset_symbol} → ${t.destination_asset_symbol}`,
             settlementTxHash: t.destination_tx_hash ?? t.source_tx_hash ?? null,
-            settledAt: t.settled_at ? t.settled_at.toISOString() : null,
+            settledAt: t.settled_at ? new Date(t.settled_at).toISOString() : null,
           },
           ctaLabel: "View in Activity",
           ctaView: "activity",
         },
+      });
+    }
+
+    if (latestAddMoney?.[0]) {
+      const m = latestAddMoney[0];
+      candidates.push({
+        at: toMillis(m.created_at) || toMillis(m.settled_at),
+        content: `Your latest cross-chain deposit (${m.quoted_source_display_amount} ${m.source_asset_symbol} → ${m.destination_asset_symbol}) is ${m.status}.`,
+        card: {
+          type: "PAYMENT_STATUS",
+          title: `Add Money: ${m.quoted_source_display_amount} ${m.source_asset_symbol}`,
+          data: {
+            publicId: m.id,
+            status: m.status,
+            amount: `${m.quoted_source_display_amount} ${m.source_asset_symbol} → ${m.destination_asset_symbol}`,
+            settlementTxHash: m.destination_tx_hash ?? null,
+            settledAt: m.settled_at ? new Date(m.settled_at).toISOString() : null,
+          },
+          ctaLabel: "View in Activity",
+          ctaView: "activity",
+        },
+      });
+    }
+
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => b.at - a.at);
+      const newest = candidates[0]!;
+      return {
+        role: "assistant",
+        content: newest.content,
+        card: newest.card,
         timestamp: new Date().toISOString(),
       };
     }
-  }
 
-  // Intent E: Supported networks & tokens
-  if (
-    prompt.includes("network") ||
-    prompt.includes("chain") ||
-    prompt.includes("token") ||
-    prompt.includes("support")
-  ) {
     return {
       role: "assistant",
       content:
-        "FLOW supports 4 primary wallet networks: Ethereum Mainnet, Base Mainnet, Solana Mainnet, and NEAR Mainnet with 11 supported assets. Payers can also settle with over 200 tokens across 35+ blockchains, automatically converted into your preferred settlement asset.",
+        "You don't have any settlements, transfers, or payment attempts yet. Once you send a payment, convert assets, or receive a deposit, I'll show the live status here.",
       timestamp: new Date().toISOString(),
     };
   }
 
-  // Default response
+  // Intent F: Wallet Receive / Deposit Addresses
+  if (
+    prompt.includes("address") ||
+    prompt.includes("receive") ||
+    prompt.includes("deposit") ||
+    prompt.includes("wallet")
+  ) {
+    if (walletAddresses.length === 0) {
+      return {
+        role: "assistant",
+        content:
+          "Your wallet addresses are still being provisioned. Open Home to check wallet setup status.",
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    return {
+      role: "assistant",
+      content:
+        "Here are your active Flow deposit addresses across supported networks. Click Copy on any address to receive funds.",
+      card: {
+        type: "RECEIVE_ADDRESS",
+        title: "Your Wallet Addresses",
+        data: {
+          addresses: walletAddresses.map((w) => ({
+            network: w.network,
+            address: w.address,
+          })),
+        },
+        ctaLabel: "Open Receive",
+        ctaView: "receive",
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // Intent G: "Can I pay with USDC on Base?" & Supported Networks / Tokens
+  if (
+    prompt.includes("can i pay") ||
+    prompt.includes("pay with") ||
+    prompt.includes("network") ||
+    prompt.includes("chain") ||
+    prompt.includes("token") ||
+    prompt.includes("support") ||
+    prompt.includes("accept")
+  ) {
+    const dep = findMentionedDeployment(prompt);
+    if (dep) {
+      const held = nonZero.find(
+        (b) =>
+          canonicalizeNetworkId(b.network) === dep.networkKey &&
+          b.symbol.toUpperCase() === dep.symbol.toUpperCase(),
+      );
+      const balText = held ? `${held.displayBalance} ${dep.symbol}` : "0";
+      return {
+        role: "assistant",
+        content: `Yes — ${dep.symbol} on ${dep.networkName} is fully supported on Flow for sending, receiving, swapping, and checkout links. Your current ${dep.networkName} ${dep.symbol} balance is ${balText}. Want me to send a payment or create a payment link with it?`,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    return {
+      role: "assistant",
+      content:
+        "FLOW supports 4 primary wallet networks: Ethereum Mainnet, Base Mainnet, Solana Mainnet, and NEAR Mainnet with 11 curated assets (USDC, USDT, ETH, SOL, NEAR). Payers can also settle with 200+ tokens across 35+ blockchains via NEAR Intents.",
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // Default helpful response
   return {
     role: "assistant",
     content:
-      "I am your Flow AI Assistant. I can help you check verified balances, review your recent payments, draft a new payment link, or preview cross-chain swaps across supported networks. What would you like to do?",
+      "I can check your balances, look up recent settlements, show your deposit addresses, draft & create payment links, preview swaps, or prepare a payment to send (just tell me the amount, token, and recipient address). What would you like to do?",
     timestamp: new Date().toISOString(),
   };
 }
