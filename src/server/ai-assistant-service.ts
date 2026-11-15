@@ -106,6 +106,144 @@ function findLastUserPrompt(history: AssistantMessage[] | undefined): string {
   return "";
 }
 
+function findLastAssistantContent(
+  history: AssistantMessage[] | undefined,
+): string {
+  if (!history || history.length === 0) return "";
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    if (msg?.role === "assistant" && msg.content.trim()) {
+      return msg.content.trim();
+    }
+  }
+  return "";
+}
+
+async function tryLlmAssistantReply(params: {
+  prompt: string;
+  history: AssistantMessage[];
+  balances: Array<{ network: string; symbol: string; displayBalance: string }>;
+  addresses: Array<{ network: string; address: string }>;
+}): Promise<AssistantMessage | null> {
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
+  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!geminiKey && !openaiKey && !anthropicKey) return null;
+
+  const systemPrompt = [
+    "You are Flow Copilot, the conversational AI assistant for Flow (a non-custodial multi-chain payments & treasury wallet).",
+    "Be concise, natural, accurate, and directly answer the user's question using the live account context below.",
+    "Never invent balances, addresses, or transaction hashes.",
+    `Supported mainnet deployments: ${MAINNET_SUPPORTED_DEPLOYMENTS.map((d) => `${d.symbol} on ${d.networkName} (${d.id})`).join(", ")}.`,
+    `Current verified balances: ${params.balances.length > 0 ? params.balances.map((b) => `${b.displayBalance} ${b.symbol} on ${b.network}`).join("; ") : "0 funded balances"}.`,
+    `Active wallet addresses: ${params.addresses.length > 0 ? params.addresses.map((a) => `${a.network}: ${a.address}`).join("; ") : "None provisioned yet"}.`,
+    "Respond ONLY with valid JSON: { \"reply\": string, \"card\"?: { \"type\": \"SEND_PREVIEW\" | \"PREVIEW_SWAP\" | \"DRAFT_PAYMENT_LINK\" | \"BALANCE_SUMMARY\" | \"RECEIVE_ADDRESS\", \"title\": string, \"data\": object } | null }.",
+    "Only attach a SEND_PREVIEW card when you have sourceDeploymentId, destinationDeploymentId, assetSymbol, network, networkName, amount, recipientAddress, availableBalance, and sufficientBalance (boolean).",
+  ].join("\n");
+
+  const transcript = [
+    ...params.history.slice(-10).map((m) => ({
+      role: m.role,
+      content: m.content,
+    })),
+    { role: "user" as const, content: params.prompt },
+  ];
+
+  try {
+    let rawText: string | null = null;
+
+    if (geminiKey) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: transcript.map((m) => ({
+              role: m.role === "assistant" ? "model" : "user",
+              parts: [{ text: m.content }],
+            })),
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature: 0.3,
+            },
+          }),
+        },
+      );
+      if (res.ok) {
+        const json = (await res.json()) as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+          }>;
+        };
+        rawText = json.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+      }
+    } else if (openaiKey) {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${openaiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+          messages: [{ role: "system", content: systemPrompt }, ...transcript],
+        }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        rawText = json.choices?.[0]?.message?.content ?? null;
+      }
+    } else if (anthropicKey) {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-haiku-latest",
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: transcript,
+        }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as {
+          content?: Array<{ text?: string }>;
+        };
+        rawText = json.content?.[0]?.text ?? null;
+      }
+    }
+
+    if (!rawText) return null;
+    const cleaned = rawText
+      .replace(/^```json\s*/i, "")
+      .replace(/```$/i, "")
+      .trim();
+    const parsed = JSON.parse(cleaned) as {
+      reply?: string;
+      card?: AssistantActionCard | null;
+    };
+    if (!parsed.reply) return null;
+
+    return {
+      role: "assistant",
+      content: parsed.reply,
+      card: parsed.card ?? null,
+      timestamp: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function processAssistantQuery(params: {
   accountId: string;
   prompt: string;
@@ -117,6 +255,9 @@ export async function processAssistantQuery(params: {
   const prompt = rawPrompt.toLowerCase();
   const lastCard = findLastCard(params.history);
   const lastUserPrompt = findLastUserPrompt(params.history).toLowerCase();
+  const lastAssistantContent = findLastAssistantContent(
+    params.history,
+  ).toLowerCase();
 
   // 1. Fetch account context (balances + wallet addresses)
   const [balances, walletAddresses] = await Promise.all([
@@ -154,6 +295,58 @@ export async function processAssistantQuery(params: {
     ...row,
     displayBalance: formatAtomicToDisplay(row.atomic_balance, row.decimals),
   }));
+
+  const llmReply = await tryLlmAssistantReply({
+    prompt: rawPrompt,
+    history: params.history ?? [],
+    balances: nonZero,
+    addresses: walletAddresses,
+  });
+  if (llmReply) {
+    return llmReply;
+  }
+
+  // Contextual "why" / clarification handler
+  if (
+    /^(why|how come|what does that mean|explain)\b/.test(prompt) &&
+    lastAssistantContent
+  ) {
+    if (
+      lastAssistantContent.includes("don't have any settlements") ||
+      lastAssistantContent.includes("no funded balance") ||
+      lastAssistantContent.includes("0 funded balance")
+    ) {
+      return {
+        role: "assistant",
+        content:
+          "There are no completed or pending transactions recorded on this account yet, or your wallet hasn't received a synced deposit yet. Once you send, swap, or receive funds, I'll show the live settlement status here.",
+        timestamp: new Date().toISOString(),
+      };
+    }
+    if (lastAssistantContent.includes("insufficient")) {
+      return {
+        role: "assistant",
+        content:
+          nonZero.length > 0
+            ? `Your synced holdings are ${nonZero.map((b) => `${b.displayBalance} ${b.symbol} on ${b.network}`).join(", ")}. You can send up to those amounts or add more funds first.`
+            : "Your synced balance is currently 0, so there aren't enough funds on that network to cover the payment yet.",
+        timestamp: new Date().toISOString(),
+      };
+    }
+    if (lastAssistantContent.includes("payment for you. please provide")) {
+      return {
+        role: "assistant",
+        content:
+          "To prepare a blockchain transfer safely, I just need the exact amount and the destination wallet address (or tell me which network you want to use, like Base or Solana).",
+        timestamp: new Date().toISOString(),
+      };
+    }
+    return {
+      role: "assistant",
+      content: `Regarding my previous message: "${findLastAssistantContent(params.history)}". Tell me what you'd like to adjust or check next.`,
+      timestamp: new Date().toISOString(),
+    };
+  }
 
   const isFollowUpModification =
     /^(what about|how about|instead|make it|change it|use |try )/.test(
@@ -274,22 +467,34 @@ export async function processAssistantQuery(params: {
   }
 
   // Intent B: Send / Pay someone (actionable SEND_PREVIEW with Confirm & Send button)
+  const inPendingSendFlow =
+    lastAssistantContent.includes("payment for you. please provide") ||
+    lastCard?.type === "SEND_PREVIEW";
+
   const looksLikeSend =
-    /\b(send|pay|transfer)\b/.test(prompt) &&
-    !prompt.includes("can i pay") &&
-    !prompt.includes("link") &&
-    !prompt.includes("status") &&
-    !prompt.includes("recent") &&
-    !prompt.includes("settlement");
+    (/\b(send|pay|transfer)\b/.test(prompt) &&
+      !prompt.includes("can i pay") &&
+      !prompt.includes("link") &&
+      !prompt.includes("status") &&
+      !prompt.includes("recent") &&
+      !prompt.includes("settlement")) ||
+    (inPendingSendFlow &&
+      !prompt.includes("balance") &&
+      !prompt.includes("link") &&
+      !prompt.includes("swap") &&
+      !prompt.includes("convert") &&
+      !prompt.includes("settlement") &&
+      !prompt.includes("address"));
 
   if (looksLikeSend || (previousAskedForRecipient && extractedAddress)) {
     const contextText =
-      previousAskedForRecipient && extractedAddress && !looksLikeSend
+      (inPendingSendFlow || previousAskedForRecipient) &&
+      !/\b(send|pay|transfer)\b/.test(prompt)
         ? `${lastUserPrompt} ${rawPrompt}`
         : rawPrompt;
     const amountMatch = contextText.match(/\$?\b(\d+(?:\.\d+)?)\b/);
     const amount = amountMatch?.[1] ?? null;
-    const recipient = extractedAddress;
+    const recipient = extractedAddress ?? extractRecipientAddress(lastUserPrompt);
 
     const firstHeld = nonZero[0]
       ? MAINNET_SUPPORTED_DEPLOYMENTS.find(
@@ -300,11 +505,14 @@ export async function processAssistantQuery(params: {
       : undefined;
     const deployment =
       findMentionedDeployment(
-        contextText,
-        firstHeld ??
-          MAINNET_SUPPORTED_DEPLOYMENTS.find(
-            (d) => d.id === "base-mainnet:USDC",
-          ),
+        rawPrompt,
+        findMentionedDeployment(
+          contextText,
+          firstHeld ??
+            MAINNET_SUPPORTED_DEPLOYMENTS.find(
+              (d) => d.id === "base-mainnet:USDC",
+            ),
+        ),
       ) ?? MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
 
     if (!amount || !recipient) {
