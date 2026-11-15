@@ -19,6 +19,15 @@ import {
   type Hex,
 } from "viem";
 import { isFinancialExecutionDisabled } from "../../domain/custody.ts";
+import {
+  BURROW_CONTRACT,
+  BURROW_STORAGE_DEPOSIT_YOCTO,
+  BURROW_USDC_CONTRACT,
+  EARN_MEMO,
+  isEarnMemo,
+  LINEAR_CONTRACT,
+  type EarnMemo,
+} from "../../domain/earn.ts";
 import type { NetworkId } from "../../domain/providers.ts";
 import {
   decryptSecret,
@@ -639,6 +648,165 @@ async function pollOutLayerRequestForTxHash(
   return { txHash: `outlayer-req:${requestId}`, requestId };
 }
 
+async function executeNearEarnJob(
+  memo: EarnMemo,
+  job: ClaimedOutgoingCustodyJob,
+  apiKey: string,
+  outlayer: OutLayerAdapter,
+  targetAddress: string,
+  markSigningStarted: () => Promise<void>,
+): Promise<{ txHash: string; requestId: string; feeAtomic: string }> {
+  const { primary, fallback } = resolveChainRpc(
+    job.source_network,
+    job.wallet_environment,
+  );
+
+  if (memo === EARN_MEMO.LINEAR_DEPOSIT && targetAddress === LINEAR_CONTRACT) {
+    await markSigningStarted();
+    const res = await outlayer.callNearContract(apiKey, {
+      receiverId: LINEAR_CONTRACT,
+      methodName: "deposit_and_stake",
+      args: {},
+      gas: "50000000000000",
+      deposit: job.source_atomic_amount,
+    });
+    const polled = await pollOutLayerRequestForTxHash(
+      outlayer,
+      apiKey,
+      res.request_id,
+      res.tx_hash,
+    );
+    return { ...polled, feeAtomic: "0" };
+  }
+
+  if (
+    (memo === EARN_MEMO.LINEAR_WITHDRAW_INSTANT ||
+      memo === EARN_MEMO.LINEAR_WITHDRAW_DELAYED) &&
+    targetAddress === LINEAR_CONTRACT
+  ) {
+    await markSigningStarted();
+    const methodName =
+      memo === EARN_MEMO.LINEAR_WITHDRAW_DELAYED
+        ? "unstake"
+        : "instant_unstake";
+    const res = await outlayer.callNearContract(apiKey, {
+      receiverId: LINEAR_CONTRACT,
+      methodName,
+      args: { amount: job.source_atomic_amount },
+      gas: "100000000000000",
+      deposit: "0",
+    });
+    const polled = await pollOutLayerRequestForTxHash(
+      outlayer,
+      apiKey,
+      res.request_id,
+      res.tx_hash,
+    );
+    return { ...polled, feeAtomic: "0" };
+  }
+
+  if (memo === EARN_MEMO.BURROW_DEPOSIT && targetAddress === BURROW_CONTRACT) {
+    const storageBalance = await queryNearViewJson<{
+      total: string;
+      available: string;
+    } | null>(primary, fallback, BURROW_CONTRACT, "storage_balance_of", {
+      account_id: job.source_address,
+    });
+
+    await markSigningStarted();
+
+    if (storageBalance === null) {
+      const depRes = await outlayer.callNearContract(apiKey, {
+        receiverId: BURROW_CONTRACT,
+        methodName: "storage_deposit",
+        args: { account_id: job.source_address, registration_only: false },
+        gas: "30000000000000",
+        deposit: BURROW_STORAGE_DEPOSIT_YOCTO.toString(),
+      });
+      await pollOutLayerRequestForTxHash(
+        outlayer,
+        apiKey,
+        depRes.request_id,
+        depRes.tx_hash,
+      );
+    }
+
+    const res = await outlayer.callNearContract(apiKey, {
+      receiverId: BURROW_USDC_CONTRACT,
+      methodName: "ft_transfer_call",
+      args: {
+        receiver_id: BURROW_CONTRACT,
+        amount: job.source_atomic_amount,
+        msg: "",
+      },
+      gas: "100000000000000",
+      deposit: "1",
+    });
+    const polled = await pollOutLayerRequestForTxHash(
+      outlayer,
+      apiKey,
+      res.request_id,
+      res.tx_hash,
+    );
+    return { ...polled, feeAtomic: "0" };
+  }
+
+  if (memo === EARN_MEMO.BURROW_WITHDRAW && targetAddress === BURROW_CONTRACT) {
+    const account = await queryNearViewJson<{
+      supplied?: Array<{ token_id: string; balance?: string }>;
+      collateral?: Array<{ token_id: string; balance?: string }>;
+    } | null>(primary, fallback, BURROW_CONTRACT, "get_account", {
+      account_id: job.source_address,
+    });
+    let available18 = 0n;
+    if (account) {
+      for (const entry of [
+        ...(account.supplied ?? []),
+        ...(account.collateral ?? []),
+      ]) {
+        if (entry.token_id === BURROW_USDC_CONTRACT && entry.balance) {
+          available18 += BigInt(entry.balance);
+        }
+      }
+    }
+    const requested18 = BigInt(job.source_atomic_amount) * 10n ** 12n;
+    const withdrawMax18 =
+      available18 > 0n && requested18 >= available18 - 10n ** 12n
+        ? available18.toString()
+        : requested18.toString();
+
+    await markSigningStarted();
+    const res = await outlayer.callNearContract(apiKey, {
+      receiverId: BURROW_CONTRACT,
+      methodName: "execute",
+      args: {
+        actions: [
+          {
+            Withdraw: {
+              token_id: BURROW_USDC_CONTRACT,
+              max_amount: withdrawMax18,
+            },
+          },
+        ],
+      },
+      gas: "100000000000000",
+      deposit: "1",
+    });
+    const polled = await pollOutLayerRequestForTxHash(
+      outlayer,
+      apiKey,
+      res.request_id,
+      res.tx_hash,
+    );
+    return { ...polled, feeAtomic: "0" };
+  }
+
+  throw new FlowError(
+    "UNSUPPORTED_CHAIN",
+    `Unsupported Earn action ${memo} for target ${targetAddress}`,
+  );
+}
+
 async function executeNearTransfer(
   job: ClaimedOutgoingCustodyJob,
   apiKey: string,
@@ -646,6 +814,16 @@ async function executeNearTransfer(
   targetAddress: string,
   markSigningStarted: () => Promise<void>,
 ): Promise<{ txHash: string; requestId: string; feeAtomic: string }> {
+  if (job.job_kind === "SEND" && isEarnMemo(job.provider_deposit_memo)) {
+    return executeNearEarnJob(
+      job.provider_deposit_memo,
+      job,
+      apiKey,
+      outlayer,
+      targetAddress,
+      markSigningStarted,
+    );
+  }
   const isNative = job.source_asset_id.toLowerCase() === "native";
   if (isNative) {
     await markSigningStarted();

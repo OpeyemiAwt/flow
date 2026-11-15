@@ -31,6 +31,7 @@ export interface EarnViewProps {
   onNavigateToTab: (tab: NavTabId) => void;
   onSelectConvert: (sourceDeploymentId?: string, destDeploymentId?: string) => void;
   onSelectDeposit: (deploymentId?: string) => void;
+  onSyncPortfolio?: () => void;
   pushToast: (toast: {
     title: string;
     description?: string;
@@ -94,6 +95,7 @@ export function EarnView({
   onNavigateToTab,
   onSelectConvert,
   onSelectDeposit,
+  onSyncPortfolio,
   pushToast,
 }: EarnViewProps) {
   const [mounted, setMounted] = useState(false);
@@ -109,9 +111,18 @@ export function EarnView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [unstakeType, setUnstakeType] = useState<"INSTANT" | "DELAYED">("INSTANT");
   const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({});
+  const [activeEarnJobs, setActiveEarnJobs] = useState<
+    Array<{
+      publicId: string;
+      status: string;
+      providerDepositMemo: string | null;
+      sourceDisplayAmount: string;
+      sourceAssetSymbol: string;
+      sourceTxHash: string | null;
+    }>
+  >([]);
 
-  // Persistent Position per Account
-  const storageKey = `flow_earn_v2_pos_${accountId}`;
+  // Live on-chain protocol positions
   const [positions, setPositions] = useState<
     Record<
       string,
@@ -127,34 +138,51 @@ export function EarnView({
     burrow: { depositedAmount: 0, depositedUsd: 0, earnedYieldUsd: 0, updatedAt: Date.now() },
   });
 
-  // Load from local storage
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const fetchEarnPositions = useCallback(async () => {
     try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setPositions(parsed);
-      }
-    } catch {
-      // ignore
-    }
-  }, [storageKey]);
+      const res = await fetch(`/api/accounts/${accountId}/earn`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data?.ok || !data.positions) return;
 
-  // Save to local storage
-  const savePositions = useCallback(
-    (next: typeof positions) => {
-      setPositions(next);
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          // ignore
-        }
-      }
-    },
-    [storageKey],
-  );
+      const linearNear = parseFloat(data.positions.linear?.nearDisplay ?? "0") || 0;
+      const burrowUsdc = parseFloat(data.positions.burrow?.usdcDisplay ?? "0") || 0;
+      const now = Date.now();
+
+      setPositions({
+        linear: {
+          depositedAmount: linearNear,
+          depositedUsd: linearNear * nearPriceUsd,
+          earnedYieldUsd: 0,
+          updatedAt: now,
+        },
+        burrow: {
+          depositedAmount: burrowUsdc,
+          depositedUsd: burrowUsdc,
+          earnedYieldUsd: 0,
+          updatedAt: now,
+        },
+      });
+      setActiveEarnJobs(Array.isArray(data.activeJobs) ? data.activeJobs : []);
+    } catch {
+      // Keep last known on-chain snapshot on transient network hiccup
+    }
+  }, [accountId, nearPriceUsd]);
+
+  useEffect(() => {
+    void fetchEarnPositions();
+  }, [fetchEarnPositions]);
+
+  useEffect(() => {
+    if (activeEarnJobs.length === 0) return;
+    const timer = setInterval(() => {
+      void fetchEarnPositions();
+      onSyncPortfolio?.();
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [activeEarnJobs.length, fetchEarnPositions, onSyncPortfolio]);
 
   // Live yield accrual ticker
   const [ticker, setTicker] = useState(0);
@@ -192,13 +220,14 @@ export function EarnView({
     return isNaN(parsed) ? 0 : parsed;
   }, [nearAsset]);
 
-  // Available Stables in wallet (USDC / USDT)
+  // Available NEAR USDC in wallet for Burrow
   const availableStablesNum = useMemo(() => {
-    const usdc = heldAssets.find((a) => a.deployment.symbol === "USDC");
-    const usdt = heldAssets.find((a) => a.deployment.symbol === "USDT");
-    const uVal = usdc ? parseFloat(usdc.displayBalance.replace(/,/g, "")) || 0 : 0;
-    const tVal = usdt ? parseFloat(usdt.displayBalance.replace(/,/g, "")) || 0 : 0;
-    return uVal + tVal;
+    const usdc = heldAssets.find(
+      (a) =>
+        a.deployment.id === "near-mainnet:USDC" ||
+        (a.deployment.symbol === "USDC" && a.deployment.ecosystem === "near"),
+    );
+    return usdc ? parseFloat(usdc.displayBalance.replace(/,/g, "")) || 0 : 0;
   }, [heldAssets]);
 
   // Open Deposit Modal
@@ -220,7 +249,8 @@ export function EarnView({
   // Execute Deposit
   const handleExecuteDeposit = async () => {
     if (!activeModalProtocol) return;
-    const parsed = parseFloat(amountInput.replace(/,/g, ""));
+    const trimmed = amountInput.replace(/,/g, "").trim();
+    const parsed = parseFloat(trimmed);
 
     if (isNaN(parsed) || parsed <= 0) {
       pushToast({
@@ -239,7 +269,7 @@ export function EarnView({
     if (parsed > available) {
       pushToast({
         title: "Insufficient balance",
-        description: `You only have ${available.toFixed(2)} ${activeModalProtocol.assetSymbol} available in your wallet.`,
+        description: `You only have ${available.toFixed(4)} ${activeModalProtocol.assetSymbol} available in your NEAR wallet.`,
         variant: "error",
       });
       return;
@@ -249,70 +279,46 @@ export function EarnView({
     setIsSubmitting(true);
 
     try {
-      // Execute real on-chain custody send to protocol contract
-      try {
-        const res = await fetch(`/api/accounts/${accountId}/send/execute`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sourceDeploymentId:
-              activeModalProtocol.assetSymbol === "NEAR"
-                ? "near-mainnet:NEAR"
-                : "near-mainnet:USDC",
-            destinationDeploymentId:
-              activeModalProtocol.assetSymbol === "NEAR"
-                ? "near-mainnet:NEAR"
-                : "near-mainnet:USDC",
-            recipientAddress: activeModalProtocol.contractId,
-            sourceDisplayAmount: parsed.toString(),
-            idempotencyKey: crypto.randomUUID(),
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          console.warn("Custody contract deposit response:", data);
-        }
-      } catch (e) {
-        console.warn("Direct custody execution attempt:", e);
+      const res = await fetch(`/api/accounts/${accountId}/earn/execute`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          protocol: activeModalProtocol.protocolKey,
+          action: "DEPOSIT",
+          displayAmount: trimmed,
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          data?.error?.message ||
+          data?.message ||
+          data?.error?.code ||
+          "Could not submit deposit transaction.";
+        throw new Error(msg);
       }
 
-      const usdValue =
-        activeModalProtocol.assetSymbol === "NEAR"
-          ? parsed * nearPriceUsd
-          : parsed;
-
-      const currentPos = positions[activeModalProtocol.protocolKey] || {
-        depositedAmount: 0,
-        depositedUsd: 0,
-        earnedYieldUsd: 0,
-        updatedAt: Date.now(),
-      };
-
-      const updated = {
-        ...positions,
-        [activeModalProtocol.protocolKey]: {
-          depositedAmount: currentPos.depositedAmount + parsed,
-          depositedUsd: currentPos.depositedUsd + usdValue,
-          earnedYieldUsd: currentPos.earnedYieldUsd,
-          updatedAt: Date.now(),
-        },
-      };
-
-      savePositions(updated);
+      await fetchEarnPositions();
+      onSyncPortfolio?.();
       triggerHaptic("success");
       pushToast({
-        title: "Deposit Successful!",
-        description: `Deposited ${parsed.toFixed(2)} ${activeModalProtocol.assetSymbol} into ${activeModalProtocol.name} (${activeModalProtocol.apy}% APY).`,
+        title: "Deposit Submitted",
+        description: `Queued ${parsed.toFixed(4)} ${activeModalProtocol.assetSymbol} deposit to ${activeModalProtocol.name} on NEAR Mainnet.`,
         variant: "success",
         durationMs: 5000,
       });
       setActiveModalProtocol(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Could not complete deposit transaction.";
       pushToast({
         title: "Deposit Failed",
-        description: err?.message || "Could not complete deposit transaction.",
+        description: message,
         variant: "error",
       });
     } finally {
@@ -326,7 +332,8 @@ export function EarnView({
     const currentPos = positions[activeModalProtocol.protocolKey];
     if (!currentPos || currentPos.depositedAmount <= 0) return;
 
-    const parsed = parseFloat(amountInput.replace(/,/g, ""));
+    const trimmed = amountInput.replace(/,/g, "").trim();
+    const parsed = parseFloat(trimmed);
     if (isNaN(parsed) || parsed <= 0) {
       pushToast({
         title: "Enter an amount",
@@ -336,10 +343,10 @@ export function EarnView({
       return;
     }
 
-    if (parsed > currentPos.depositedAmount) {
+    if (parsed > currentPos.depositedAmount * 1.0001) {
       pushToast({
         title: "Exceeds deposited balance",
-        description: `You only have ${currentPos.depositedAmount.toFixed(2)} ${activeModalProtocol.assetSymbol} deposited.`,
+        description: `You only have ${currentPos.depositedAmount.toFixed(4)} ${activeModalProtocol.assetSymbol} deposited.`,
         variant: "error",
       });
       return;
@@ -349,39 +356,48 @@ export function EarnView({
     setIsSubmitting(true);
 
     try {
-      await new Promise((res) => setTimeout(res, 800));
-
-      const feeDeduction = unstakeType === "INSTANT" ? parsed * 0.003 : 0;
-      const netReturned = parsed - feeDeduction;
-      const remainingAmount = Math.max(0, currentPos.depositedAmount - parsed);
-      const remainingUsd =
-        activeModalProtocol.assetSymbol === "NEAR"
-          ? remainingAmount * nearPriceUsd
-          : remainingAmount;
-
-      const updated = {
-        ...positions,
-        [activeModalProtocol.protocolKey]: {
-          depositedAmount: remainingAmount,
-          depositedUsd: remainingUsd,
-          earnedYieldUsd: currentPos.earnedYieldUsd,
-          updatedAt: Date.now(),
+      const res = await fetch(`/api/accounts/${accountId}/earn/execute`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      };
+        body: JSON.stringify({
+          protocol: activeModalProtocol.protocolKey,
+          action: "WITHDRAW",
+          unstakeType:
+            activeModalProtocol.protocolKey === "linear" ? unstakeType : undefined,
+          displayAmount: trimmed,
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          data?.error?.message ||
+          data?.message ||
+          data?.error?.code ||
+          "Could not submit withdrawal transaction.";
+        throw new Error(msg);
+      }
 
-      savePositions(updated);
+      await fetchEarnPositions();
+      onSyncPortfolio?.();
       triggerHaptic("success");
       pushToast({
-        title: "Withdrawal Complete",
-        description: `Returned ~${netReturned.toFixed(2)} ${activeModalProtocol.assetSymbol} to your wallet.`,
+        title: "Withdrawal Submitted",
+        description: `Queued ${parsed.toFixed(4)} ${activeModalProtocol.assetSymbol} withdrawal from ${activeModalProtocol.name} on NEAR Mainnet.`,
         variant: "success",
         durationMs: 5000,
       });
       setActiveModalProtocol(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Could not complete withdrawal transaction.";
       pushToast({
         title: "Withdrawal Failed",
-        description: err?.message || "Could not complete withdrawal transaction.",
+        description: message,
         variant: "error",
       });
     } finally {
@@ -587,6 +603,17 @@ export function EarnView({
                     >
                       <span>Withdraw</span>
                     </button>
+                  )}
+
+                  {activeEarnJobs.some((j) =>
+                    j.providerDepositMemo?.startsWith(
+                      `EARN:${protocol.protocolKey.toUpperCase()}:`,
+                    ),
+                  ) && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      Confirming on NEAR
+                    </span>
                   )}
                 </div>
               </div>
