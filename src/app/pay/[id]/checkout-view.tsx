@@ -8,6 +8,7 @@ import type {
   PaymentDepositInstructions,
 } from "../../../domain/quote-discovery.ts";
 import { FlowLogo } from "../../../components/flow-logo.tsx";
+import { PaymentTimelineTracker } from "../../../components/payment-timeline-tracker.tsx";
 import { QrCode } from "../../../components/qr-code.tsx";
 import { useToast } from "../../../components/toast-provider.tsx";
 import {
@@ -110,6 +111,68 @@ export function CheckoutView({
   // Deposit Instructions & Settlement Lifecycle State
   const [instructions, setInstructions] =
     useState<PaymentDepositInstructions | null>(request.activeAttempt ?? null);
+  const [attemptInitiatedAt] = useState<string>(() => new Date().toISOString());
+  const attemptStorageKey = `flow-checkout-attempt:${request.publicId}`;
+
+  // Persist active deposit attempt across reloads & restore on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (instructions?.attemptPublicId) {
+      try {
+        window.localStorage.setItem(
+          attemptStorageKey,
+          instructions.attemptPublicId,
+        );
+      } catch {
+        // ignore storage errors
+      }
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("attempt") !== instructions.attemptPublicId) {
+        url.searchParams.set("attempt", instructions.attemptPublicId);
+        window.history.replaceState(null, "", url.toString());
+      }
+      return;
+    }
+  }, [attemptStorageKey, instructions?.attemptPublicId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || instructions || isReadOnly) return;
+    let savedAttemptId: string | null = null;
+    try {
+      savedAttemptId = window.localStorage.getItem(attemptStorageKey);
+    } catch {
+      savedAttemptId = null;
+    }
+    if (!savedAttemptId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/pay/${request.publicId}/attempt/${savedAttemptId}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok || cancelled) return;
+        const latest = (await res.json()) as PaymentDepositInstructions;
+        const isStillRelevant =
+          latest.status === "DETECTED" ||
+          latest.status === "SETTLING" ||
+          latest.status === "SETTLED" ||
+          latest.status === "EXCEPTION_REFUND_REQUIRED" ||
+          latest.status === "RECONCILIATION_REQUIRED" ||
+          Boolean(latest.sourceTxHash) ||
+          (latest.status === "DEPOSIT_COMMITTED" &&
+            Date.parse(latest.depositDeadline) > Date.now());
+        if (isStillRelevant && !cancelled) {
+          setInstructions(latest);
+        }
+      } catch {
+        // ignore restore errors
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attemptStorageKey, instructions, isReadOnly, request.publicId]);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [directVisible, setDirectVisible] = useState(false);
@@ -261,6 +324,16 @@ export function CheckoutView({
         if (!proceed) return;
       }
     }
+    try {
+      window.localStorage.removeItem(attemptStorageKey);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("attempt")) {
+        url.searchParams.delete("attempt");
+        window.history.replaceState(null, "", url.toString());
+      }
+    } catch {
+      // ignore
+    }
     setInstructions(null);
     setRefreshTrigger((n) => n + 1);
   };
@@ -289,6 +362,16 @@ export function CheckoutView({
       }
     } catch {
       // Network failure, safe to fall back to resetting
+    }
+    try {
+      window.localStorage.removeItem(attemptStorageKey);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("attempt")) {
+        url.searchParams.delete("attempt");
+        window.history.replaceState(null, "", url.toString());
+      }
+    } catch {
+      // ignore
     }
     setInstructions(null);
     setRefreshTrigger((n) => n + 1);
@@ -1168,45 +1251,26 @@ export function CheckoutView({
                     </div>
                   </div>
 
-                  {isFundedOrProcessing ? (
-                    <div className="rounded-[16px] border border-blue-200/80 dark:border-blue-800/40 bg-blue-50/60 dark:bg-blue-950/30 p-4 text-xs text-blue-950 dark:text-blue-200 space-y-1">
-                      <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
-                        <span>Payment Detected — Settling In Progress</span>
-                      </p>
-                      <p className="text-[11px] leading-relaxed text-blue-900/80 dark:text-blue-200/80">
-                        Your deposit has been recognized on{" "}
-                        {instructions.sourceNetwork}. Settlement to{" "}
-                        {request.recipientName} on{" "}
-                        {instructions.destinationNetwork} is proceeding
-                        automatically. Please keep this window open until
-                        settlement completes.
-                      </p>
-                    </div>
-                  ) : isUnderReview ? (
-                    <div className="rounded-[16px] border border-purple-200/80 dark:border-purple-800/40 bg-purple-50/60 dark:bg-purple-950/30 p-4 text-xs text-purple-950 dark:text-purple-200 space-y-1">
-                      <p className="font-semibold text-purple-900 dark:text-purple-300">
-                        Payment Under Review
-                      </p>
-                      <p className="text-[11px] leading-relaxed text-purple-900/80 dark:text-purple-200/80">
-                        Your deposit was received and is currently under
-                        automated reconciliation. Do not initiate a new payment
-                        attempt.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="rounded-[16px] border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-4 text-xs text-neutral-600 dark:text-neutral-400 space-y-1">
-                      <p className="font-semibold text-neutral-900 dark:text-white">
-                        Payment Attempt Active
-                      </p>
-                      <p className="text-[11px] leading-relaxed">
-                        Funds sent to this address will automatically convert
-                        and credit to {request.recipientName}. If you navigate
-                        back to payment selection, this deposit address remains
-                        active until its deadline expires.
-                      </p>
-                    </div>
-                  )}
+                  <PaymentTimelineTracker
+                    transfer={{
+                      id: instructions.attemptPublicId,
+                      publicId: instructions.attemptPublicId,
+                      jobKind: "CHECKOUT",
+                      sourceNetwork: instructions.sourceNetwork,
+                      sourceAssetSymbol: instructions.sourceAssetSymbol,
+                      sourceDisplayAmount: instructions.requiredDisplayAmount,
+                      destinationNetwork: instructions.destinationNetwork,
+                      destinationAssetSymbol: instructions.destinationAssetSymbol,
+                      quotedDestinationDisplayAmount:
+                        instructions.destinationDisplayAmount,
+                      status: instructions.status,
+                      sourceTxHash: instructions.sourceTxHash,
+                      destinationTxHash: instructions.destinationTxHash,
+                      errorMessage: null,
+                      settledAt: instructions.settledAt,
+                      createdAt: attemptInitiatedAt,
+                    }}
+                  />
                 </div>
               ) : (
                 /* ============================================================

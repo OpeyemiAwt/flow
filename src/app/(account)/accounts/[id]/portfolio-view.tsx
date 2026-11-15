@@ -855,6 +855,7 @@ export function PortfolioView({
 
   const [addMoneyIntent, setAddMoneyIntent] =
     useState<SerializedAddMoneyIntent | null>(null);
+  const addMoneyStorageKey = `flow-add-money-intent:${accountId}`;
   const [addMoneyCommitting, setAddMoneyCommitting] = useState(false);
   const [addMoneyError, setAddMoneyError] = useState<string | null>(null);
   const [addMoneySecondsRemaining, setAddMoneySecondsRemaining] =
@@ -1660,6 +1661,82 @@ export function PortfolioView({
     }, 2000);
     return () => window.clearInterval(timer);
   }, [accountId, activeOutgoingTransfer, triggerPostSettlementSync]);
+
+  useEffect(() => {
+    if (!addMoneyIntent?.id) return;
+    try {
+      if (addMoneyIntent.status === "EXPIRED") {
+        window.localStorage.removeItem(addMoneyStorageKey);
+      } else {
+        window.localStorage.setItem(addMoneyStorageKey, addMoneyIntent.id);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [addMoneyIntent?.id, addMoneyIntent?.status, addMoneyStorageKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let savedId: string | null = null;
+    try {
+      savedId = window.localStorage.getItem(addMoneyStorageKey);
+    } catch {
+      savedId = null;
+    }
+    if (!savedId) return;
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/accounts/${accountId}/add-money/${savedId}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          if (res.status === 404) {
+            try {
+              window.localStorage.removeItem(addMoneyStorageKey);
+            } catch {
+              // Ignore
+            }
+          }
+          return;
+        }
+        const data = (await res.json()) as {
+          intent?: SerializedAddMoneyIntent;
+        };
+        const intent = data.intent;
+        if (!intent || cancelled) return;
+        const isExpiredCommit =
+          intent.status === "EXPIRED" ||
+          (intent.status === "DEPOSIT_COMMITTED" &&
+            intent.depositDeadline != null &&
+            Date.parse(intent.depositDeadline) <= Date.now());
+        if (isExpiredCommit) {
+          try {
+            window.localStorage.removeItem(addMoneyStorageKey);
+          } catch {
+            // Ignore
+          }
+          return;
+        }
+        setAddMoneyIntent(intent);
+        if (
+          intent.status === "DEPOSIT_COMMITTED" ||
+          intent.status === "DETECTED" ||
+          intent.status === "EXECUTING" ||
+          intent.status === "PROCESSING"
+        ) {
+          setDepositMode("DEPOSIT");
+        }
+      } catch {
+        // Ignore transient restore errors
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, addMoneyStorageKey]);
 
   useEffect(() => {
     if (!addMoneyIntent?.depositDeadline) return;

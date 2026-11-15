@@ -6,7 +6,7 @@ import { FlowMark } from "./flow-logo.tsx";
 export interface TrackedTransfer {
   readonly id: string;
   readonly publicId: string;
-  readonly jobKind: "SEND" | "CONVERT";
+  readonly jobKind: "SEND" | "CONVERT" | "CHECKOUT";
   readonly sourceNetwork: string;
   readonly sourceAssetSymbol: string;
   readonly sourceDisplayAmount: string;
@@ -64,7 +64,9 @@ function resolveStage(transfer: TrackedTransfer): {
   if (
     status === "FAILED" ||
     status === "REFUNDED" ||
-    status === "UNKNOWN_AMBIGUOUS"
+    status === "EXCEPTION_REFUND_REQUIRED" ||
+    status === "UNKNOWN_AMBIGUOUS" ||
+    status === "RECONCILIATION_REQUIRED"
   ) {
     const reached = transfer.destinationTxHash
       ? 3
@@ -81,7 +83,7 @@ function resolveStage(transfer: TrackedTransfer): {
   if (status === "SETTLING") {
     return { completedMax: 3, activeIndex: 4, isSettled: false, isIssue: false };
   }
-  if (status === "SUBMITTED" || status === "PROCESSING") {
+  if (status === "SUBMITTED" || status === "PROCESSING" || status === "DETECTED") {
     return { completedMax: 2, activeIndex: 3, isSettled: false, isIssue: false };
   }
   if (status === "DEPOSIT_CONFIRMED" || Boolean(transfer.sourceTxHash)) {
@@ -96,17 +98,17 @@ function buildIssueExplanation(transfer: TrackedTransfer): {
   fundsStatus: string;
 } {
   const status = transfer.status.toUpperCase();
-  if (status === "REFUNDED") {
+  if (status === "REFUNDED" || status === "EXCEPTION_REFUND_REQUIRED") {
     return {
       headline: "Payment could not complete — funds refunded.",
       whatHappened:
         transfer.errorMessage ||
         "The cross-chain route expired or slipped outside its quote window before final delivery.",
       fundsStatus:
-        "Your funds have been automatically returned to your FLOW wallet.",
+        "Your funds are automatically returned to the refund/sender wallet.",
     };
   }
-  if (status === "UNKNOWN_AMBIGUOUS") {
+  if (status === "UNKNOWN_AMBIGUOUS" || status === "RECONCILIATION_REQUIRED") {
     return {
       headline: "Confirming final network status.",
       whatHappened:
@@ -205,7 +207,9 @@ export function PaymentTimelineTracker({
       <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-5 border-b border-white/[0.08]">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-            {transfer.jobKind === "SEND" ? "Live Payment Tracker" : "Live Conversion Tracker"}
+            {transfer.jobKind === "CONVERT"
+              ? "Live Conversion Tracker"
+              : "Live Payment Tracker"}
           </p>
           <p className="text-sm font-semibold text-white mt-0.5 tabular-nums">
             {transfer.sourceDisplayAmount} {transfer.sourceAssetSymbol} →{" "}
@@ -315,7 +319,8 @@ export function PaymentTimelineTracker({
             <div className="relative shrink-0 mt-0.5">
               <div
                 className={`relative w-9 h-9 rounded-full flex items-center justify-center ring-4 ${
-                  transfer.status.toUpperCase() === "UNKNOWN_AMBIGUOUS"
+                  transfer.status.toUpperCase() === "UNKNOWN_AMBIGUOUS" ||
+                  transfer.status.toUpperCase() === "RECONCILIATION_REQUIRED"
                     ? "bg-amber-500 ring-amber-500/25"
                     : "bg-[#FF1A1A] ring-[#FF1A1A]/25"
                 }`}
