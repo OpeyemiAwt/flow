@@ -8,6 +8,7 @@ import {
 } from "../../../../components/floating-nav.tsx";
 import { NotificationsDrawer } from "../../../../components/notifications-drawer.tsx";
 import { useToast } from "../../../../components/toast-provider.tsx";
+import { useTranslation } from "../../../../components/language-provider.tsx";
 import { FlowAIAssistantDrawer } from "../../../../components/flow-ai-assistant-drawer.tsx";
 import {
   AssetsHeldModal,
@@ -642,6 +643,7 @@ export function PortfolioView({
   profileId?: string;
   executionDisabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const [portfolio, setPortfolio] =
     useState<SerializedAccountPortfolio>(initialPortfolio);
   const [activeTab, setActiveTab] = useState<NavTabId>(initialView);
@@ -2059,7 +2061,7 @@ export function PortfolioView({
                   className="flow-liquid-btn-primary flow-press inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full text-sm font-semibold cursor-pointer"
                 >
                   <span className="text-base font-bold">+</span>
-                  <span>Add Money</span>
+                  <span>{t.actionAddMoney}</span>
                 </button>
 
                 <button
@@ -2084,7 +2086,7 @@ export function PortfolioView({
                     <path d="M7 17 17 7" />
                     <path d="M7 7h10v10" />
                   </svg>
-                  <span>Send</span>
+                  <span>{t.actionSend}</span>
                 </button>
               </div>
             </section>

@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "../../../components/theme-toggle.tsx";
 import { FloatingNav } from "../../../components/floating-nav.tsx";
+import { useTranslation } from "../../../components/language-provider.tsx";
 import { UserAvatar } from "../../../components/user-avatar.tsx";
+import {
+  LOCALE_META,
+  SUPPORTED_LOCALES,
+  type FlowLocale,
+} from "../../../lib/i18n.ts";
 import {
   readProfilePreference,
   writeProfilePreference,
@@ -104,6 +110,7 @@ export function SecurityPanel({
   initialProfilePreference,
   initialNotificationPreferences,
 }: SecurityPanelProps) {
+  const { locale, setLocale, t } = useTranslation();
   const [notificationPreferences, setNotificationPreferences] = useState({
     incomingPayments: initialNotificationPreferences?.incomingPayments ?? true,
     paymentLinkActivity:
@@ -698,13 +705,36 @@ export function SecurityPanel({
                 <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800">
                   <div>
                     <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
-                      Appearance Theme
+                      {t.settingsAppearanceLabel}
                     </p>
                     <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                      Toggle between clean light and deep dark visual styles.
+                      {t.settingsAppearanceDesc}
                     </p>
                   </div>
                   <ThemeToggle />
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800">
+                  <div>
+                    <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
+                      {t.settingsLanguageLabel}
+                    </p>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                      {t.settingsLanguageDesc}
+                    </p>
+                  </div>
+                  <select
+                    aria-label={t.settingsLanguageLabel}
+                    value={locale}
+                    onChange={(e) => setLocale(e.target.value as FlowLocale)}
+                    className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-950 dark:text-white outline-none focus:border-neutral-400 dark:focus:border-neutral-600 cursor-pointer"
+                  >
+                    {SUPPORTED_LOCALES.map((code) => (
+                      <option key={code} value={code}>
+                        {LOCALE_META[code].nativeName} ({LOCALE_META[code].englishName})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -712,7 +742,7 @@ export function SecurityPanel({
                 <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-6">
                   <div>
                     <h2 className="font-display text-base font-bold text-neutral-950 dark:text-white">
-                      Security &amp; Authentication
+                      {t.settingsSecurityTitle}
                     </h2>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                       Manage authentication credentials and active sessions for{" "}

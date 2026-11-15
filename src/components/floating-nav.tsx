@@ -12,6 +12,7 @@ import Link from "next/link";
 import { FlowLogo } from "./flow-logo.tsx";
 import { triggerHaptic } from "./haptics.ts";
 import { FlowAiMascot, IconMoon, IconSun } from "./icons.tsx";
+import { useTranslation } from "./language-provider.tsx";
 import { UserAvatar } from "./user-avatar.tsx";
 import {
   PROFILE_PREFERENCE_EVENT,
@@ -158,7 +159,15 @@ export function FloatingNav({
   userAvatarUrl,
   profileId,
 }: FloatingNavProps) {
+  const { t } = useTranslation();
   const effectiveUserName = userName || userEmail;
+  const navLabels: Partial<Record<NavTabId, string>> = {
+    dashboard: t.navHome,
+    send: t.navSend,
+    receive: t.actionAddMoney,
+    request: t.navConvert,
+    earn: t.navEarn,
+  };
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
@@ -380,7 +389,7 @@ export function FloatingNav({
                 >
                   {tab.icon}
                 </span>
-                <span>{tab.label}</span>
+                <span>{navLabels[tab.id] ?? tab.label}</span>
               </button>
             );
           })}
@@ -525,7 +534,7 @@ export function FloatingNav({
                       <line x1="12" y1="20" x2="12" y2="4" />
                       <line x1="6" y1="20" x2="6" y2="14" />
                     </svg>
-                    <span>Activity</span>
+                    <span>{t.navActivity}</span>
                   </button>
 
                   <Link
@@ -546,7 +555,7 @@ export function FloatingNav({
                       <path d="M3 3v18h18" />
                       <path d="m19 9-5 5-4-4-3 3" />
                     </svg>
-                    <span>Insights</span>
+                    <span>{t.navInsights}</span>
                   </Link>
 
                   <Link
@@ -567,7 +576,7 @@ export function FloatingNav({
                       <circle cx="12" cy="12" r="3" />
                       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                     </svg>
-                    <span>Settings</span>
+                    <span>{t.navSettings}</span>
                   </Link>
 
                   {userEmail?.trim().toLowerCase() ===
@@ -590,7 +599,7 @@ export function FloatingNav({
                         <path d="M3 3v18h18" />
                         <path d="M18 9l-5 5-4-4-3 3" />
                       </svg>
-                      <span>Analytics</span>
+                      <span>{t.navAnalytics}</span>
                     </Link>
                   )}
 
@@ -637,7 +646,7 @@ export function FloatingNav({
                     <polyline points="16 17 21 12 16 7" />
                     <line x1="21" y1="12" x2="9" y2="12" />
                   </svg>
-                  <span>Sign out</span>
+                  <span>{t.navSignOut}</span>
                 </button>
                 {signOutError && (
                   <p role="alert" className="px-3 py-2 text-xs text-red-600">

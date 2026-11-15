@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { FlowLogo } from "../../../components/flow-logo.tsx";
 import { triggerHaptic } from "../../../components/haptics.ts";
+import { useTranslation } from "../../../components/language-provider.tsx";
 import { MotionNumber, MotionReveal } from "../../../components/motion.tsx";
 import { UserAvatar } from "../../../components/user-avatar.tsx";
 import type { UserInsightsSnapshot } from "../../../server/insights-service.ts";
@@ -112,6 +113,7 @@ export function InsightsView({
   userAvatarUrl,
   profileId,
 }: InsightsViewProps) {
+  const { t } = useTranslation();
   const [insights, setInsights] = useState(initialInsights);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -471,7 +473,7 @@ export function InsightsView({
             </Link>
             <span className="text-neutral-300 dark:text-neutral-700">/</span>
             <span className="text-sm font-semibold tracking-tight">
-              Insights
+              {t.navInsights}
             </span>
           </div>
 
@@ -480,7 +482,7 @@ export function InsightsView({
               href={backHref}
               className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-neutral-100 hover:bg-neutral-200/80 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] transition-colors"
             >
-              Back to Wallet
+              {t.backToWallet}
             </Link>
             <UserAvatar
               name={userName || userEmail}
@@ -498,17 +500,17 @@ export function InsightsView({
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500 dark:text-neutral-400">
-                Personal Cashflow &amp; Performance
+                {t.insightsEyebrow}
               </p>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mt-1">
-                Your FLOW Insights
+                {t.insightsTitle}
               </h1>
               <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-                Tracking your mainnet inflows, outflows, and balance from{" "}
+                {t.insightsSubtitlePrefix}{" "}
                 <span className="font-medium text-neutral-800 dark:text-neutral-200">
                   {openedFormatted}
                 </span>{" "}
-                to{" "}
+                {t.insightsSubtitleTo}{" "}
                 <span className="font-medium text-neutral-800 dark:text-neutral-200">
                   {recentFormatted}
                 </span>
@@ -522,7 +524,7 @@ export function InsightsView({
               disabled={refreshing}
               className="self-start sm:self-auto px-4 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 hover:opacity-90 disabled:opacity-50 transition-all"
             >
-              {refreshing ? "Refreshing..." : "Refresh"}
+              {refreshing ? t.refreshing : t.refresh}
             </button>
           </div>
         </MotionReveal>
@@ -552,7 +554,7 @@ export function InsightsView({
                       : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
                   }`}
                 >
-                  {tf === "ALL" ? "All Time" : tf}
+                  {tf === "ALL" ? t.allTime : tf}
                 </button>
               ))}
             </div>
@@ -568,7 +570,7 @@ export function InsightsView({
                   }}
                   className="px-3 py-1.5 rounded-full text-xs font-semibold bg-neutral-100 dark:bg-white/[0.06] border border-transparent hover:border-neutral-300 dark:hover:border-white/20 outline-none"
                 >
-                  <option value="ALL">All Accounts</option>
+                  <option value="ALL">{t.allAccounts}</option>
                   {insights.accounts.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}
@@ -586,7 +588,7 @@ export function InsightsView({
                 }}
                 className="px-3 py-1.5 rounded-full text-xs font-semibold bg-neutral-100 dark:bg-white/[0.06] border border-transparent hover:border-neutral-300 dark:hover:border-white/20 outline-none"
               >
-                <option value="ALL">All Assets</option>
+                <option value="ALL">{t.allAssets}</option>
                 {availableAssets.map((sym) => (
                   <option key={sym} value={sym}>
                     {sym}
@@ -603,7 +605,7 @@ export function InsightsView({
                 }}
                 className="px-3 py-1.5 rounded-full text-xs font-semibold bg-neutral-100 dark:bg-white/[0.06] border border-transparent hover:border-neutral-300 dark:hover:border-white/20 outline-none"
               >
-                <option value="ALL">All Networks</option>
+                <option value="ALL">{t.allNetworks}</option>
                 {availableNetworks.map((net) => (
                   <option key={net} value={net}>
                     {formatNetworkLabel(net)}
@@ -619,7 +621,7 @@ export function InsightsView({
           <MotionReveal delayMs={50}>
             <div className="rounded-3xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500 dark:text-neutral-400">
-                Total Moved In
+                {t.insightsTotalIn}
               </p>
               <div className="mt-3 text-3xl font-bold tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400">
                 <MotionNumber value={summary.totalInflow} format={formatUsd} />
@@ -634,7 +636,7 @@ export function InsightsView({
           <MotionReveal delayMs={80}>
             <div className="rounded-3xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500 dark:text-neutral-400">
-                Total Left (Outflow)
+                {t.insightsTotalOut}
               </p>
               <div className="mt-3 text-3xl font-bold tracking-tight tabular-nums text-rose-600 dark:text-rose-400">
                 <MotionNumber value={summary.totalOutflow} format={formatUsd} />
@@ -649,13 +651,13 @@ export function InsightsView({
           <MotionReveal delayMs={110}>
             <div className="rounded-3xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500 dark:text-neutral-400">
-                Current Balance
+                {t.insightsCurrentBalance}
               </p>
               <div className="mt-3 text-3xl font-bold tracking-tight tabular-nums">
                 <MotionNumber value={filteredBalanceUsd} format={formatUsd} />
               </div>
               <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
-                Net period flow:{" "}
+                {t.insightsNetPeriodFlow}{" "}
                 <span
                   className={
                     summary.netFlow >= 0
@@ -677,15 +679,15 @@ export function InsightsView({
             <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06] p-6 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
-                  Highest Inflow Month
+                  {t.insightsHighestInMonth}
                 </p>
                 <div className="mt-2 text-2xl font-bold tracking-tight">
-                  {summary.peakInflow ? summary.peakInflow.fullLabel : "No inflows yet"}
+                  {summary.peakInflow ? summary.peakInflow.fullLabel : t.insightsNoInflowsYet}
                 </div>
                 <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
                   {summary.peakInflow
-                    ? `${summary.peakInflow.inflowTx} incoming tx in peak month`
-                    : "Deposits and received payments will highlight your peak month."}
+                    ? `${summary.peakInflow.inflowTx} tx`
+                    : t.insightsPeakInHint}
                 </p>
               </div>
               <div className="text-right">
@@ -700,15 +702,15 @@ export function InsightsView({
             <div className="rounded-3xl border border-rose-500/20 bg-rose-500/[0.04] dark:bg-rose-500/[0.06] p-6 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-rose-700 dark:text-rose-300">
-                  Highest Outflow Month
+                  {t.insightsHighestOutMonth}
                 </p>
                 <div className="mt-2 text-2xl font-bold tracking-tight">
-                  {summary.peakOutflow ? summary.peakOutflow.fullLabel : "No outflows yet"}
+                  {summary.peakOutflow ? summary.peakOutflow.fullLabel : t.insightsNoOutflowsYet}
                 </div>
                 <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
                   {summary.peakOutflow
-                    ? `${summary.peakOutflow.outflowTx} outgoing tx in peak month`
-                    : "Sends and swaps will highlight your peak month."}
+                    ? `${summary.peakOutflow.outflowTx} tx`
+                    : t.insightsPeakOutHint}
                 </p>
               </div>
               <div className="text-right">
@@ -726,10 +728,10 @@ export function InsightsView({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-base sm:text-lg font-bold tracking-tight">
-                  Monthly Cashflow Analysis
+                  {t.insightsChartTitle}
                 </h2>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  Hover or tap any month to inspect exact inflow, outflow, and asset breakdown.
+                  {t.insightsChartSubtitle}
                 </p>
               </div>
 
@@ -746,7 +748,7 @@ export function InsightsView({
                       : "text-neutral-600 dark:text-neutral-400"
                   }`}
                 >
-                  Inflow vs Outflow
+                  {t.insightsModeFlow}
                 </button>
                 <button
                   type="button"
@@ -760,7 +762,7 @@ export function InsightsView({
                       : "text-neutral-600 dark:text-neutral-400"
                   }`}
                 >
-                  Net Cashflow
+                  {t.insightsModeNet}
                 </button>
               </div>
             </div>
@@ -1096,17 +1098,17 @@ export function InsightsView({
         <MotionReveal delayMs={200}>
           <div className="rounded-3xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] p-5 sm:p-6">
             <h2 className="text-base font-bold tracking-tight mb-4">
-              Month-by-Month Summary
+              {t.insightsTableTitle}
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs sm:text-sm">
                 <thead>
                   <tr className="border-b border-neutral-200/70 dark:border-white/[0.08] text-neutral-500 dark:text-neutral-400 text-xs uppercase tracking-wider">
-                    <th className="py-2.5 pr-4 font-semibold">Month</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Inflow</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Outflow</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Net</th>
-                    <th className="py-2.5 pl-3 font-semibold text-right">Tx</th>
+                    <th className="py-2.5 pr-4 font-semibold">{t.insightsColMonth}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{t.insightsColInflow}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{t.insightsColOutflow}</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">{t.insightsColNet}</th>
+                    <th className="py-2.5 pl-3 font-semibold text-right">{t.insightsColTx}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200/50 dark:divide-white/[0.05]">
