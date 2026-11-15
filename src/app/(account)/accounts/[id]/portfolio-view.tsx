@@ -9,6 +9,7 @@ import {
 import { NotificationsDrawer } from "../../../../components/notifications-drawer.tsx";
 import { useToast } from "../../../../components/toast-provider.tsx";
 import { useTranslation } from "../../../../components/language-provider.tsx";
+import { PaymentTimelineTracker } from "../../../../components/payment-timeline-tracker.tsx";
 import { FlowAIAssistantDrawer } from "../../../../components/flow-ai-assistant-drawer.tsx";
 import {
   AssetsHeldModal,
@@ -1817,55 +1818,7 @@ export function PortfolioView({
     if (!activeOutgoingTransfer || activeOutgoingTransfer.jobKind !== kind) {
       return null;
     }
-    const isDone = activeOutgoingTransfer.status === "SETTLED";
-    const isBad = ["FAILED", "REFUNDED", "UNKNOWN_AMBIGUOUS"].includes(
-      activeOutgoingTransfer.status,
-    );
-    return (
-      <div
-        className={`flow-anim-fade-up mt-4 rounded-2xl border p-4 space-y-2 text-xs ${
-          isDone
-            ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-950/30"
-            : isBad
-              ? "border-red-200 dark:border-red-900/50 bg-red-50/70 dark:bg-red-950/30"
-              : "border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/25"
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <span className="font-bold text-neutral-950 dark:text-white">
-            {kind === "SEND" ? "Transfer Receipt" : "Conversion Receipt"} ·{" "}
-            {activeOutgoingTransfer.publicId}
-          </span>
-          <span className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">
-            {activeOutgoingTransfer.status}
-          </span>
-        </div>
-        <p className="text-neutral-700 dark:text-neutral-300">
-          {activeOutgoingTransfer.sourceDisplayAmount}{" "}
-          {activeOutgoingTransfer.sourceAssetSymbol} (
-          {activeOutgoingTransfer.sourceNetwork}) →{" "}
-          {activeOutgoingTransfer.quotedDestinationDisplayAmount ??
-            activeOutgoingTransfer.sourceDisplayAmount}{" "}
-          {activeOutgoingTransfer.destinationAssetSymbol} (
-          {activeOutgoingTransfer.destinationNetwork})
-        </p>
-        {activeOutgoingTransfer.sourceTxHash && (
-          <p className="font-mono text-[11px] break-all text-neutral-600 dark:text-neutral-400">
-            Source tx: {activeOutgoingTransfer.sourceTxHash}
-          </p>
-        )}
-        {activeOutgoingTransfer.destinationTxHash && (
-          <p className="font-mono text-[11px] break-all text-neutral-600 dark:text-neutral-400">
-            Destination tx: {activeOutgoingTransfer.destinationTxHash}
-          </p>
-        )}
-        {activeOutgoingTransfer.errorMessage && (
-          <p className="text-[#FF1A1A] font-medium">
-            {activeOutgoingTransfer.errorMessage}
-          </p>
-        )}
-      </div>
-    );
+    return <PaymentTimelineTracker transfer={activeOutgoingTransfer} />;
   };
 
   return (
