@@ -317,7 +317,7 @@ export function FloatingNav({
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full bg-white dark:bg-black border-b border-neutral-100/90 dark:border-white/[0.08] px-4 sm:px-8 pt-3.5 pb-3 transition-colors">
+      <header className="sticky top-0 z-40 w-full bg-[#FAF8F5] dark:bg-[#0B0B0B] border-b border-neutral-200/60 dark:border-white/[0.08] px-4 sm:px-8 pt-3.5 pb-3 transition-colors">
       <div className="mx-auto flex md:grid md:grid-cols-[1fr_auto_1fr] max-w-7xl items-center justify-between gap-4">
         {/* Brand Logo (Left Column) */}
         <div className="flex items-center justify-self-start">

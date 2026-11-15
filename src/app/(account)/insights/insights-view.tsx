@@ -459,8 +459,8 @@ export function InsightsView({
     : "/accounts";
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#050505] text-neutral-950 dark:text-neutral-50">
-      <header className="sticky top-0 z-30 border-b border-neutral-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-black/70 backdrop-blur-xl">
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0B0B] text-neutral-950 dark:text-neutral-50">
+      <header className="sticky top-0 z-30 border-b border-neutral-200/70 dark:border-white/[0.08] bg-[#FAF8F5]/90 dark:bg-[#0B0B0B]/90 backdrop-blur-xl">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
