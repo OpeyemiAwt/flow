@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FloatingNav,
@@ -10,7 +11,6 @@ import { NotificationsDrawer } from "../../../../components/notifications-drawer
 import { useToast } from "../../../../components/toast-provider.tsx";
 import { useTranslation } from "../../../../components/language-provider.tsx";
 import { PaymentTimelineTracker } from "../../../../components/payment-timeline-tracker.tsx";
-import { FlowAIAssistantDrawer } from "../../../../components/flow-ai-assistant-drawer.tsx";
 import {
   AssetsHeldModal,
   type HeldAssetItem,
@@ -700,9 +700,9 @@ export function PortfolioView({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Modals and Drawers
+  const router = useRouter();
   const [isHeldAssetsOpen, setIsHeldAssetsOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const { pushToast } = useToast();
   const setMessage = useCallback(
@@ -1909,7 +1909,7 @@ export function PortfolioView({
         }}
         unreadCount={unreadNotifications}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
-        onOpenAssistant={() => setIsAssistantOpen(true)}
+        onOpenAssistant={() => router.push(`/assistant?account=${accountId}`)}
         userName={initialDisplayName?.trim() || userEmail || account?.name || "Personal"}
         userAvatarUrl={userAvatarUrl}
         profileId={profileId}
@@ -3986,34 +3986,6 @@ export function PortfolioView({
         onClose={() => setIsNotificationsOpen(false)}
         accountId={accountId}
         onUnreadCountChange={setUnreadNotifications}
-      />
-
-      {/* Flow AI Assistant Drawer */}
-      <FlowAIAssistantDrawer
-        isOpen={isAssistantOpen}
-        onClose={() => setIsAssistantOpen(false)}
-        accountId={accountId}
-        onNavigateToTab={(tab) => {
-          setIsAssistantOpen(false);
-          changeTab(tab);
-        }}
-        onCreatePaymentLinkDraft={(draft) => {
-          if (draft.title) setPrTitle(draft.title);
-          if (draft.amount) setPrAmount(draft.amount);
-          if (draft.network || draft.assetSymbol) {
-            const dep = MAINNET_SUPPORTED_DEPLOYMENTS.find(
-              (d) =>
-                (!draft.network ||
-                  canonicalizeNetworkId(d.networkKey) ===
-                    canonicalizeNetworkId(draft.network)) &&
-                (!draft.assetSymbol ||
-                  d.symbol.toUpperCase() === draft.assetSymbol.toUpperCase()),
-            );
-            if (dep) setPrDestinationDeployment(dep);
-          }
-          setIsAssistantOpen(false);
-          changeTab("request");
-        }}
       />
 
       {/* Unified Asset Selector Modal for Cross-Chain Deposit */}
