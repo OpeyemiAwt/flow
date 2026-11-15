@@ -487,14 +487,25 @@ export async function processAssistantQuery(params: {
       !prompt.includes("address"));
 
   if (looksLikeSend || (previousAskedForRecipient && extractedAddress)) {
-    const contextText =
-      (inPendingSendFlow || previousAskedForRecipient) &&
-      !/\b(send|pay|transfer)\b/.test(prompt)
-        ? `${lastUserPrompt} ${rawPrompt}`
-        : rawPrompt;
-    const amountMatch = contextText.match(/\$?\b(\d+(?:\.\d+)?)\b/);
-    const amount = amountMatch?.[1] ?? null;
-    const recipient = extractedAddress ?? extractRecipientAddress(lastUserPrompt);
+    // Collect all user turns in the current send thread (from most recent send/pay/transfer forward)
+    const userHistory = (params.history ?? [])
+      .filter((m) => m.role === "user")
+      .map((m) => m.content.trim());
+    let threadStartIdx = userHistory.length - 1;
+    for (let i = userHistory.length - 1; i >= 0; i--) {
+      const text = (userHistory[i] ?? "").toLowerCase();
+      if (/\b(send|pay|transfer)\b/.test(text)) {
+        threadStartIdx = i;
+        break;
+      }
+    }
+    const threadTurns =
+      /\b(send|pay|transfer)\b/.test(prompt)
+        ? [rawPrompt]
+        : [
+            ...userHistory.slice(Math.max(0, threadStartIdx)),
+            rawPrompt,
+          ];
 
     const firstHeld = nonZero[0]
       ? MAINNET_SUPPORTED_DEPLOYMENTS.find(
@@ -503,17 +514,93 @@ export async function processAssistantQuery(params: {
             d.symbol.toUpperCase() === nonZero[0]!.symbol.toUpperCase(),
         )
       : undefined;
-    const deployment =
-      findMentionedDeployment(
-        rawPrompt,
-        findMentionedDeployment(
-          contextText,
-          firstHeld ??
-            MAINNET_SUPPORTED_DEPLOYMENTS.find(
-              (d) => d.id === "base-mainnet:USDC",
-            ),
-        ),
-      ) ?? MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
+
+    let sourceDeployment: CatalogTokenDeployment =
+      firstHeld ??
+      MAINNET_SUPPORTED_DEPLOYMENTS.find(
+        (d) => d.id === "base-mainnet:USDC",
+      ) ??
+      MAINNET_SUPPORTED_DEPLOYMENTS[0]!;
+    let destinationNetworkHint: string | null = null;
+    let amount: string | null = null;
+    let recipient: string | null = null;
+
+    for (const turn of threadTurns) {
+      const addr = extractRecipientAddress(turn);
+      if (addr) {
+        recipient = addr;
+        if (addr.endsWith(".near") || /^[a-f0-9]{64}$/i.test(addr)) {
+          destinationNetworkHint = "near-mainnet";
+        } else if (!addr.startsWith("0x")) {
+          destinationNetworkHint = "solana-mainnet";
+        }
+      }
+
+      // Strip recipient address before parsing source/destination networks & amounts
+      const cleanedTurn = addr ? turn.replace(addr, " ") : turn;
+      const lowerTurn = cleanedTurn.toLowerCase();
+
+      // Check for "send X to Y" destination hint (e.g. "to a users near wallet")
+      const toSplit = lowerTurn.split(/\bto\b/);
+      const srcPart = toSplit[0] ?? lowerTurn;
+      const dstPart = toSplit.slice(1).join(" ");
+
+      const srcMentioned = findMentionedDeployment(srcPart);
+      if (srcMentioned) {
+        const hasNetworkInTurn =
+          /\b(ethereum|base|solana|near)\b/i.test(srcPart);
+        if (hasNetworkInTurn || threadTurns.indexOf(turn) === 0) {
+          sourceDeployment = srcMentioned;
+        } else if (
+          srcMentioned.symbol.toUpperCase() !==
+          sourceDeployment.symbol.toUpperCase()
+        ) {
+          // User switched token without specifying network; keep current network if supported
+          const sameNet = MAINNET_SUPPORTED_DEPLOYMENTS.find(
+            (d) =>
+              d.networkKey === sourceDeployment.networkKey &&
+              d.symbol.toUpperCase() === srcMentioned.symbol.toUpperCase(),
+          );
+          sourceDeployment = sameNet ?? srcMentioned;
+        }
+      }
+
+      if (dstPart) {
+        if (/\bnear\b/.test(dstPart)) destinationNetworkHint = "near-mainnet";
+        else if (/\bsolana\b/.test(dstPart))
+          destinationNetworkHint = "solana-mainnet";
+        else if (/\bbase\b/.test(dstPart))
+          destinationNetworkHint = "base-mainnet";
+        else if (/\bethereum\b/.test(dstPart))
+          destinationNetworkHint = "ethereum-mainnet";
+      }
+
+      const amtMatch = cleanedTurn.match(/\$?\b(\d+(?:\.\d+)?)\b/);
+      if (amtMatch?.[1]) {
+        amount = amtMatch[1];
+      }
+    }
+
+    // Resolve destination deployment (supports cross-chain transfers!)
+    let destinationDeployment: CatalogTokenDeployment = sourceDeployment;
+    if (
+      destinationNetworkHint &&
+      destinationNetworkHint !== sourceDeployment.networkKey
+    ) {
+      destinationDeployment =
+        MAINNET_SUPPORTED_DEPLOYMENTS.find(
+          (d) =>
+            d.networkKey === destinationNetworkHint &&
+            d.symbol.toUpperCase() === sourceDeployment.symbol.toUpperCase(),
+        ) ??
+        MAINNET_SUPPORTED_DEPLOYMENTS.find(
+          (d) => d.networkKey === destinationNetworkHint,
+        ) ??
+        sourceDeployment;
+    }
+
+    const isCrossChain =
+      sourceDeployment.networkKey !== destinationDeployment.networkKey;
 
     if (!amount || !recipient) {
       const missingParts = [
@@ -522,20 +609,26 @@ export async function processAssistantQuery(params: {
           ? "the recipient wallet address (0x..., Solana address, or .near)"
           : null,
       ].filter(Boolean);
+      const routeLabel = isCrossChain
+        ? `${sourceDeployment.symbol} (${sourceDeployment.networkName}) → ${destinationDeployment.symbol} (${destinationDeployment.networkName})`
+        : `${sourceDeployment.symbol} (${sourceDeployment.networkName})`;
       return {
         role: "assistant",
-        content: `I can prepare that ${deployment.symbol} (${deployment.networkName}) payment for you. Please provide ${missingParts.join(" and ")}.`,
+        content: `I can prepare that ${routeLabel} payment for you. Please provide ${missingParts.join(" and ")}.`,
         timestamp: new Date().toISOString(),
       };
     }
 
     const held = nonZero.find(
       (b) =>
-        canonicalizeNetworkId(b.network) === deployment.networkKey &&
-        b.symbol.toUpperCase() === deployment.symbol.toUpperCase(),
+        canonicalizeNetworkId(b.network) === sourceDeployment.networkKey &&
+        b.symbol.toUpperCase() === sourceDeployment.symbol.toUpperCase(),
     );
     const availableBalance = held?.displayBalance ?? "0";
-    const requestedAtomic = parseDisplayToAtomic(amount, deployment.decimals);
+    const requestedAtomic = parseDisplayToAtomic(
+      amount,
+      sourceDeployment.decimals,
+    );
     const heldAtomic = held ? BigInt(held.atomic_balance) : 0n;
     const sufficientBalance =
       requestedAtomic > 0n && heldAtomic >= requestedAtomic;
@@ -543,17 +636,21 @@ export async function processAssistantQuery(params: {
     return {
       role: "assistant",
       content: sufficientBalance
-        ? `Ready to send ${amount} ${deployment.symbol} on ${deployment.networkName} to ${recipient}. Review the details below and click "Confirm & Send" to execute.`
-        : `Prepared payment preview for ${amount} ${deployment.symbol} on ${deployment.networkName}, but your synced ${deployment.networkName} ${deployment.symbol} balance is ${availableBalance}.`,
+        ? isCrossChain
+          ? `Ready for cross-chain transfer: ${amount} ${sourceDeployment.symbol} (${sourceDeployment.networkName}) → ${destinationDeployment.symbol} (${destinationDeployment.networkName}) to ${recipient}. Review the details below and click "Confirm & Send" to execute.`
+          : `Ready to send ${amount} ${sourceDeployment.symbol} on ${sourceDeployment.networkName} to ${recipient}. Review the details below and click "Confirm & Send" to execute.`
+        : `Prepared ${isCrossChain ? "cross-chain " : ""}payment preview for ${amount} ${sourceDeployment.symbol} (${sourceDeployment.networkName})${isCrossChain ? ` → ${destinationDeployment.networkName}` : ""}, but your synced ${sourceDeployment.networkName} ${sourceDeployment.symbol} balance is ${availableBalance}.`,
       card: {
         type: "SEND_PREVIEW",
-        title: "Confirm Payment",
+        title: isCrossChain ? "Confirm Cross-Chain Payment" : "Confirm Payment",
         data: {
-          sourceDeploymentId: deployment.id,
-          destinationDeploymentId: deployment.id,
-          assetSymbol: deployment.symbol,
-          network: deployment.networkKey,
-          networkName: deployment.networkName,
+          sourceDeploymentId: sourceDeployment.id,
+          destinationDeploymentId: destinationDeployment.id,
+          assetSymbol: sourceDeployment.symbol,
+          network: sourceDeployment.networkKey,
+          networkName: isCrossChain
+            ? `${sourceDeployment.networkName} → ${destinationDeployment.networkName}`
+            : sourceDeployment.networkName,
           amount,
           recipientAddress: recipient,
           availableBalance,
@@ -794,14 +891,16 @@ export async function processAssistantQuery(params: {
           id: string;
           status: string;
           source_asset_symbol: string;
-          quoted_source_display_amount: string;
+          quoted_source_atomic_amount: string;
+          source_decimals: number;
           destination_asset_symbol: string;
           destination_tx_hash: string | null;
           settled_at: Date | null;
           created_at: Date;
         }>
       >`
-        SELECT id::text, status, source_asset_symbol, quoted_source_display_amount,
+        SELECT id::text, status, source_asset_symbol,
+               quoted_source_atomic_amount::text, source_decimals,
                destination_asset_symbol, destination_tx_hash, settled_at, created_at
         FROM flow.add_money_intents
         WHERE account_id = ${params.accountId}::uuid
@@ -867,16 +966,20 @@ export async function processAssistantQuery(params: {
 
     if (latestAddMoney?.[0]) {
       const m = latestAddMoney[0];
+      const srcFormatted = formatAtomicToDisplay(
+        m.quoted_source_atomic_amount,
+        m.source_decimals,
+      );
       candidates.push({
         at: toMillis(m.created_at) || toMillis(m.settled_at),
-        content: `Your latest cross-chain deposit (${m.quoted_source_display_amount} ${m.source_asset_symbol} → ${m.destination_asset_symbol}) is ${m.status}.`,
+        content: `Your latest cross-chain deposit (${srcFormatted} ${m.source_asset_symbol} → ${m.destination_asset_symbol}) is ${m.status}.`,
         card: {
           type: "PAYMENT_STATUS",
-          title: `Add Money: ${m.quoted_source_display_amount} ${m.source_asset_symbol}`,
+          title: `Add Money: ${srcFormatted} ${m.source_asset_symbol}`,
           data: {
             publicId: m.id,
             status: m.status,
-            amount: `${m.quoted_source_display_amount} ${m.source_asset_symbol} → ${m.destination_asset_symbol}`,
+            amount: `${srcFormatted} ${m.source_asset_symbol} → ${m.destination_asset_symbol}`,
             settlementTxHash: m.destination_tx_hash ?? null,
             settledAt: m.settled_at ? new Date(m.settled_at).toISOString() : null,
           },
