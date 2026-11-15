@@ -28,7 +28,7 @@ export function isPlatformAdmin(
   );
 }
 
-async function fetchSymbolUsdPrices(): Promise<Record<string, number>> {
+export async function fetchSymbolUsdPrices(): Promise<Record<string, number>> {
   const fallback: Record<string, number> = {
     USDC: 1,
     USDT: 1,

@@ -43,6 +43,7 @@ export default function nextConfig(phase: string): NextConfig {
         ...[
           "/accounts/:path*",
           "/analytics",
+          "/insights",
           "/security",
           "/onboarding",
           "/sign-in",

@@ -529,6 +529,27 @@ export function FloatingNav({
                   </button>
 
                   <Link
+                    href="/insights"
+                    onClick={() => setProfileOpen(false)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 3v18h18" />
+                      <path d="m19 9-5 5-4-4-3 3" />
+                    </svg>
+                    <span>Insights</span>
+                  </Link>
+
+                  <Link
                     href="/security"
                     onClick={() => setProfileOpen(false)}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
