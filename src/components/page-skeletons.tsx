@@ -214,3 +214,76 @@ export function CenteredCardSkeleton() {
     </div>
   );
 }
+
+export function TabContentSkeleton({ tab }: { tab: string }) {
+  if (tab === "dashboard") {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-[28px] border border-neutral-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#141414] p-6 sm:p-8 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2.5">
+              <Skeleton className="h-4 w-28 rounded-lg" />
+              <Skeleton className="h-11 w-48 rounded-xl" />
+            </div>
+            <Skeleton className="h-9 w-32 rounded-full" />
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Skeleton className="h-11 w-28 rounded-full" />
+            <Skeleton className="h-11 w-28 rounded-full" />
+            <Skeleton className="h-11 w-28 rounded-full" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7 rounded-[28px] border border-neutral-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#141414] p-6 space-y-4">
+            <Skeleton className="h-5 w-32 rounded-lg" />
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-20 rounded-md" />
+                    <Skeleton className="h-3 w-28 rounded-md" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-20 rounded-md" />
+              </div>
+            ))}
+          </div>
+          <div className="lg:col-span-5 rounded-[28px] border border-neutral-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#141414] p-6 space-y-4">
+            <Skeleton className="h-5 w-36 rounded-lg" />
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-9 w-9 rounded-full" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-3.5 w-28 rounded-md" />
+                    <Skeleton className="h-3 w-20 rounded-md" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-16 rounded-md" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-7 w-44 rounded-xl" />
+        <Skeleton className="h-4 w-72 rounded-lg" />
+      </div>
+      <div className="rounded-[28px] border border-neutral-200/70 dark:border-white/[0.08] bg-white/80 dark:bg-[#141414] p-6 sm:p-8 space-y-5">
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-28 rounded-full" />
+          <Skeleton className="h-10 w-28 rounded-full" />
+        </div>
+        <Skeleton className="h-14 w-full rounded-2xl" />
+        <Skeleton className="h-14 w-full rounded-2xl" />
+        <Skeleton className="h-12 w-full rounded-full" />
+      </div>
+    </div>
+  );
+}

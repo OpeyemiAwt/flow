@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { LanguageProvider } from "../components/language-provider.tsx";
+import { RouteSkeletonTransition } from "../components/route-skeleton-transition.tsx";
 import { ToastProvider } from "../components/toast-provider.tsx";
 
 export const metadata: Metadata = {
@@ -21,7 +22,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-[var(--surface-canvas)] font-sans text-[var(--text-primary)] antialiased">
         <LanguageProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <RouteSkeletonTransition>{children}</RouteSkeletonTransition>
+          </ToastProvider>
         </LanguageProvider>
       </body>
     </html>

@@ -10,6 +10,7 @@ import {
 import { NotificationsDrawer } from "../../../../components/notifications-drawer.tsx";
 import { useToast } from "../../../../components/toast-provider.tsx";
 import { useTranslation } from "../../../../components/language-provider.tsx";
+import { TabContentSkeleton } from "../../../../components/page-skeletons.tsx";
 import { PaymentTimelineTracker } from "../../../../components/payment-timeline-tracker.tsx";
 import {
   AssetsHeldModal,
@@ -648,25 +649,48 @@ export function PortfolioView({
   const [portfolio, setPortfolio] =
     useState<SerializedAccountPortfolio>(initialPortfolio);
   const [activeTab, setActiveTab] = useState<NavTabId>(initialView);
+  const [tabLoading, setTabLoading] = useState(false);
+  const tabTimerRef = useRef<number | null>(null);
 
-  const changeTab = useCallback((tab: NavTabId) => {
-    setActiveTab(tab);
-    if (typeof window !== "undefined") {
-      try {
-        const url = new URL(window.location.href);
-        if (tab === "dashboard") {
-          url.searchParams.delete("view");
-        } else {
-          url.searchParams.set("view", tab);
-        }
-        const nextQuery = url.searchParams.toString();
-        const nextPath = `${url.pathname}${nextQuery ? `?${nextQuery}` : ""}${url.hash}`;
-        window.history.replaceState(window.history.state, "", nextPath);
-      } catch {
-        // ignore
+  useEffect(() => {
+    return () => {
+      if (tabTimerRef.current) {
+        window.clearTimeout(tabTimerRef.current);
       }
-    }
+    };
   }, []);
+
+  const changeTab = useCallback(
+    (tab: NavTabId) => {
+      if (tab !== activeTab) {
+        if (tabTimerRef.current) {
+          window.clearTimeout(tabTimerRef.current);
+        }
+        setTabLoading(true);
+        tabTimerRef.current = window.setTimeout(() => {
+          setTabLoading(false);
+          tabTimerRef.current = null;
+        }, 220);
+      }
+      setActiveTab(tab);
+      if (typeof window !== "undefined") {
+        try {
+          const url = new URL(window.location.href);
+          if (tab === "dashboard") {
+            url.searchParams.delete("view");
+          } else {
+            url.searchParams.set("view", tab);
+          }
+          const nextQuery = url.searchParams.toString();
+          const nextPath = `${url.pathname}${nextQuery ? `?${nextQuery}` : ""}${url.hash}`;
+          window.history.replaceState(window.history.state, "", nextPath);
+        } catch {
+          // ignore
+        }
+      }
+    },
+    [activeTab],
+  );
 
   useEffect(() => {
     const handlePopState = () => {
@@ -1918,7 +1942,10 @@ export function PortfolioView({
 
       {/* Main Content Area */}
       <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-8 sm:pt-12 pb-28 md:pb-16 overflow-x-hidden">
-
+        {tabLoading ? (
+          <TabContentSkeleton tab={activeTab} />
+        ) : (
+          <>
         {/* ===================================================================
             TAB 1: HOME / DASHBOARD
            =================================================================== */}
@@ -3949,6 +3976,8 @@ export function PortfolioView({
               )}
             </div>
           </MotionTabPanel>
+        )}
+          </>
         )}
       </main>
 
