@@ -662,6 +662,25 @@ export function PortfolioView({
     };
   }, []);
 
+  const syncUrlParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      if (typeof window === "undefined") return;
+      try {
+        const url = new URL(window.location.href);
+        for (const [k, v] of Object.entries(updates)) {
+          if (v === null) url.searchParams.delete(k);
+          else url.searchParams.set(k, v);
+        }
+        const nextQuery = url.searchParams.toString();
+        const nextPath = `${url.pathname}${nextQuery ? `?${nextQuery}` : ""}${url.hash}`;
+        window.history.replaceState(window.history.state, "", nextPath);
+      } catch {
+        // ignore
+      }
+    },
+    [],
+  );
+
   const changeTab = useCallback(
     (tab: NavTabId) => {
       if (tab !== activeTab) {
@@ -675,23 +694,13 @@ export function PortfolioView({
         }, 220);
       }
       setActiveTab(tab);
-      if (typeof window !== "undefined") {
-        try {
-          const url = new URL(window.location.href);
-          if (tab === "dashboard") {
-            url.searchParams.delete("view");
-          } else {
-            url.searchParams.set("view", tab);
-          }
-          const nextQuery = url.searchParams.toString();
-          const nextPath = `${url.pathname}${nextQuery ? `?${nextQuery}` : ""}${url.hash}`;
-          window.history.replaceState(window.history.state, "", nextPath);
-        } catch {
-          // ignore
-        }
-      }
+      syncUrlParams({
+        view: tab === "dashboard" ? null : tab,
+        sendMode: tab === "send" ? null : null,
+        depositMode: tab === "receive" ? null : null,
+      });
     },
-    [activeTab],
+    [activeTab, syncUrlParams],
   );
 
   useEffect(() => {
@@ -855,7 +864,14 @@ export function PortfolioView({
   const [carouselIndex, setCarouselIndex] = useState(0);
 
   // Send vs Convert state (Matches media_1794490079738_c27b1dd5.jpg)
-  const [sendMode, setSendMode] = useState<"SEND" | "CONVERT">("SEND");
+  const [sendMode, setSendModeState] = useState<"SEND" | "CONVERT">("SEND");
+  const setSendMode = useCallback(
+    (mode: "SEND" | "CONVERT") => {
+      setSendModeState(mode);
+      syncUrlParams({ sendMode: mode === "SEND" ? null : mode });
+    },
+    [syncUrlParams],
+  );
   const [convertSourceDeploymentId, setConvertSourceDeploymentId] =
     useState<string>("base-mainnet:USDC");
   const [convertDestDeploymentId, setConvertDestDeploymentId] =
@@ -904,9 +920,33 @@ export function PortfolioView({
   >(null);
 
   // Add Money state (Matches media_1794490079680_0a50f095.jpg)
-  const [depositMode, setDepositMode] = useState<"DIRECT" | "DEPOSIT">(
+  const [depositMode, setDepositModeState] = useState<"DIRECT" | "DEPOSIT">(
     "DIRECT",
   );
+  const setDepositMode = useCallback(
+    (mode: "DIRECT" | "DEPOSIT") => {
+      setDepositModeState(mode);
+      syncUrlParams({ depositMode: mode === "DIRECT" ? null : mode });
+    },
+    [syncUrlParams],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const sm = params.get("sendMode");
+      if (sm === "SEND" || sm === "CONVERT") {
+        setSendModeState(sm);
+      }
+      const dm = params.get("depositMode");
+      if (dm === "DIRECT" || dm === "DEPOSIT") {
+        setDepositModeState(dm);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
   const [depositDeployment, setDepositDeployment] =
     useState<CatalogTokenDeployment>(
       MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => d.id === "base-mainnet:USDC") ??
@@ -3373,16 +3413,20 @@ export function PortfolioView({
                   </div>
                 </div>
 
-                {/* Right Column: Dry Quote & Commitment Card */}
+                {/* Right Column: Dry Quote & Commitment Card (replaced by Deposit Card once generated) */}
                 <div className="md:col-span-6 rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4">
                   <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
                     <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
-                      Cross-chain deposit quote
+                      {addMoneyIntent
+                        ? "Deposit instructions"
+                        : "Cross-chain deposit quote"}
                     </h3>
                     <NearIntentsBadge />
                   </div>
 
-                  <dl className="space-y-3.5 py-1 text-xs">
+                  {!addMoneyIntent ? (
+                    <>
+                      <dl className="space-y-3.5 py-1 text-xs">
                     <div className="flex justify-between gap-4">
                       <dt className="text-neutral-500 dark:text-neutral-400">
                         You send
@@ -3565,23 +3609,49 @@ export function PortfolioView({
                       {addMoneyError}
                     </p>
                   )}
-
-                  {addMoneyIntent && (
-                    <div className="mt-2 rounded-2xl border border-neutral-200 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-4 space-y-3 text-xs">
-                      <div className="flex items-center justify-between">
+                    </>
+                  ) : (
+                    <div className="rounded-2xl border border-neutral-200 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-4 space-y-3.5 text-xs">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="font-bold text-neutral-950 dark:text-white">
-                          Deposit {addMoneyIntent.quotedSourceDisplayAmount}{" "}
-                          {addMoneyIntent.sourceAssetSymbol}
+                          Send exact amount
                         </span>
-                        <span className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
-                          {addMoneyIntent.status}
+                        <span className="rounded-full bg-neutral-200/80 dark:bg-white/[0.08] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-200">
+                          {addMoneyIntent.status.replace(/_/g, " ")}
                         </span>
+                      </div>
+
+                      {/* Copyable Amount to Pay */}
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-400 block">
+                          Amount to pay ({addMoneyIntent.sourceAssetSymbol})
+                        </span>
+                        <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#141414] px-3 py-2 font-mono text-xs font-bold">
+                          <span className="truncate select-all text-neutral-950 dark:text-white">
+                            {addMoneyIntent.quotedSourceDisplayAmount}{" "}
+                            {addMoneyIntent.sourceAssetSymbol}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyText(
+                                `am-amt-${addMoneyIntent.id}`,
+                                addMoneyIntent.quotedSourceDisplayAmount,
+                              )
+                            }
+                            className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline cursor-pointer"
+                          >
+                            {copiedKey === `am-amt-${addMoneyIntent.id}`
+                              ? "Copied"
+                              : "Copy"}
+                          </button>
+                        </div>
                       </div>
 
                       {addMoneyIntent.depositAddress &&
                         addMoneyIntent.status === "DEPOSIT_COMMITTED" && (
                           <>
-                            <div className="flex justify-center py-2">
+                            <div className="flex justify-center py-1">
                               <div className="p-2.5 bg-white rounded-2xl">
                                 <QrCode
                                   value={addMoneyIntent.depositAddress}
@@ -3605,7 +3675,7 @@ export function PortfolioView({
                                       addMoneyIntent.depositAddress ?? "",
                                     )
                                   }
-                                  className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline"
+                                  className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline cursor-pointer"
                                 >
                                   {copiedKey === `am-addr-${addMoneyIntent.id}`
                                     ? "Copied"
@@ -3630,7 +3700,7 @@ export function PortfolioView({
                                         addMoneyIntent.depositMemo ?? "",
                                       )
                                     }
-                                    className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline"
+                                    className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline cursor-pointer"
                                   >
                                     {copiedKey ===
                                     `am-memo-${addMoneyIntent.id}`
@@ -3656,16 +3726,33 @@ export function PortfolioView({
                           </>
                         )}
 
-                      {addMoneyIntent.destinationTxHash && (
-                        <p className="font-mono text-[11px] break-all text-emerald-700 dark:text-emerald-400">
-                          NEAR settlement tx: {addMoneyIntent.destinationTxHash}
-                        </p>
-                      )}
+                      {addMoneyIntent.status === "SETTLED" &&
+                        addMoneyIntent.destinationTxHash && (
+                          <p className="font-mono text-[11px] break-all text-emerald-700 dark:text-emerald-400">
+                            NEAR settlement tx: {addMoneyIntent.destinationTxHash}
+                          </p>
+                        )}
                       {addMoneyIntent.settlementError && (
                         <p className="text-[#FF1A1A] font-medium">
                           {addMoneyIntent.settlementError}
                         </p>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddMoneyIntent(null);
+                          setAddMoneyError(null);
+                          try {
+                            window.localStorage.removeItem(addMoneyStorageKey);
+                          } catch {}
+                        }}
+                        className="w-full py-2.5 rounded-full text-xs font-semibold border border-neutral-200 dark:border-white/[0.12] bg-white dark:bg-[#141414] text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                      >
+                        {addMoneyIntent.status === "DEPOSIT_COMMITTED"
+                          ? "Cancel / New Quote"
+                          : "Start New Deposit"}
+                      </button>
                     </div>
                   )}
                 </div>
