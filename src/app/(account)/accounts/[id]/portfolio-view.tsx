@@ -1027,9 +1027,9 @@ export function PortfolioView({
       const key = JSON.stringify([
         row.chainId,
         row.txHash,
-        row.eventIndex,
         row.direction,
         row.assetSymbol,
+        row.atomicAmount,
       ]);
       if (
         !unique.has(key) ||
