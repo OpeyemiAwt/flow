@@ -209,7 +209,7 @@ async function computeAvailableBalanceForDeployment(
     if (!walletAddress) {
       throw new ApiFailure(409, "ACTIVE_MAINNET_WALLET_REQUIRED");
     }
-    const networkKey = deployment.networkKey as
+    const networkKey = deployment.networkKey.replace(/-mainnet$/, "") as
       | "ethereum"
       | "base"
       | "solana"

@@ -359,7 +359,15 @@ export async function reconcileWalletBalances(
  * for a single asset deployment and wallet address.
  */
 export async function fetchLiveMainnetBalance(params: {
-  readonly networkKey: "ethereum" | "base" | "solana" | "near";
+  readonly networkKey:
+    | "ethereum"
+    | "base"
+    | "solana"
+    | "near"
+    | "ethereum-mainnet"
+    | "base-mainnet"
+    | "solana-mainnet"
+    | "near-mainnet";
   readonly standard: "NATIVE" | "ERC20" | "SPL" | "NEP141";
   readonly contractIdentifier: string;
   readonly address: string;
@@ -367,8 +375,9 @@ export async function fetchLiveMainnetBalance(params: {
 }): Promise<BalanceObservation> {
   const rpc = getDefaultRpcConfig("mainnet");
   const networkAssetId = params.networkAssetId ?? params.contractIdentifier;
+  const normalizedNetwork = params.networkKey.replace(/-mainnet$/, "");
 
-  if (params.networkKey === "ethereum") {
+  if (normalizedNetwork === "ethereum") {
     const primary =
       rpc.ethereum?.primary ?? "https://ethereum-rpc.publicnode.com";
     const fallback = rpc.ethereum?.fallback ?? "https://cloudflare-eth.com";
@@ -386,7 +395,7 @@ export async function fetchLiveMainnetBalance(params: {
         );
   }
 
-  if (params.networkKey === "base") {
+  if (normalizedNetwork === "base") {
     const primary = rpc.base?.primary ?? "https://mainnet.base.org";
     const fallback = rpc.base?.fallback;
     return params.standard === "NATIVE"
@@ -403,7 +412,7 @@ export async function fetchLiveMainnetBalance(params: {
         );
   }
 
-  if (params.networkKey === "solana") {
+  if (normalizedNetwork === "solana") {
     const primary =
       rpc.solana?.primary ?? "https://api.mainnet-beta.solana.com";
     const fallback = rpc.solana?.fallback;
