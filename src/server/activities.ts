@@ -208,7 +208,7 @@ function accountActivityRows(accountId: string) {
         AND NOT (
           am.source_tx_hash IS NULL
           AND am.destination_tx_hash IS NULL
-          AND (am.status = 'EXPIRED' OR (am.status = 'AWAITING_DEPOSIT' AND am.expires_at < CURRENT_TIMESTAMP))
+          AND (am.status = 'EXPIRED' OR (am.status = 'AWAITING_DEPOSIT' AND am.deposit_deadline < CURRENT_TIMESTAMP))
         )
         AND NOT EXISTS (
           SELECT 1 FROM flow.wallet_activities indexed
