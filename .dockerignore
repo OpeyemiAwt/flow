@@ -1,6 +1,7 @@
 .git
 .next
 node_modules
+video-production
 coverage
 outputs
 work
