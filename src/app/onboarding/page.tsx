@@ -59,7 +59,17 @@ export default async function Onboarding({
     account =
       accounts.find((candidate) => candidate.kind === "PERSONAL") ?? null;
     if (account?.id) {
-      initialFlowId = await pageData(() => getAccountFlowId(db, account!.id));
+      const accountId = account.id;
+      const sessionToken = actor.session.token;
+      initialFlowId = await pageData(() =>
+        db.$transaction(async (tx) => {
+          if (sessionToken) {
+            await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${sessionToken}, true)`;
+          }
+          await tx.$executeRaw`SELECT set_config('flow.current_account_id', ${accountId}, true)`;
+          return getAccountFlowId(tx, accountId);
+        }),
+      );
     }
     if (account?.provisioningComplete && initialFlowId) {
       redirect(`/accounts/${account.id}`);
