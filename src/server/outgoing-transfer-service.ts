@@ -365,6 +365,9 @@ export async function executeSendTransfer(
       rawFlowId: trimmedRecipient,
       destinationNetwork: destDeployment.networkKey,
     });
+    if (resolved.accountId === id) {
+      throw new ApiFailure(400, "SELF_SEND_NOT_ALLOWED");
+    }
     trimmedRecipient = resolved.recipientAddress;
   }
   const addressValidation = validateAddressForNetwork(
@@ -389,6 +392,15 @@ export async function executeSendTransfer(
   const walletId = wallet?.id;
   if (!wallet || !walletId) {
     throw new ApiFailure(409, "ACTIVE_MAINNET_WALLET_REQUIRED");
+  }
+  const isSelfAddress = wallet.addresses.some((entry) => {
+    const own = entry.address.trim();
+    return destDeployment.ecosystem === "solana"
+      ? own === trimmedRecipient
+      : own.toLowerCase() === trimmedRecipient.toLowerCase();
+  });
+  if (isSelfAddress) {
+    throw new ApiFailure(400, "SELF_SEND_NOT_ALLOWED");
   }
 
   let committedQuote: {

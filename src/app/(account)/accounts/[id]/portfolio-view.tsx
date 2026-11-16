@@ -872,6 +872,7 @@ export function PortfolioView({
   const [isFlowIdModalOpen, setIsFlowIdModalOpen] = useState(false);
   const [flowIdResolution, setFlowIdResolution] = useState<{
     status: "idle" | "loading" | "resolved" | "error";
+    accountId?: string;
     flowId?: string;
     accountName?: string;
     recipientAddress?: string;
@@ -1085,6 +1086,7 @@ export function PortfolioView({
         .then(async (res) => {
           const data = (await res.json().catch(() => ({}))) as {
             ok?: boolean;
+            accountId?: string;
             flowId?: string;
             accountName?: string;
             recipientAddress?: string;
@@ -1102,6 +1104,7 @@ export function PortfolioView({
           }
           setFlowIdResolution({
             status: "resolved",
+            accountId: data.accountId,
             flowId: data.flowId ?? trimmed,
             accountName: data.accountName,
             recipientAddress: data.recipientAddress,
@@ -1127,8 +1130,28 @@ export function PortfolioView({
   ]);
 
   const sendAddressValidation = useMemo(() => {
+    const matchesOwnAddress = (candidate: string) => {
+      const trimmedCandidate = candidate.trim();
+      if (!trimmedCandidate || !wallet?.addresses?.length) return false;
+      return wallet.addresses.some((entry) => {
+        const own = entry.address.trim();
+        return sendDestDeployment.ecosystem === "solana"
+          ? own === trimmedCandidate
+          : own.toLowerCase() === trimmedCandidate.toLowerCase();
+      });
+    };
+
     if (sendIsFlowId) {
       if (flowIdResolution.status === "resolved" && flowIdResolution.recipientAddress) {
+        if (
+          flowIdResolution.accountId === accountId ||
+          matchesOwnAddress(flowIdResolution.recipientAddress)
+        ) {
+          return {
+            valid: false as const,
+            reason: "You cannot send assets to your own Flow ID.",
+          };
+        }
         return { valid: true as const };
       }
       if (flowIdResolution.status === "loading" || flowIdResolution.status === "idle") {
@@ -1142,11 +1165,20 @@ export function PortfolioView({
         reason: flowIdResolution.error ?? "Could not resolve @flow ID.",
       };
     }
-    return validateEcosystemAddress(
+    const baseValidation = validateEcosystemAddress(
       sendDestDeployment.ecosystem,
       sendRecipientAddress,
     );
+    if (baseValidation.valid && matchesOwnAddress(sendRecipientAddress)) {
+      return {
+        valid: false as const,
+        reason: "You cannot send assets to your own wallet address.",
+      };
+    }
+    return baseValidation;
   }, [
+    accountId,
+    wallet?.addresses,
     sendIsFlowId,
     flowIdResolution,
     sendDestDeployment.ecosystem,
