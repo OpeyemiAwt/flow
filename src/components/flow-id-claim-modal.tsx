@@ -120,7 +120,7 @@ export function FlowIdPickerForm({
               setHandle(e.target.value.toLowerCase().replace(/\s+/g, ""));
               setError(null);
             }}
-            placeholder="yemigraffix"
+            placeholder="name"
             autoComplete="off"
             spellCheck={false}
             className="flex-1 bg-transparent text-sm font-medium text-neutral-950 dark:text-white placeholder:text-neutral-400 focus:outline-hidden"
