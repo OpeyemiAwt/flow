@@ -4,24 +4,10 @@ import { canonicalizeNetworkId } from "../domain/supported-assets-catalog.ts";
 import { type FlowDb } from "../foundation/prisma.ts";
 import { ApiFailure } from "./http.ts";
 
-let schemaEnsured = false;
-
-export async function ensureFlowIdSchema(db: FlowDb): Promise<void> {
-  if (schemaEnsured) return;
-  try {
-    await db.$executeRawUnsafe(`
-      ALTER TABLE flow.accounts
-      ADD COLUMN IF NOT EXISTS flow_id VARCHAR(80);
-    `);
-    await db.$executeRawUnsafe(`
-      CREATE UNIQUE INDEX IF NOT EXISTS accounts_flow_id_lower_key
-      ON flow.accounts (LOWER(flow_id))
-      WHERE flow_id IS NOT NULL;
-    `);
-    schemaEnsured = true;
-  } catch {
-    // Non-fatal if caller is inside a read-only transaction or column already exists
-  }
+export async function ensureFlowIdSchema(_db: FlowDb): Promise<void> {
+  // Schema is managed via Prisma migration 20261121000000_flow_id_unique_handle.
+  // Never execute DDL at request time because least-privilege web roles cannot
+  // alter flow.accounts and a failed DDL inside $transaction aborts the whole tx.
 }
 
 export async function getAccountFlowId(
