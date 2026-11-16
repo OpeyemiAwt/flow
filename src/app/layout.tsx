@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { LanguageProvider } from "../components/language-provider.tsx";
@@ -8,6 +8,13 @@ import { ToastProvider } from "../components/toast-provider.tsx";
 export const metadata: Metadata = {
   title: "FLOW",
   description: "The FLOW multi-chain payment foundation.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
