@@ -839,75 +839,75 @@ export async function processAssistantQuery(params: {
     prompt.includes("activity") ||
     prompt.includes("transaction")
   ) {
-    const [latestAttempts, latestOutgoing, latestAddMoney] = await Promise.all([
-      db.$queryRaw<
-        Array<{
-          title: string;
-          public_id: string;
-          status: string;
-          amount: string;
-          destination_asset_symbol: string;
-          destination_decimals: number;
-          destination_tx_hash: string | null;
-          settled_at: Date | null;
-          created_at: Date;
-        }>
-      >`
-        SELECT pr.title, pa.attempt_public_id as public_id, pa.status,
-               pa.quoted_destination_atomic_amount as amount,
-               pr.destination_asset_symbol, pr.destination_decimals,
-               pa.destination_tx_hash, pa.settled_at, pa.created_at
-        FROM flow.payment_attempts pa
-        JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
-        WHERE pr.account_id = ${params.accountId}::uuid
-        ORDER BY pa.created_at DESC
-        LIMIT 1
-      `,
-      db.$queryRaw<
-        Array<{
-          public_id: string;
-          job_kind: string;
-          status: string;
-          source_atomic_amount: string;
-          source_decimals: number;
-          source_asset_symbol: string;
-          destination_asset_symbol: string;
-          source_tx_hash: string | null;
-          destination_tx_hash: string | null;
-          settled_at: Date | null;
-          created_at: Date;
-        }>
-      >`
-        SELECT public_id, job_kind, status, source_atomic_amount::text, source_decimals,
-               source_asset_symbol, destination_asset_symbol,
-               source_tx_hash, destination_tx_hash, settled_at, created_at
-        FROM flow.outgoing_transfer_jobs
-        WHERE account_id = ${params.accountId}::uuid
-        ORDER BY created_at DESC
-        LIMIT 1
-      `,
-      db.$queryRaw<
-        Array<{
-          id: string;
-          status: string;
-          source_asset_symbol: string;
-          quoted_source_atomic_amount: string;
-          source_decimals: number;
-          destination_asset_symbol: string;
-          destination_tx_hash: string | null;
-          settled_at: Date | null;
-          created_at: Date;
-        }>
-      >`
-        SELECT id::text, status, source_asset_symbol,
-               quoted_source_atomic_amount::text, source_decimals,
-               destination_asset_symbol, destination_tx_hash, settled_at, created_at
-        FROM flow.add_money_intents
-        WHERE account_id = ${params.accountId}::uuid
-        ORDER BY created_at DESC
-        LIMIT 1
-      `,
-    ]);
+    const latestAttempts = await db.$queryRaw<
+      Array<{
+        title: string;
+        public_id: string;
+        status: string;
+        amount: string;
+        destination_asset_symbol: string;
+        destination_decimals: number;
+        destination_tx_hash: string | null;
+        settled_at: Date | null;
+        created_at: Date;
+      }>
+    >`
+      SELECT pr.title, pa.attempt_public_id as public_id, pa.status,
+             COALESCE(pa.quoted_destination_atomic_amount::text, '0') as amount,
+             pr.destination_asset_symbol, pr.destination_decimals,
+             pa.destination_tx_hash, pa.settled_at, pa.created_at
+      FROM flow.payment_attempts pa
+      JOIN flow.payment_requests pr ON pr.id = pa.payment_request_id
+      WHERE pr.account_id = ${params.accountId}::uuid
+      ORDER BY pa.created_at DESC
+      LIMIT 1
+    `;
+    const latestOutgoing = await db.$queryRaw<
+      Array<{
+        public_id: string;
+        job_kind: string;
+        status: string;
+        source_atomic_amount: string;
+        source_decimals: number;
+        source_asset_symbol: string;
+        destination_asset_symbol: string;
+        source_tx_hash: string | null;
+        destination_tx_hash: string | null;
+        settled_at: Date | null;
+        created_at: Date;
+      }>
+    >`
+      SELECT public_id, job_kind, status,
+             COALESCE(source_atomic_amount::text, '0') as source_atomic_amount,
+             source_decimals, source_asset_symbol, destination_asset_symbol,
+             source_tx_hash, destination_tx_hash, settled_at, created_at
+      FROM flow.outgoing_transfer_jobs
+      WHERE account_id = ${params.accountId}::uuid
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const latestAddMoney = await db.$queryRaw<
+      Array<{
+        id: string;
+        status: string;
+        source_asset_symbol: string;
+        quoted_source_atomic_amount: string;
+        source_decimals: number;
+        destination_asset_symbol: string;
+        destination_tx_hash: string | null;
+        settled_at: Date | null;
+        created_at: Date;
+      }>
+    >`
+      SELECT id::text, status, source_asset_symbol,
+             COALESCE(quoted_source_atomic_amount::text, '0') as quoted_source_atomic_amount,
+             source_decimals, destination_asset_symbol, destination_tx_hash,
+             settled_at, created_at
+      FROM flow.add_money_intents
+      WHERE account_id = ${params.accountId}::uuid
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
 
     const candidates: Array<{
       at: number;
