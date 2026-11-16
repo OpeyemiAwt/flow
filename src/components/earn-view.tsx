@@ -155,6 +155,31 @@ export function EarnView({
     setMounted(true);
   }, []);
 
+  // Live APYs fetched from on-chain NEAR Mainnet protocol state
+  const [liveApys, setLiveApys] = useState<{
+    linear?: number;
+    burrow?: number;
+    source?: string;
+  } | null>(null);
+
+  const protocols = useMemo<ProtocolEarnConfig[]>(() => {
+    return PROTOCOLS.map((p) => {
+      const liveVal =
+        p.protocolKey === "linear" ? liveApys?.linear : liveApys?.burrow;
+      if (typeof liveVal === "number" && Number.isFinite(liveVal) && liveVal > 0) {
+        return {
+          ...p,
+          apy: liveVal,
+          apyLabel:
+            p.protocolKey === "linear"
+              ? `${liveVal.toFixed(2)}% live APY`
+              : `${liveVal.toFixed(2)}% live APR`,
+        };
+      }
+      return p;
+    });
+  }, [liveApys]);
+
   // Modal State
   const [activeModalProtocol, setActiveModalProtocol] =
     useState<ProtocolEarnConfig | null>(null);
@@ -217,6 +242,15 @@ export function EarnView({
           updatedAt: now,
         },
       });
+      if (data.apys && typeof data.apys === "object") {
+        setLiveApys({
+          linear:
+            typeof data.apys.linear === "number" ? data.apys.linear : undefined,
+          burrow:
+            typeof data.apys.burrow === "number" ? data.apys.burrow : undefined,
+          source: typeof data.apys.source === "string" ? data.apys.source : undefined,
+        });
+      }
       setActiveEarnJobs(Array.isArray(data.activeJobs) ? data.activeJobs : []);
     } catch {
       // Keep last known on-chain snapshot on transient network hiccup
@@ -246,7 +280,7 @@ export function EarnView({
   // Compute Total Earning Balance ($ USD)
   const totalEarningUsd = useMemo(() => {
     let sum = 0;
-    for (const p of PROTOCOLS) {
+    for (const p of protocols) {
       const pos = positions[p.protocolKey];
       if (pos && pos.depositedUsd > 0) {
         const elapsed = Math.max(0, (Date.now() - pos.updatedAt) / 1000);
@@ -256,7 +290,7 @@ export function EarnView({
       }
     }
     return sum;
-  }, [positions, ticker]);
+  }, [positions, protocols, ticker]);
 
   // Available NEAR in wallet
   const nearAsset = useMemo(() => {
@@ -520,7 +554,7 @@ export function EarnView({
         delayMs={70}
         className="rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] shadow-sm overflow-hidden"
       >
-        {PROTOCOLS.map((protocol, index) => {
+        {protocols.map((protocol, index) => {
           const pos = positions[protocol.protocolKey] || {
             depositedAmount: 0,
             depositedUsd: 0,

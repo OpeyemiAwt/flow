@@ -111,6 +111,128 @@ async function queryNearMainnetView<T>(
   return JSON.parse(text) as T;
 }
 
+const NEAR_ARCHIVAL_RPC =
+  process.env.FLOW_NEAR_ARCHIVAL_RPC_URL?.trim() ||
+  "https://archival-rpc.mainnet.near.org";
+const APYS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+interface LiveEarnApys {
+  linear: number;
+  burrow: number;
+  source: "onchain" | "cached" | "fallback";
+  updatedAt: string;
+}
+
+let cachedEarnApys: { value: LiveEarnApys; expiresAt: number } | null = null;
+
+async function fetchLinearLiveApy(): Promise<number | null> {
+  const { response: statusRes } = await callJsonRpc<{
+    sync_info?: { latest_block_height?: number; latest_block_time?: string };
+  }>(NEAR_ARCHIVAL_RPC, "status", [], { timeoutMs: 7_000, maxRetries: 0 });
+  const latestHeight = statusRes.result?.sync_info?.latest_block_height;
+  const latestTime = statusRes.result?.sync_info?.latest_block_time;
+  if (!latestHeight || !latestTime) return null;
+
+  const pastHeight = Math.max(1, latestHeight - 2_000_000);
+  const [{ response: pastBlockRes }, { response: nowPriceRes }, { response: pastPriceRes }] =
+    await Promise.all([
+      callJsonRpc<{ header?: { timestamp?: number } }>(
+        NEAR_ARCHIVAL_RPC,
+        "block",
+        { block_id: pastHeight },
+        { timeoutMs: 7_000, maxRetries: 0 },
+      ),
+      callJsonRpc<{ result?: number[] }>(
+        NEAR_ARCHIVAL_RPC,
+        "query",
+        {
+          request_type: "call_function",
+          block_id: latestHeight,
+          account_id: LINEAR_CONTRACT,
+          method_name: "ft_price",
+          args_base64: "e30=",
+        },
+        { timeoutMs: 7_000, maxRetries: 0 },
+      ),
+      callJsonRpc<{ result?: number[] }>(
+        NEAR_ARCHIVAL_RPC,
+        "query",
+        {
+          request_type: "call_function",
+          block_id: pastHeight,
+          account_id: LINEAR_CONTRACT,
+          method_name: "ft_price",
+          args_base64: "e30=",
+        },
+        { timeoutMs: 7_000, maxRetries: 0 },
+      ),
+    ]);
+
+  const pastTimestampNs = pastBlockRes.result?.header?.timestamp;
+  const nowBytes = nowPriceRes.result?.result;
+  const pastBytes = pastPriceRes.result?.result;
+  if (!pastTimestampNs || !Array.isArray(nowBytes) || !Array.isArray(pastBytes)) {
+    return null;
+  }
+
+  const nowPrice = Number(JSON.parse(Buffer.from(nowBytes).toString("utf8")));
+  const pastPrice = Number(JSON.parse(Buffer.from(pastBytes).toString("utf8")));
+  const latestMs = new Date(latestTime).getTime();
+  const pastMs = Number(pastTimestampNs) / 1e6;
+  const days = (latestMs - pastMs) / 86_400_000;
+  if (!Number.isFinite(nowPrice) || !Number.isFinite(pastPrice) || pastPrice <= 0 || days <= 0) {
+    return null;
+  }
+  const apy = (Math.pow(nowPrice / pastPrice, 365 / days) - 1) * 100;
+  return Number.isFinite(apy) && apy > 0 ? Math.round(apy * 100) / 100 : null;
+}
+
+async function fetchBurrowLiveApr(): Promise<number | null> {
+  const asset = await queryNearMainnetView<{ supply_apr?: string }>(
+    BURROW_CONTRACT,
+    "get_asset",
+    { token_id: BURROW_USDC_CONTRACT },
+  );
+  const apr = Number(asset?.supply_apr ?? NaN);
+  if (!Number.isFinite(apr) || apr <= 0) return null;
+  return Math.round(apr * 10_000) / 100;
+}
+
+async function fetchLiveEarnApys(): Promise<LiveEarnApys> {
+  const now = Date.now();
+  if (cachedEarnApys && cachedEarnApys.expiresAt > now) {
+    return { ...cachedEarnApys.value, source: "cached" };
+  }
+
+  const [linearRes, burrowRes] = await Promise.allSettled([
+    fetchLinearLiveApy(),
+    fetchBurrowLiveApr(),
+  ]);
+
+  const linear =
+    linearRes.status === "fulfilled" && linearRes.value !== null
+      ? linearRes.value
+      : cachedEarnApys?.value.linear ?? 4.33;
+  const burrow =
+    burrowRes.status === "fulfilled" && burrowRes.value !== null
+      ? burrowRes.value
+      : cachedEarnApys?.value.burrow ?? 10.85;
+
+  const value: LiveEarnApys = {
+    linear,
+    burrow,
+    source:
+      (linearRes.status === "fulfilled" && linearRes.value !== null) ||
+      (burrowRes.status === "fulfilled" && burrowRes.value !== null)
+        ? "onchain"
+        : "fallback",
+    updatedAt: new Date(now).toISOString(),
+  };
+
+  cachedEarnApys = { value, expiresAt: now + APYS_CACHE_TTL_MS };
+  return value;
+}
+
 async function fetchLinearPosition(nearAddress: string): Promise<{
   sharesAtomic: string;
   sharesDisplay: string;
@@ -242,7 +364,7 @@ export async function getEarnPositions(
   const portfolio = serializePortfolio(accountBalances);
   const nearAddress = getMainnetWalletAddress(portfolio.wallet, "near-mainnet");
 
-  const [linear, burrow, jobs] = await Promise.all([
+  const [linear, burrow, jobs, apys] = await Promise.all([
     nearAddress
       ? fetchLinearPosition(nearAddress)
       : Promise.resolve({
@@ -261,6 +383,7 @@ export async function getEarnPositions(
           hasStorage: false,
         }),
     fetchEarnJobs(id, token),
+    fetchLiveEarnApys(),
   ]);
 
   const serializedJobs = jobs.map(serializeOutgoingTransfer);
@@ -276,6 +399,7 @@ export async function getEarnPositions(
   return reply(200, {
     ok: true,
     nearAddress,
+    apys,
     positions: {
       linear,
       burrow,
