@@ -62,6 +62,18 @@ const FAQ_ITEMS = [
     q: "Are all assets and routes available?",
     a: "No. Wallet holdings and direct operations are scoped to verified deployments on NEAR, Solana, Ethereum, and Base. Cross-chain routes depend on live NEAR Intents / 1Click liquidity and route availability.",
   },
+  {
+    q: "Which gas token do I need when converting or sending (e.g., Base to NEAR)?",
+    a: "You only need the native gas token on the network you are sending from—for example, at least 0.00001 ETH on Base when converting or sending from Base to NEAR. You do not need NEAR gas in advance to receive your converted NEAR.",
+  },
+  {
+    q: "If I pay a deposit address and the page refreshes or closes, will I still be credited?",
+    a: "Yes. As long as you sent the quoted amount on the right network before the quote deadline expired, FLOW monitors your deposit in the background until it settles into your wallet—and active, non-expired deposit addresses also persist across page reloads.",
+  },
+  {
+    q: "What happens if someone sends less or more than the quoted amount? Will they be refunded?",
+    a: "If less than the required amount is sent, the payment is not credited unless topped up before expiry, and the partial deposit is refunded by the routing provider to your refund address. On fixed-amount payment links, the recipient still receives the exact requested amount and excess overpayment above the quote buffer is refunded to your refund address—provided a valid source-chain refund address was entered and the refund covers network fee minimums.",
+  },
 ] as const;
 
 export default function DocsPage() {

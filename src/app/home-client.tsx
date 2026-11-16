@@ -35,6 +35,18 @@ const FAQS = [
     q: "Which networks and assets are supported?",
     a: "FLOW supports Ethereum, Base, Solana, and NEAR, including native assets (ETH, SOL, NEAR) and major stablecoins (USDC, USDT), with cross-chain routing across dozens of supported tokens.",
   },
+  {
+    q: "Which gas token do I need when converting or sending (e.g., Base to NEAR)?",
+    a: "You only need a small amount of the native gas token on the network you are sending from—for example, ETH on Base (at least 0.00001 ETH) when converting from Base to NEAR. You don't need NEAR gas ahead of time to receive your converted NEAR.",
+  },
+  {
+    q: "If I pay a deposit address and the page refreshes or closes, will I still be credited?",
+    a: "Yes. As long as you sent the quoted amount on the right network before the quote deadline expired, FLOW tracks your deposit automatically in the background until it settles in your wallet—and active deposit addresses also stay saved across page reloads.",
+  },
+  {
+    q: "What happens if someone sends less or more than the quoted amount? Will they be refunded?",
+    a: "If you send less than the quoted amount, the payment won't settle unless topped up before the timer expires, and the partial deposit is refunded to your refund address. On fixed-amount payment links, the recipient still gets the exact requested amount and any excess overpayment (above network fees and minimums) is refunded to your refund address—just make sure your refund address is valid for the network you sent from.",
+  },
 ];
 
 const TESTIMONIALS = [
