@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { runtime } from "../../foundation/prisma.ts";
 import { accessibleAccounts, principal } from "../../server/accounts.ts";
 import { readSession } from "../../server/auth/session.ts";
+import { getAccountFlowId } from "../../server/flow-id-service.ts";
 import { pageData } from "../../server/pages.ts";
 import { SignOutButton } from "../controls.tsx";
 import { CompleteOnboarding } from "./complete.tsx";
@@ -51,12 +52,18 @@ export default async function Onboarding({
       </main>
     );
   }
+  let initialFlowId: string | null = null;
   if (existingUser?.active) {
     const actor = await pageData(() => principal(db, requestHeaders));
     const accounts = await pageData(() => accessibleAccounts(db, actor));
     account =
       accounts.find((candidate) => candidate.kind === "PERSONAL") ?? null;
-    if (account?.provisioningComplete) redirect(`/accounts/${account.id}`);
+    if (account?.id) {
+      initialFlowId = await pageData(() => getAccountFlowId(db, account!.id));
+    }
+    if (account?.provisioningComplete && initialFlowId) {
+      redirect(`/accounts/${account.id}`);
+    }
   }
 
   const { step } = await searchParams;
@@ -67,6 +74,7 @@ export default async function Onboarding({
       userEmail={identity.email}
       userName={identity.name?.trim() || identity.email}
       initialAccount={account}
+      initialFlowId={initialFlowId}
     />
   );
 }

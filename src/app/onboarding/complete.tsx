@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { FlowIdPickerForm } from "../../components/flow-id-claim-modal.tsx";
 import { FlowLogo } from "../../components/flow-logo.tsx";
 import { describe, Feedback, send } from "../controls.tsx";
 
@@ -50,16 +51,19 @@ export function CompleteOnboarding({
   userEmail,
   userName,
   initialAccount,
+  initialFlowId,
 }: {
   initialStep?: string;
   userEmail: string;
   userName: string;
   initialAccount?: OnboardingAccount | null;
+  initialFlowId?: string | null;
 }) {
   const router = useRouter();
   const [account, setAccount] = useState<OnboardingAccount | null>(
     initialAccount ?? null,
   );
+  const [flowId, setFlowId] = useState<string | null>(initialFlowId ?? null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [progressPercent, setProgressPercent] = useState<number>(() => {
@@ -122,12 +126,13 @@ export function CompleteOnboarding({
     }
   }, [account]);
 
-  // Redirect directly to dashboard as soon as the wallet is active and verified
+  // Redirect directly to dashboard once wallet is active AND Flow ID is claimed
   useEffect(() => {
     if (!account?.id) return;
     if (
       account.walletStatus === "active" &&
       account.provisioningComplete &&
+      flowId &&
       !redirectedRef.current
     ) {
       redirectedRef.current = true;
@@ -136,7 +141,13 @@ export function CompleteOnboarding({
       }, 250);
       return () => window.clearTimeout(timer);
     }
-  }, [account?.id, account?.provisioningComplete, account?.walletStatus, router]);
+  }, [
+    account?.id,
+    account?.provisioningComplete,
+    account?.walletStatus,
+    flowId,
+    router,
+  ]);
 
   // Poll wallet readiness while setting up
   useEffect(() => {
@@ -261,45 +272,74 @@ export function CompleteOnboarding({
           </div>
 
           <div className="pt-6">
-            <h1 className="font-serif text-3xl leading-tight dark:text-white">
-              {status.title}
-            </h1>
-            {isBlockedState ? (
-              <p className="mt-3 text-sm leading-6 text-[#5A5A5A] dark:text-neutral-400">
-                {status.detail}
-              </p>
-            ) : null}
+            {account?.walletStatus === "active" &&
+            account.provisioningComplete &&
+            !flowId ? (
+              <div className="space-y-5">
+                <div>
+                  <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    Step 2 of 2 · Wallet Ready
+                  </span>
+                  <h1 className="mt-2 font-serif text-3xl leading-tight dark:text-white">
+                    Claim your unique @flow ID
+                  </h1>
+                  <p className="mt-2 text-sm text-[#5A5A5A] dark:text-neutral-400">
+                    Pick your permanent handle so anyone on Flow can send assets
+                    directly to you.
+                  </p>
+                </div>
 
-            {!isBlockedState && (
-              <div
-                role="progressbar"
-                aria-label="Wallet setup progress"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={progressPercent}
-                className="mt-7 h-2.5 w-full overflow-hidden rounded-full bg-[#ECE7DF] dark:bg-white/[0.08]"
-              >
-                <div
-                  className={`h-full rounded-full bg-gradient-to-r from-[#FF1A1A] via-[#FF4D4D] to-[#FF1A1A] transition-all duration-700 ease-out ${
-                    isSettingUp ? "animate-pulse" : ""
-                  }`}
-                  style={{ width: `${progressPercent}%` }}
+                <FlowIdPickerForm
+                  accountId={account.id}
+                  onClaimed={(claimedId) => {
+                    setFlowId(claimedId);
+                  }}
+                  submitLabel="Claim & Open Wallet"
                 />
               </div>
-            )}
+            ) : (
+              <>
+                <h1 className="font-serif text-3xl leading-tight dark:text-white">
+                  {status.title}
+                </h1>
+                {isBlockedState ? (
+                  <p className="mt-3 text-sm leading-6 text-[#5A5A5A] dark:text-neutral-400">
+                    {status.detail}
+                  </p>
+                ) : null}
 
-            {(message || resolvedStatus === "setup_failed") && (
-              <div className="mt-6 space-y-3">
-                <Feedback text={message} />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void beginProvisioning()}
-                  className="flow-liquid-btn-primary flow-press h-11 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
-                >
-                  {busy ? "Retrying…" : "Try again"}
-                </button>
-              </div>
+                {!isBlockedState && (
+                  <div
+                    role="progressbar"
+                    aria-label="Wallet setup progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={progressPercent}
+                    className="mt-7 h-2.5 w-full overflow-hidden rounded-full bg-[#ECE7DF] dark:bg-white/[0.08]"
+                  >
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r from-[#FF1A1A] via-[#FF4D4D] to-[#FF1A1A] transition-all duration-700 ease-out ${
+                        isSettingUp ? "animate-pulse" : ""
+                      }`}
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                )}
+
+                {(message || resolvedStatus === "setup_failed") && (
+                  <div className="mt-6 space-y-3">
+                    <Feedback text={message} />
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void beginProvisioning()}
+                      className="flow-liquid-btn-primary flow-press h-11 w-full rounded-full font-semibold disabled:opacity-50 cursor-pointer"
+                    >
+                      {busy ? "Retrying…" : "Try again"}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>

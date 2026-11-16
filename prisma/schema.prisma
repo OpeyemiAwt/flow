@@ -185,6 +185,7 @@ model FlowAccount {
   id              String                 @id @default(uuid()) @db.Uuid
   kind            AccountKind
   name            String
+  flowId          String?                @unique @map("flow_id") @db.VarChar(80)
   personalOwnerId String?                @unique @map("personal_owner_id") @db.Uuid
   createdAt       DateTime               @default(now()) @map("created_at")
   personalOwner   FlowUser?              @relation(fields: [personalOwnerId], references: [id], onDelete: Restrict)

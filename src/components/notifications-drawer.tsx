@@ -15,6 +15,7 @@ export interface NotificationsDrawerProps {
   accountId: string;
   profileId?: string;
   onUnreadCountChange?: (count: number) => void;
+  onClaimFlowId?: () => void;
 }
 
 export function NotificationsDrawer({
@@ -23,6 +24,7 @@ export function NotificationsDrawer({
   accountId,
   profileId,
   onUnreadCountChange,
+  onClaimFlowId,
 }: NotificationsDrawerProps) {
   const [notifications, setNotifications] = useState<AccountNotification[]>([]);
   const [filter, setFilter] = useState<"ALL" | "PAYMENTS" | "SYSTEM">("ALL");
@@ -66,15 +68,26 @@ export function NotificationsDrawer({
 
   const markAllRead = async () => {
     try {
-      const ids = notifications.map((n) => n.id);
+      const ids = notifications
+        .filter((n) => n.type !== "CLAIM_FLOW_ID")
+        .map((n) => n.id);
+      if (ids.length === 0) return;
       const response = await fetch(`/api/accounts/${accountId}/notifications`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ markAll: true, ids }),
       });
       if (!response.ok) return;
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      if (onUnreadCountChange) onUnreadCountChange(0);
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.type === "CLAIM_FLOW_ID" ? n : { ...n, isRead: true },
+        ),
+      );
+      if (onUnreadCountChange) {
+        onUnreadCountChange(
+          notifications.some((n) => n.type === "CLAIM_FLOW_ID") ? 1 : 0,
+        );
+      }
     } catch (err) {
       console.error("Failed to mark all as read:", err);
     }
@@ -208,7 +221,16 @@ export function NotificationsDrawer({
               filtered.map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => !item.isRead && markSingleRead(item.id)}
+                  onClick={() => {
+                    if (item.link === "#claim-flow-id") {
+                      onClose();
+                      onClaimFlowId?.();
+                      return;
+                    }
+                    if (!item.isRead) {
+                      void markSingleRead(item.id);
+                    }
+                  }}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                     item.isRead
                       ? "bg-white dark:bg-[#141414] border-neutral-200/60 dark:border-neutral-800/60 text-neutral-600 dark:text-neutral-400"

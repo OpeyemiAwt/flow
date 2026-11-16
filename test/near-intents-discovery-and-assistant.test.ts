@@ -187,6 +187,9 @@ test("notifications-service: loads persisted read state and propagates query fai
       if (sql.includes("account_notification_reads")) {
         return [{ notification_id: "notif_settled_attempt-1" }];
       }
+      if (sql.includes("flow.accounts")) {
+        return [{ flow_id: "alice@flow" }];
+      }
       return [];
     },
   } as unknown as import("../src/foundation/prisma.ts").FlowDb;

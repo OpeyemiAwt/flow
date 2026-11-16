@@ -8,6 +8,7 @@ import {
   getAccountNotificationPreferences,
   getUserProfilePreference,
 } from "../../../server/preferences-service.ts";
+import { getAccountFlowId } from "../../../server/flow-id-service.ts";
 import { SecurityPanel } from "./security-panel.tsx";
 
 export default async function SecurityPage() {
@@ -21,7 +22,7 @@ export default async function SecurityPage() {
   const primaryAccountId =
     accounts.find((a) => a.kind === "PERSONAL")?.id ?? accounts[0]?.id ?? null;
   const token = actor.session.token;
-  const [initialProfilePreference, initialNotificationPreferences] = token
+  const [initialProfilePreference, initialNotificationPreferences, initialFlowId] = token
     ? await pageData(() =>
         db.$transaction(async (tx) => {
           await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true)`;
@@ -36,12 +37,16 @@ export default async function SecurityPage() {
                 actor.userId,
               )
             : DEFAULT_NOTIFICATION_PREFERENCES;
-          return [profile, notifPrefs] as const;
+          const flowId = primaryAccountId
+            ? await getAccountFlowId(tx, primaryAccountId)
+            : null;
+          return [profile, notifPrefs, flowId] as const;
         }),
       )
     : [
         { displayName: null, avatarDataUrl: null },
         DEFAULT_NOTIFICATION_PREFERENCES,
+        null,
       ];
 
   return (
@@ -52,6 +57,7 @@ export default async function SecurityPage() {
         profileId={actor.userId}
         initialProfilePreference={initialProfilePreference}
         initialNotificationPreferences={initialNotificationPreferences}
+        initialFlowId={initialFlowId}
       />
     </main>
   );

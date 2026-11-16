@@ -1,5 +1,6 @@
 import { formatAtomicToDisplay } from "../domain/atomic-amounts.ts";
 import { type FlowDb } from "../foundation/prisma.ts";
+import { getAccountFlowId } from "./flow-id-service.ts";
 
 export type NotificationCategory = "all" | "payments" | "accounts" | "system";
 
@@ -10,7 +11,8 @@ export type NotificationType =
   | "DEPOSIT_DETECTED"
   | "SWAP_COMPLETED"
   | "SYNC_NOTICE"
-  | "SECURITY_NOTICE";
+  | "SECURITY_NOTICE"
+  | "CLAIM_FLOW_ID";
 
 export interface AccountNotification {
   readonly id: string;
@@ -251,10 +253,27 @@ export async function getAccountNotifications(
       AND viewer_user_id = ${viewerUserId}::uuid
   `;
   const readIds = new Set(readRows.map((row) => row.notification_id));
-  return visibleNotifications.map((notification) => ({
+  const result = visibleNotifications.map((notification) => ({
     ...notification,
     isRead: readIds.has(notification.id),
   }));
+
+  const flowId = await getAccountFlowId(db, accountId).catch(() => null);
+  if (!flowId) {
+    result.unshift({
+      id: `notif_claim_flow_id_${accountId}`,
+      accountId,
+      category: "accounts",
+      type: "CLAIM_FLOW_ID",
+      title: "Claim your unique @flow ID",
+      description:
+        "Pick a permanent name@flow handle so anyone on Flow can send you assets directly.",
+      link: "#claim-flow-id",
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+  }
+  return result;
 }
 
 export async function markNotificationsAsRead(

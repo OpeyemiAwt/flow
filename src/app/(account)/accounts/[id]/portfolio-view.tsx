@@ -8,6 +8,8 @@ import {
   type NavTabId,
 } from "../../../../components/floating-nav.tsx";
 import { NotificationsDrawer } from "../../../../components/notifications-drawer.tsx";
+import { FlowIdClaimModal } from "../../../../components/flow-id-claim-modal.tsx";
+import { isFlowIdInput } from "../../../../domain/flow-id.ts";
 import { useToast } from "../../../../components/toast-provider.tsx";
 import { useTranslation } from "../../../../components/language-provider.tsx";
 import { TabContentSkeleton } from "../../../../components/page-skeletons.tsx";
@@ -867,6 +869,14 @@ export function PortfolioView({
     useState<string>("solana-mainnet:SOL");
   const [sendAmount, setSendAmount] = useState<string>("");
   const [sendRecipientAddress, setSendRecipientAddress] = useState<string>("");
+  const [isFlowIdModalOpen, setIsFlowIdModalOpen] = useState(false);
+  const [flowIdResolution, setFlowIdResolution] = useState<{
+    status: "idle" | "loading" | "resolved" | "error";
+    flowId?: string;
+    accountName?: string;
+    recipientAddress?: string;
+    error?: string;
+  }>({ status: "idle" });
 
   // Outgoing execution (Send & Convert) + Add Money + Payment Links management state
   const [outgoingExecuting, setOutgoingExecuting] = useState(false);
@@ -1057,12 +1067,91 @@ export function PortfolioView({
     );
   }, [sendDestDeploymentId]);
 
+  const sendIsFlowId = isFlowIdInput(sendRecipientAddress);
+
+  useEffect(() => {
+    const trimmed = sendRecipientAddress.trim();
+    if (!isFlowIdInput(trimmed)) {
+      setFlowIdResolution({ status: "idle" });
+      return;
+    }
+    let cancelled = false;
+    setFlowIdResolution({ status: "loading" });
+    const timer = window.setTimeout(() => {
+      fetch(
+        `/api/flow-id/resolve?flowId=${encodeURIComponent(trimmed)}&network=${encodeURIComponent(sendDestDeployment.networkKey)}`,
+        { cache: "no-store" },
+      )
+        .then(async (res) => {
+          const data = (await res.json().catch(() => ({}))) as {
+            ok?: boolean;
+            flowId?: string;
+            accountName?: string;
+            recipientAddress?: string;
+            error?: string;
+          };
+          if (cancelled) return;
+          if (!res.ok || !data.ok || !data.recipientAddress) {
+            setFlowIdResolution({
+              status: "error",
+              error:
+                data.error ??
+                `Could not resolve ${trimmed} for ${sendDestDeployment.networkName}.`,
+            });
+            return;
+          }
+          setFlowIdResolution({
+            status: "resolved",
+            flowId: data.flowId ?? trimmed,
+            accountName: data.accountName,
+            recipientAddress: data.recipientAddress,
+          });
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setFlowIdResolution({
+              status: "error",
+              error: "Unable to verify Flow ID right now.",
+            });
+          }
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    sendRecipientAddress,
+    sendDestDeployment.networkKey,
+    sendDestDeployment.networkName,
+  ]);
+
   const sendAddressValidation = useMemo(() => {
+    if (sendIsFlowId) {
+      if (flowIdResolution.status === "resolved" && flowIdResolution.recipientAddress) {
+        return { valid: true as const };
+      }
+      if (flowIdResolution.status === "loading" || flowIdResolution.status === "idle") {
+        return {
+          valid: false as const,
+          reason: "Verifying @flow ID and resolving destination address...",
+        };
+      }
+      return {
+        valid: false as const,
+        reason: flowIdResolution.error ?? "Could not resolve @flow ID.",
+      };
+    }
     return validateEcosystemAddress(
       sendDestDeployment.ecosystem,
       sendRecipientAddress,
     );
-  }, [sendDestDeployment.ecosystem, sendRecipientAddress]);
+  }, [
+    sendIsFlowId,
+    flowIdResolution,
+    sendDestDeployment.ecosystem,
+    sendRecipientAddress,
+  ]);
 
   // Derive held assets with positive balance
   const heldAssets: HeldAssetItem[] = useMemo(() => {
@@ -1148,7 +1237,11 @@ export function PortfolioView({
     source: sendSource,
     destination: sendDestDeployment,
     displayAmount: sendAmount,
-    recipient: sendAddressValidation.valid ? sendRecipientAddress.trim() : "",
+    recipient: sendAddressValidation.valid
+      ? sendIsFlowId
+        ? (flowIdResolution.recipientAddress ?? "")
+        : sendRecipientAddress.trim()
+      : "",
     refund: sendSource
       ? (getMainnetWalletAddress(wallet, sendSource.deployment.networkKey) ??
         "")
@@ -2589,7 +2682,9 @@ export function PortfolioView({
                           setSendRecipientAddress(e.target.value)
                         }
                         placeholder={
-                          "Address on " + sendDestDeployment.networkName
+                          "Address on " +
+                          sendDestDeployment.networkName +
+                          " or name@flow"
                         }
                         className="w-full pl-4 pr-10 py-3 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 font-mono focus:outline-hidden"
                       />
@@ -2603,22 +2698,41 @@ export function PortfolioView({
                         )}
                     </div>
                     {sendRecipientAddress.trim().length > 0 ? (
-                      <p
-                        className={`mt-1 text-xs font-medium ${
-                          sendAddressValidation.valid
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-[#FF1A1A]"
-                        }`}
-                      >
-                        {sendAddressValidation.valid
-                          ? `Valid ${sendDestDeployment.networkName} address format.`
-                          : sendAddressValidation.reason}
-                      </p>
+                      sendIsFlowId &&
+                      sendAddressValidation.valid &&
+                      flowIdResolution.recipientAddress ? (
+                        <div className="mt-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs">
+                          <div className="flex items-center justify-between gap-2 text-emerald-700 dark:text-emerald-300 font-semibold">
+                            <span>
+                              Active Flow ID: {flowIdResolution.flowId}
+                              {flowIdResolution.accountName
+                                ? ` (${flowIdResolution.accountName})`
+                                : ""}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wider">
+                              {sendDestDeployment.symbol} · {sendDestDeployment.networkName}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 font-mono text-[11px] text-emerald-700/80 dark:text-emerald-300/80 truncate">
+                            → {flowIdResolution.recipientAddress}
+                          </p>
+                        </div>
+                      ) : (
+                        <p
+                          className={`mt-1 text-xs font-medium ${
+                            sendAddressValidation.valid
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-[#FF1A1A]"
+                          }`}
+                        >
+                          {sendAddressValidation.valid
+                            ? `Valid ${sendDestDeployment.networkName} address format.`
+                            : sendAddressValidation.reason}
+                        </p>
+                      )
                     ) : (
                       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        ⓘ This address will be checked against{" "}
-                        {sendDestDeployment.networkName} (
-                        {sendDestDeployment.symbol}) to ensure it&apos;s valid.
+                        ⓘ Enter a {sendDestDeployment.networkName} ({sendDestDeployment.symbol}) address or a recipient&apos;s <span className="font-mono">@flow</span> ID.
                       </p>
                     )}
                   </div>
@@ -4015,6 +4129,21 @@ export function PortfolioView({
         onClose={() => setIsNotificationsOpen(false)}
         accountId={accountId}
         onUnreadCountChange={setUnreadNotifications}
+        onClaimFlowId={() => setIsFlowIdModalOpen(true)}
+      />
+
+      <FlowIdClaimModal
+        isOpen={isFlowIdModalOpen}
+        onClose={() => setIsFlowIdModalOpen(false)}
+        accountId={accountId}
+        onClaimed={(claimedFlowId) => {
+          setIsFlowIdModalOpen(false);
+          setUnreadNotifications((count) => Math.max(0, count - 1));
+          pushToast({
+            title: `Your unique Flow ID ${claimedFlowId} is now active!`,
+            variant: "success",
+          });
+        }}
       />
 
       {/* Unified Asset Selector Modal for Cross-Chain Deposit */}

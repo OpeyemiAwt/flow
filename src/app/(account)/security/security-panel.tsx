@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "../../../components/theme-toggle.tsx";
 import { FloatingNav } from "../../../components/floating-nav.tsx";
+import { FlowIdClaimModal } from "../../../components/flow-id-claim-modal.tsx";
 import { useTranslation } from "../../../components/language-provider.tsx";
 import { UserAvatar } from "../../../components/user-avatar.tsx";
 import {
@@ -55,6 +56,7 @@ export interface SecurityPanelProps {
     readonly paymentLinkActivity: boolean;
     readonly securityAlerts: boolean;
   };
+  readonly initialFlowId?: string | null;
 }
 
 type SecurityAction =
@@ -109,6 +111,7 @@ export function SecurityPanel({
   accounts,
   initialProfilePreference,
   initialNotificationPreferences,
+  initialFlowId,
 }: SecurityPanelProps) {
   const { locale, setLocale, t } = useTranslation();
   const [notificationPreferences, setNotificationPreferences] = useState({
@@ -122,6 +125,9 @@ export function SecurityPanel({
 
   // Profile Customization state
   const primaryAccount = accounts[0];
+  const [flowId, setFlowId] = useState<string | null>(initialFlowId ?? null);
+  const [isFlowIdModalOpen, setIsFlowIdModalOpen] = useState(false);
+  const [flowIdCopied, setFlowIdCopied] = useState(false);
   const walletStatusInfo = (() => {
     switch (primaryAccount?.walletStatus) {
       case "active":
@@ -533,6 +539,57 @@ export function SecurityPanel({
                     </button>
                   </div>
                 )}
+
+                {/* Unique Flow ID */}
+                <div className="p-4 sm:p-5 rounded-2xl border border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-display text-xs font-bold text-neutral-950 dark:text-white">
+                        Unique Flow ID
+                      </p>
+                      {!flowId ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FF1A1A] text-white">
+                          NEW
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                          Permanent
+                        </span>
+                      )}
+                    </div>
+                    {flowId ? (
+                      <p className="mt-1 font-mono text-sm font-bold text-neutral-950 dark:text-white truncate">
+                        {flowId}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                        Pick a permanent <span className="font-mono">@flow</span> handle so anyone on Flow can send assets straight to your wallet.
+                      </p>
+                    )}
+                  </div>
+                  {flowId ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(flowId).catch(() => {});
+                        setFlowIdCopied(true);
+                        window.setTimeout(() => setFlowIdCopied(false), 1800);
+                      }}
+                      className="shrink-0 px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    >
+                      {flowIdCopied ? "Copied" : "Copy ID"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!primaryAccount}
+                      onClick={() => setIsFlowIdModalOpen(true)}
+                      className="shrink-0 px-4 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
+                    >
+                      Claim @flow ID
+                    </button>
+                  )}
+                </div>
 
                 {/* Account Details */}
                 <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 text-xs space-y-2">
@@ -971,6 +1028,17 @@ export function SecurityPanel({
               </div>
         </div>
       </main>
+      {primaryAccount && (
+        <FlowIdClaimModal
+          isOpen={isFlowIdModalOpen}
+          onClose={() => setIsFlowIdModalOpen(false)}
+          accountId={primaryAccount.id}
+          onClaimed={(claimedFlowId) => {
+            setFlowId(claimedFlowId);
+            setIsFlowIdModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

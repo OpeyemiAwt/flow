@@ -9,6 +9,7 @@ import {
   isFinancialExecutionDisabled,
   validateAddressForNetwork,
 } from "../domain/custody.ts";
+import { isFlowIdInput } from "../domain/flow-id.ts";
 import {
   getMainnetWalletAddress,
   isBalanceMatchingDeployment,
@@ -25,6 +26,7 @@ import { access, accountId, principal } from "./accounts.ts";
 import { requestAccountSync } from "./account-sync.ts";
 import { getAccountBalances } from "./assets/asset-service.ts";
 import { fetchLiveMainnetBalance } from "./assets/connectors/multi-chain-reconciler.ts";
+import { resolveFlowIdForSend } from "./flow-id-service.ts";
 import { ApiFailure, input, reply } from "./http.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import { fetchOneClickCommittedQuote } from "./providers/one-click-adapter.ts";
@@ -357,7 +359,14 @@ export async function executeSendTransfer(
     throw new ApiFailure(400, "INVALID_AMOUNT");
   }
 
-  const trimmedRecipient = body.recipientAddress.trim();
+  let trimmedRecipient = body.recipientAddress.trim();
+  if (isFlowIdInput(trimmedRecipient)) {
+    const resolved = await resolveFlowIdForSend(runtime().db, {
+      rawFlowId: trimmedRecipient,
+      destinationNetwork: destDeployment.networkKey,
+    });
+    trimmedRecipient = resolved.recipientAddress;
+  }
   const addressValidation = validateAddressForNetwork(
     destDeployment.networkKey as NetworkId,
     trimmedRecipient,
