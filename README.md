@@ -40,9 +40,46 @@ FLOW is a chain-abstracted multi-chain wallet, payments, and DeFi yield platform
 | Network | Protocol / Contract | Role in FLOW |
 | :--- | :--- | :--- |
 | **NEAR Mainnet** | [`outlayer.near`](https://nearblocks.io/address/outlayer.near) | OutLayer MPC wallet custody & on-chain policy sponsorship |
-| **NEAR Mainnet** | [`linear-protocol.near`](https://nearblocks.io/address/linear-protocol.near) | FLOW Earn — Native NEAR liquid staking (`6.26% variable APY`) |
-| **NEAR Mainnet** | [`contract.main.burrow.near`](https://nearblocks.io/address/contract.main.burrow.near) | FLOW Earn — NEAR DeFi money-market yield (`9.20% variable APY`) |
+| **NEAR Mainnet** | [`linear-protocol.near`](https://nearblocks.io/address/linear-protocol.near) | FLOW Earn — Native NEAR liquid staking (live on-chain APY via `ft_price`) |
+| **NEAR Mainnet** | [`contract.main.burrow.near`](https://nearblocks.io/address/contract.main.burrow.near) | FLOW Earn — NEAR DeFi money-market yield (live on-chain APR via `get_asset`) |
 | **Multi-Chain** | NEAR Intents (1Click API) | Cross-chain swaps, deposits, and payment link settlement across NEAR, Solana, Base & Ethereum |
+
+---
+
+## About FLOW
+
+**FLOW** is a chain-abstracted multi-chain money app built for everyday people, freelancers, and global teams. It combines the simplicity of a modern neobank with the openness of on-chain rails—letting anyone hold, send, convert, request, and earn yield across **NEAR**, **Solana**, **Base**, and **Ethereum** from a single account, without managing seed phrases, browser extensions, or bridging workflows.
+
+### What We Built
+
+- **Unified Multi-Chain Account:** Passwordless Google or email sign-in automatically provisions permanent mainnet addresses across NEAR, Solana, Base, and Ethereum, backed by **NEAR OutLayer** MPC custody and on-chain security policies.
+- **Cross-Chain Payments & Request Links (`/pay/[id]`):** Create shareable payment links or invoices specifying the exact asset and chain you want to receive. Payers can settle from any of 230+ supported tokens across 39+ blockchains—no FLOW account required—via **NEAR Intents (1Click)**.
+- **Live Convert, Send & Cross-Chain Add Money:** Move value across chains or send to external wallets and `@handle` **Flow IDs** with real-time quotes, live step-by-step transaction trackers that survive page reloads, and built-in gas reserve protection.
+- **Native NEAR DeFi Yield (`FLOW Earn`):** Stake `NEAR` with **LiNEAR Protocol** or supply `USDC` on NEAR Mainnet to **Burrow Finance** with live on-chain APY/APR reads, real-time position tracking, 1-step **Swap & Earn** from other chains, and flexible instant or standard withdrawals.
+- **Personal & Business Workspaces:** Separate personal balances from team/business treasuries, track monthly inflows and outflows in **Cashflow Insights**, receive real-time settlement notifications, and query your portfolio or routes with the **FLOW AI Assistant**.
+
+### Why We Built It
+
+Using crypto for real payments and savings is still unnecessarily fragmented:
+- A client wants to pay in `USDC` on Base or `SOL` on Solana, while you want to hold `NEAR` or `USDC` on NEAR.
+- Earning yield requires finding a bridge, holding the right gas token on the destination chain, and navigating separate DeFi dashboards.
+- Most wallets force everyday users to juggle seed phrases, RPC errors, and raw transaction hashes just to complete a routine transfer.
+
+We built **FLOW** so users only think about **who** they are paying, **what** they want to hold, and **how** their money is growing—while NEAR OutLayer and NEAR Intents handle custody, routing, and cross-chain settlement invisibly underneath.
+
+### Who It Is For
+
+- **Everyday Crypto Users:** Anyone who wants one clean wallet for NEAR, Solana, Base, and Ethereum with Google/email login and zero seed-phrase anxiety.
+- **Freelancers, Creators & Global Contractors:** Professionals who send payment links to clients worldwide and want to receive their preferred token regardless of which chain the client pays from.
+- **Teams & Businesses:** Organizations managing shared treasury accounts, outgoing transfers, and monthly cashflow reporting across chains.
+- **DeFi Savers:** Holders with idle `SOL`, `ETH`, or `USDC` on other networks who want to swap into NEAR and earn native staking or lending yield in one place.
+
+### Benefits
+
+- **Pay With What You Hold, Receive What You Want:** Eliminates manual bridging and multi-wallet juggling for both senders and recipients.
+- **No Seed Phrases, Policy-Protected Custody:** Accounts are provisioned and governed by NEAR OutLayer MPC policies rather than fragile local private keys.
+- **Transparent, Real-Time Execution:** Every send, swap, deposit, and Earn action is backed by live mainnet RPC state and tracked end-to-end with clear status steps and truthful error messages.
+- **Productive Idle Balances:** Turn received payments directly into native NEAR yield through LiNEAR and Burrow without leaving the app.
 
 ---
 
