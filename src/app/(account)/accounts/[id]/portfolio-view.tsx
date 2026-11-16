@@ -1780,9 +1780,17 @@ export function PortfolioView({
   ]);
 
   useEffect(() => {
+    if (!activeOutgoingTransfer) return;
+    if (activeOutgoingTransfer.status === "SETTLED") {
+      const doneTimer = window.setTimeout(() => {
+        setActiveOutgoingTransfer(null);
+        setSendAmount("");
+        setConvertAmount("");
+      }, 2200);
+      return () => window.clearTimeout(doneTimer);
+    }
     if (
-      !activeOutgoingTransfer ||
-      ["SETTLED", "FAILED", "REFUNDED", "UNKNOWN_AMBIGUOUS"].includes(
+      ["FAILED", "REFUNDED", "EXCEPTION_REFUND_REQUIRED", "UNKNOWN_AMBIGUOUS"].includes(
         activeOutgoingTransfer.status,
       )
     ) {
@@ -2619,29 +2627,50 @@ export function PortfolioView({
            =================================================================== */}
         {activeTab === "send" && (
           <MotionTabPanel className="max-w-2xl mx-auto space-y-6">
-            <div>
-              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
-                Send &amp; Convert
-              </h1>
-              <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
-                Review transfer and conversion quotes from NEAR Intents.
-              </p>
-              <div className="mt-2.5">
-                <NearIntentsBadge />
+            {activeOutgoingTransfer &&
+            activeOutgoingTransfer.jobKind === sendMode ? (
+              <div className="space-y-4">
+                <PaymentTimelineTracker transfer={activeOutgoingTransfer} />
+                {[
+                  "FAILED",
+                  "REFUNDED",
+                  "EXCEPTION_REFUND_REQUIRED",
+                  "UNKNOWN_AMBIGUOUS",
+                ].includes(activeOutgoingTransfer.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveOutgoingTransfer(null)}
+                    className="w-full py-3 rounded-full text-xs font-semibold border border-neutral-200 dark:border-white/[0.12] bg-white dark:bg-[#141414] text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                  >
+                    Back to {sendMode === "CONVERT" ? "Convert" : "Send"}
+                  </button>
+                )}
               </div>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
+                    Send &amp; Convert
+                  </h1>
+                  <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
+                    Review transfer and conversion quotes from NEAR Intents.
+                  </p>
+                  <div className="mt-2.5">
+                    <NearIntentsBadge />
+                  </div>
+                </div>
 
-            {/* Segmented Mode Switcher: Send vs Convert */}
-            <SegmentedTabPill
-              tabs={[
-                { id: "SEND", label: "Send" },
-                { id: "CONVERT", label: "Convert" },
-              ] as const}
-              activeTab={sendMode}
-              onChange={setSendMode}
-            />
+                {/* Segmented Mode Switcher: Send vs Convert */}
+                <SegmentedTabPill
+                  tabs={[
+                    { id: "SEND", label: "Send" },
+                    { id: "CONVERT", label: "Convert" },
+                  ] as const}
+                  activeTab={sendMode}
+                  onChange={setSendMode}
+                />
 
-            <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
+                <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
               {sendMode === "SEND" ? (
                 <>
                   {/* You Send Card */}
@@ -3009,7 +3038,9 @@ export function PortfolioView({
                   {renderOutgoingStatusCard("CONVERT")}
                 </>
               )}
-            </div>
+                </div>
+              </>
+            )}
           </MotionTabPanel>
         )}
 
@@ -4104,14 +4135,27 @@ export function PortfolioView({
                             : `${act.direction === "INCOMING" ? "+" : "-"}${formatApproxDisplay(act.displayAmount)}`}{" "}
                           {act.assetSymbol}
                         </div>
-                        <a
-                          href={act.explorerUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] text-neutral-400 dark:text-neutral-500 hover:text-neutral-950 dark:hover:text-white"
-                        >
-                          View tx ↗
-                        </a>
+                        {act.finality === "FINALIZED" &&
+                        !act.txHash.startsWith("snd_") &&
+                        !act.txHash.startsWith("cnv_") &&
+                        !act.txHash.startsWith("am_") ? (
+                          <a
+                            href={act.explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-neutral-400 dark:text-neutral-500 hover:text-neutral-950 dark:hover:text-white"
+                          >
+                            View tx ↗
+                          </a>
+                        ) : (
+                          <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+                            {act.metadata?.executionStatus === "FAILED" ||
+                            act.metadata?.executionStatus === "REFUNDED" ||
+                            act.metadata?.executionStatus === "EXPIRED"
+                              ? "No tx hash"
+                              : "Pending"}
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))

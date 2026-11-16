@@ -1052,8 +1052,10 @@ export function CheckoutView({
                     </span>
                   </div>
 
-                  {/* 2 & 3. Invoice/request name & Recipient info / Amount Due */}
-                  <div>
+                  {!isFundedOrProcessing && (
+                    <>
+                      {/* 2 & 3. Invoice/request name & Recipient info / Amount Due */}
+                      <div>
                     <p className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
                       Invoice:{" "}
                       <strong className="text-neutral-900 dark:text-white">
@@ -1234,22 +1236,25 @@ export function CheckoutView({
                         </div>
                       ) : null}
 
-                      {instructions.sourceTxHash && (
-                        <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 dark:border-white/[0.08] text-[11px]">
-                          <span className="text-neutral-500 dark:text-neutral-400">
-                            Source Transaction:
-                          </span>
-                          <span
-                            className="font-mono text-neutral-800 dark:text-neutral-200 text-[10px] truncate max-w-[180px]"
-                            title={instructions.sourceTxHash}
-                          >
-                            {instructions.sourceTxHash.slice(0, 8)}...
-                            {instructions.sourceTxHash.slice(-6)}
-                          </span>
-                        </div>
-                      )}
+                      {instructions.status === "SETTLED" &&
+                        instructions.sourceTxHash && (
+                          <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80 dark:border-white/[0.08] text-[11px]">
+                            <span className="text-neutral-500 dark:text-neutral-400">
+                              Source Transaction:
+                            </span>
+                            <span
+                              className="font-mono text-neutral-800 dark:text-neutral-200 text-[10px] truncate max-w-[180px]"
+                              title={instructions.sourceTxHash}
+                            >
+                              {instructions.sourceTxHash.slice(0, 8)}...
+                              {instructions.sourceTxHash.slice(-6)}
+                            </span>
+                          </div>
+                        )}
                     </div>
                   </div>
+                    </>
+                  )}
 
                   <PaymentTimelineTracker
                     transfer={{

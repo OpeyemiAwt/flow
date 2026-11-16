@@ -345,8 +345,8 @@ export function PaymentTimelineTracker({
         )}
       </div>
 
-      {/* Compact On-Chain Hashes */}
-      {(transfer.sourceTxHash || transfer.destinationTxHash) && (
+      {/* Compact On-Chain Hashes (shown only once settled) */}
+      {isSettled && (transfer.sourceTxHash || transfer.destinationTxHash) && (
         <div className="mt-5 pt-4 border-t border-white/[0.08] space-y-1 text-[11px] text-neutral-400 font-mono">
           {transfer.sourceTxHash && (
             <p className="truncate">Source tx: {transfer.sourceTxHash}</p>

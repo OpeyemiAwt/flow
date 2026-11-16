@@ -127,11 +127,12 @@ export async function getAccountNotifications(
     });
   }
 
-  // 2b. Fetch recent incoming on-chain deposits
-  const incomingDeposits = await db.$queryRaw<
+  // 2b. Fetch recent on-chain wallet activities (both incoming deposits and outgoing transfers)
+  const walletEvents = await db.$queryRaw<
     Array<{
       id: string;
       chain_id: string;
+      direction: string;
       asset_symbol: string;
       atomic_amount: string;
       decimals: number;
@@ -142,6 +143,7 @@ export async function getAccountNotifications(
       SELECT
         id,
         chain_id,
+        direction,
         asset_symbol,
         atomic_amount::text AS atomic_amount,
         decimals,
@@ -149,25 +151,136 @@ export async function getAccountNotifications(
         observed_at
       FROM flow.wallet_activities
       WHERE account_id = ${accountId}::uuid
-        AND direction = 'INCOMING'
+        AND direction IN ('INCOMING', 'OUTGOING')
         AND finality IN ('CONFIRMED', 'FINALIZED')
         AND atomic_amount > 0
       ORDER BY COALESCE(block_timestamp, observed_at) DESC
+      LIMIT 20
+  `;
+
+  for (const ev of walletEvents) {
+    const amount = formatAtomicToDisplay(ev.atomic_amount, ev.decimals);
+    const networkLabel = ev.chain_id.replace("-mainnet", "");
+    const isOutgoing = ev.direction === "OUTGOING";
+    notifications.push({
+      id: `notif_deposit_${ev.id}`,
+      accountId,
+      category: "payments",
+      type: isOutgoing ? "PAYMENT_COMPLETED" : "DEPOSIT_DETECTED",
+      title: isOutgoing ? "Transfer sent" : "Deposit received",
+      description: `${isOutgoing ? "-" : "+"}${amount} ${ev.asset_symbol} on ${networkLabel}`,
+      link: `/accounts/${accountId}?view=activity`,
+      isRead: false,
+      createdAt: (ev.block_timestamp ?? ev.observed_at).toISOString(),
+    });
+  }
+
+  // 2c. Fetch settled outgoing transfers (Send & Convert) not already mirrored in wallet_activities
+  const settledOutgoing = await db.$queryRaw<
+    Array<{
+      id: string;
+      job_kind: string;
+      source_network: string;
+      source_asset_symbol: string;
+      source_atomic_amount: string;
+      source_decimals: number;
+      destination_asset_symbol: string;
+      settled_at: Date | null;
+      created_at: Date;
+    }>
+  >`
+      SELECT
+        ot.id::text AS id,
+        ot.job_kind,
+        ot.source_network,
+        ot.source_asset_symbol,
+        ot.source_atomic_amount::text AS source_atomic_amount,
+        ot.source_decimals,
+        ot.destination_asset_symbol,
+        ot.settled_at,
+        ot.created_at
+      FROM flow.outgoing_transfer_jobs ot
+      WHERE ot.account_id = ${accountId}::uuid
+        AND ot.status = 'SETTLED'
+        AND NOT EXISTS (
+          SELECT 1 FROM flow.wallet_activities wa
+          WHERE wa.account_id = ot.account_id
+            AND ot.source_tx_hash IS NOT NULL
+            AND wa.tx_hash = ot.source_tx_hash
+            AND wa.direction = 'OUTGOING'
+        )
+      ORDER BY COALESCE(ot.settled_at, ot.created_at) DESC
       LIMIT 15
   `;
 
-  for (const dep of incomingDeposits) {
-    const amount = formatAtomicToDisplay(dep.atomic_amount, dep.decimals);
+  for (const job of settledOutgoing) {
+    const amount = formatAtomicToDisplay(
+      job.source_atomic_amount,
+      job.source_decimals,
+    );
+    const isConvert = job.job_kind === "CONVERT";
     notifications.push({
-      id: `notif_deposit_${dep.id}`,
+      id: `notif_outgoing_${job.id}`,
+      accountId,
+      category: "payments",
+      type: isConvert ? "SWAP_COMPLETED" : "PAYMENT_COMPLETED",
+      title: isConvert ? "Conversion completed" : "Transfer sent",
+      description: isConvert
+        ? `${amount} ${job.source_asset_symbol} → ${job.destination_asset_symbol}`
+        : `-${amount} ${job.source_asset_symbol} on ${job.source_network.replace("-mainnet", "")}`,
+      link: `/accounts/${accountId}?view=activity`,
+      isRead: false,
+      createdAt: (job.settled_at ?? job.created_at).toISOString(),
+    });
+  }
+
+  // 2d. Fetch settled Add Money deposits not already mirrored in wallet_activities
+  const settledAddMoney = await db.$queryRaw<
+    Array<{
+      id: string;
+      destination_asset_symbol: string;
+      quoted_destination_atomic_amount: string;
+      destination_decimals: number;
+      settled_at: Date | null;
+      created_at: Date;
+    }>
+  >`
+      SELECT
+        am.id::text AS id,
+        am.destination_asset_symbol,
+        am.quoted_destination_atomic_amount::text AS quoted_destination_atomic_amount,
+        am.destination_decimals,
+        am.settled_at,
+        am.created_at
+      FROM flow.add_money_intents am
+      WHERE am.account_id = ${accountId}::uuid
+        AND am.status = 'SETTLED'
+        AND NOT EXISTS (
+          SELECT 1 FROM flow.wallet_activities wa
+          WHERE wa.account_id = am.account_id
+            AND am.destination_tx_hash IS NOT NULL
+            AND wa.tx_hash = am.destination_tx_hash
+            AND wa.direction = 'INCOMING'
+        )
+      ORDER BY COALESCE(am.settled_at, am.created_at) DESC
+      LIMIT 10
+  `;
+
+  for (const am of settledAddMoney) {
+    const amount = formatAtomicToDisplay(
+      am.quoted_destination_atomic_amount,
+      am.destination_decimals,
+    );
+    notifications.push({
+      id: `notif_add_money_${am.id}`,
       accountId,
       category: "payments",
       type: "DEPOSIT_DETECTED",
-      title: "Deposit received",
-      description: `+${amount} ${dep.asset_symbol} on ${dep.chain_id.replace("-mainnet", "")}`,
+      title: "Add Money settled",
+      description: `+${amount} ${am.destination_asset_symbol} on near`,
       link: `/accounts/${accountId}?view=activity`,
       isRead: false,
-      createdAt: (dep.block_timestamp ?? dep.observed_at).toISOString(),
+      createdAt: (am.settled_at ?? am.created_at).toISOString(),
     });
   }
 
