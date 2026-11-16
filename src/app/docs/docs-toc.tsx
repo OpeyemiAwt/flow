@@ -54,10 +54,10 @@ export function DocsToc({ items }: { items: readonly TocItem[] }) {
       </div>
 
       {/* Desktop sticky left-hand Table of Contents */}
-      <aside className="hidden lg:block">
+      <aside className="hidden lg:block lg:sticky lg:top-24 lg:self-start">
         <nav
           aria-label="Documentation table of contents"
-          className="sticky top-24 rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-white/80 dark:bg-[#141414]/90 p-4 shadow-xs"
+          className="max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-white/80 dark:bg-[#141414]/90 p-4 shadow-xs"
         >
           <p className="px-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#D51B24]">
             On this page
