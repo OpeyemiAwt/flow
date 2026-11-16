@@ -536,11 +536,15 @@ export function EarnView({
           />
         </h1>
 
-        {/* Pill Badge: "Up to 6.3% APY on your dollars" */}
+        {/* Pill Badge: dynamic max live APY */}
         <div className="pt-0.5">
           <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-neutral-200/50 dark:bg-neutral-800/60 text-xs text-neutral-600 dark:text-neutral-300 font-medium border border-neutral-300/40 dark:border-white/[0.06] select-none">
             <span>
-              Up to <strong className="font-bold text-neutral-950 dark:text-white">6.3% APY</strong> on your dollars
+              Up to{" "}
+              <strong className="font-bold text-neutral-950 dark:text-white">
+                {Math.max(...protocols.map((p) => p.apy)).toFixed(2)}% APY
+              </strong>{" "}
+              on your dollars
             </span>
           </div>
         </div>
