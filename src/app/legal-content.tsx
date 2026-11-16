@@ -20,7 +20,13 @@ function LegalPage({
           <Link href="/" aria-label="FLOW home">
             <FlowLogo className="h-8 w-auto" />
           </Link>
-          <nav aria-label="Legal pages" className="flex gap-4 text-sm">
+          <nav aria-label="Legal pages" className="flex flex-wrap gap-4 text-sm">
+            <Link className="hover:text-[#FF1A1A]" href="/docs">
+              Docs
+            </Link>
+            <Link className="hover:text-[#FF1A1A]" href="/whitepaper">
+              Whitepaper
+            </Link>
             <Link className="hover:text-[#FF1A1A]" href="/privacy">
               Privacy
             </Link>
@@ -63,7 +69,19 @@ function LegalPage({
 
         <footer className="flex flex-col gap-3 py-8 text-sm text-[#666] dark:text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
           <span>FLOW · Multi-chain payments &amp; custody</span>
-          <div className="flex gap-5">
+          <div className="flex flex-wrap gap-5">
+            <Link
+              className="hover:text-[#0B0B0B] dark:hover:text-white"
+              href="/docs"
+            >
+              Docs
+            </Link>
+            <Link
+              className="hover:text-[#0B0B0B] dark:hover:text-white"
+              href="/whitepaper"
+            >
+              Whitepaper
+            </Link>
             <Link
               className="hover:text-[#0B0B0B] dark:hover:text-white"
               href="/privacy"

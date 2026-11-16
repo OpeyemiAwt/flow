@@ -68,7 +68,7 @@ export function HomePageClient() {
             <FlowLogo className="h-7 w-auto sm:h-8" />
           </Link>
 
-          <nav className="hidden items-center gap-9 text-[14px] font-medium text-[#1F1F1F] dark:text-neutral-300 md:flex">
+          <nav className="hidden items-center gap-7 text-[14px] font-medium text-[#1F1F1F] dark:text-neutral-300 md:flex">
             <a
               href="#experience"
               className="transition-colors hover:text-[#FF1A1A]"
@@ -81,14 +81,20 @@ export function HomePageClient() {
             >
               Use Cases
             </a>
-            <a
-              href="#get-paid-anywhere"
+            <Link
+              href="/docs"
               className="transition-colors hover:text-[#FF1A1A]"
             >
-              Resources
-            </a>
+              Docs
+            </Link>
+            <Link
+              href="/whitepaper"
+              className="transition-colors hover:text-[#FF1A1A]"
+            >
+              Whitepaper
+            </Link>
             <a href="#faq" className="transition-colors hover:text-[#FF1A1A]">
-              Pricing
+              FAQ
             </a>
           </nav>
 
@@ -146,19 +152,26 @@ export function HomePageClient() {
               >
                 Use Cases
               </a>
-              <a
-                href="#get-paid-anywhere"
+              <Link
+                href="/docs"
                 onClick={() => setMobileMenuOpen(false)}
                 className="py-1.5"
               >
-                Resources
-              </a>
+                Docs
+              </Link>
+              <Link
+                href="/whitepaper"
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-1.5"
+              >
+                Whitepaper
+              </Link>
               <a
                 href="#faq"
                 onClick={() => setMobileMenuOpen(false)}
                 className="py-1.5"
               >
-                Pricing
+                FAQ
               </a>
               <div className="mt-2 flex flex-col gap-2.5">
                 <Link
@@ -941,28 +954,36 @@ export function HomePageClient() {
               </div>
               <ul className="mt-2.5 space-y-1.5 text-[#666666] dark:text-neutral-400">
                 <li>
-                  <a
-                    href="#get-paid-anywhere"
+                  <Link
+                    href="/docs"
                     className="hover:text-[#0B0B0B] dark:hover:text-white"
                   >
-                    Blog
-                  </a>
+                    Docs
+                  </Link>
                 </li>
                 <li>
-                  <a
-                    href="#get-paid-anywhere"
+                  <Link
+                    href="/whitepaper"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
+                    Whitepaper
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/docs#getting-started"
                     className="hover:text-[#0B0B0B] dark:hover:text-white"
                   >
                     Guides
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
-                    href="#faq"
+                  <Link
+                    href="/docs#states-troubleshooting"
                     className="hover:text-[#0B0B0B] dark:hover:text-white"
                   >
                     Help
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
