@@ -55,6 +55,58 @@ interface ProtocolEarnConfig {
   accentColor: string;
 }
 
+const EARN_GAS_RESERVE_NEAR = 0.05;
+const BURROW_FIRST_DEPOSIT_RESERVE_NEAR = 0.3;
+
+function formatEarnErrorMessage(
+  data: unknown,
+  fallback: string,
+  protocolKey?: string,
+): string {
+  const payload =
+    data && typeof data === "object"
+      ? (data as { error?: unknown; message?: unknown })
+      : null;
+  const rawError = payload?.error;
+  const code =
+    typeof rawError === "string"
+      ? rawError
+      : rawError && typeof rawError === "object" && "code" in rawError
+        ? String((rawError as { code?: unknown }).code || "")
+        : "";
+  const nestedMessage =
+    rawError && typeof rawError === "object" && "message" in rawError
+      ? String((rawError as { message?: unknown }).message || "")
+      : "";
+  const directMessage =
+    typeof payload?.message === "string" ? payload.message : "";
+
+  switch (code) {
+    case "INSUFFICIENT_SPENDABLE_BALANCE":
+      return protocolKey === "burrow"
+        ? "Insufficient USDC on NEAR Mainnet. Burrow deposits require USDC on NEAR (not Base/Ethereum)."
+        : "Insufficient NEAR balance after reserving 0.05 NEAR for network gas.";
+    case "INSUFFICIENT_GAS_BALANCE":
+      return protocolKey === "burrow"
+        ? "Insufficient NEAR for gas and Burrow storage deposit (requires 0.30 NEAR on first deposit, or 0.05 NEAR thereafter)."
+        : "Insufficient NEAR for network gas (requires at least 0.05 NEAR).";
+    case "BALANCE_REFRESH_REQUIRED":
+      return "Your NEAR wallet balance is still syncing or unavailable. Please refresh your portfolio and try again.";
+    case "INSUFFICIENT_PROTOCOL_POSITION":
+      return "Requested withdrawal exceeds your active protocol position.";
+    case "PAYMENT_EXECUTION_DISABLED":
+      return "On-chain Earn execution is currently disabled in this environment.";
+    case "ACTIVE_MAINNET_WALLET_REQUIRED":
+      return "An active NEAR Mainnet wallet is required to use Earn.";
+    case "INVALID_AMOUNT":
+      return "Please enter a valid positive amount.";
+    case "AUTH_REQUIRED":
+      return "Your session expired. Please sign in again.";
+    default:
+      return nestedMessage || directMessage || code || fallback;
+  }
+}
+
 const PROTOCOLS: ProtocolEarnConfig[] = [
   {
     id: "linear",
@@ -263,13 +315,16 @@ export function EarnView({
 
     const available =
       activeModalProtocol.assetSymbol === "NEAR"
-        ? availableNearNum
+        ? Math.max(0, Math.floor((availableNearNum - EARN_GAS_RESERVE_NEAR) * 1e6) / 1e6)
         : availableStablesNum;
 
     if (parsed > available) {
       pushToast({
         title: "Insufficient balance",
-        description: `You only have ${available.toFixed(4)} ${activeModalProtocol.assetSymbol} available in your NEAR wallet.`,
+        description:
+          activeModalProtocol.assetSymbol === "NEAR"
+            ? `You can deposit up to ${available.toFixed(4)} NEAR (${EARN_GAS_RESERVE_NEAR.toFixed(2)} NEAR is reserved for gas).`
+            : `You only have ${available.toFixed(4)} ${activeModalProtocol.assetSymbol} available on NEAR Mainnet.`,
         variant: "error",
       });
       return;
@@ -293,12 +348,13 @@ export function EarnView({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg =
-          data?.error?.message ||
-          data?.message ||
-          data?.error?.code ||
-          "Could not submit deposit transaction.";
-        throw new Error(msg);
+        throw new Error(
+          formatEarnErrorMessage(
+            data,
+            "Could not submit deposit transaction.",
+            activeModalProtocol.protocolKey,
+          ),
+        );
       }
 
       await fetchEarnPositions();
@@ -372,12 +428,13 @@ export function EarnView({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg =
-          data?.error?.message ||
-          data?.message ||
-          data?.error?.code ||
-          "Could not submit withdrawal transaction.";
-        throw new Error(msg);
+        throw new Error(
+          formatEarnErrorMessage(
+            data,
+            "Could not submit withdrawal transaction.",
+            activeModalProtocol.protocolKey,
+          ),
+        );
       }
 
       await fetchEarnPositions();
@@ -405,11 +462,11 @@ export function EarnView({
     }
   };
 
-  // Computed modal available balance
+  // Computed modal available balance (reserves 0.05 NEAR for gas on LiNEAR deposits)
   const modalAvailable = useMemo(() => {
     if (!activeModalProtocol) return 0;
     return activeModalProtocol.assetSymbol === "NEAR"
-      ? availableNearNum
+      ? Math.max(0, Math.floor((availableNearNum - EARN_GAS_RESERVE_NEAR) * 1e6) / 1e6)
       : availableStablesNum;
   }, [activeModalProtocol, availableNearNum, availableStablesNum]);
 
@@ -798,15 +855,26 @@ export function EarnView({
                           key={pct}
                           type="button"
                           onClick={() =>
-                            setAmountInput((baseVal * pct).toFixed(2))
+                            setAmountInput(
+                              pct === 1
+                                ? baseVal.toString()
+                                : (Math.floor(baseVal * pct * 10000) / 10000).toString(),
+                            )
                           }
                           className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-neutral-100 hover:bg-neutral-200/80 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer"
                         >
-                          {pct === 1 ? "100%" : `${pct * 100}%`}
+                          {pct === 1 ? "Max" : `${pct * 100}%`}
                         </button>
                       );
                     })}
                   </div>
+                  {modalAction === "DEPOSIT" && (
+                    <p className="mt-2 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      {activeModalProtocol.protocolKey === "burrow"
+                        ? `Uses USDC on NEAR Mainnet · Requires ${BURROW_FIRST_DEPOSIT_RESERVE_NEAR.toFixed(2)} NEAR for first-time storage + gas (wallet: ${availableNearNum.toFixed(2)} NEAR).`
+                        : `${EARN_GAS_RESERVE_NEAR.toFixed(2)} NEAR is reserved for network gas (wallet: ${availableNearNum.toFixed(4)} NEAR).`}
+                    </p>
+                  )}
                 </div>
 
                 {/* If zero balance: provide quick actions to deposit or swap */}

@@ -41,8 +41,24 @@ FLOW is a chain-abstracted multi-chain wallet, payments, and DeFi yield platform
 | :--- | :--- | :--- |
 | **NEAR Mainnet** | [`outlayer.near`](https://nearblocks.io/address/outlayer.near) | OutLayer MPC wallet custody & on-chain policy sponsorship |
 | **NEAR Mainnet** | [`linear-protocol.near`](https://nearblocks.io/address/linear-protocol.near) | FLOW Earn — Native NEAR liquid staking (`6.26% variable APY`) |
-| **NEAR Mainnet** | [`contract.burrow.near`](https://nearblocks.io/address/contract.burrow.near) | FLOW Earn — NEAR DeFi money-market yield (`9.20% variable APY`) |
-| **Multi-Chain** | NEAR Intents (1Click API) | Cross-chain swaps, deposits, and payment link settlement acrossNEAR, Solana, Base & Ethereum |
+| **NEAR Mainnet** | [`contract.main.burrow.near`](https://nearblocks.io/address/contract.main.burrow.near) | FLOW Earn — NEAR DeFi money-market yield (`9.20% variable APY`) |
+| **Multi-Chain** | NEAR Intents (1Click API) | Cross-chain swaps, deposits, and payment link settlement across NEAR, Solana, Base & Ethereum |
+
+---
+
+## Architecture & Production Infrastructure
+
+FLOW runs a real, mainnet-connected multi-service architecture backed by PostgreSQL, Prisma, and live blockchain RPCs—not simulated balances or mock callbacks:
+
+- **NEAR OutLayer Custody & Policy Engine:** Multi-chain MPC wallet provisioning (`NEAR`, `Solana`, `Base`, `Ethereum`), encrypted and signed custody policies (`/wallet/v1/policy`, `/wallet/v1/encrypt-policy`, `/wallet/v1/sign-policy`), and sponsored NEAR account/policy setup (`near-policy-sponsor.ts`).
+- **NEAR Intents (1Click SDK):** Uses `@defuse-protocol/one-click-sdk-typescript` for real-time token discovery across 39+ chains, live route quoting, cross-chain deposit address generation, and settlement status tracking.
+- **Native NEAR DeFi Execution:** Direct NEAR Mainnet RPC state queries and contract execution against **LiNEAR** (`linear-protocol.near`) and **Burrow** (`contract.main.burrow.near`), including storage deposit checks, gas reserve enforcement, and instant or delayed unstaking.
+- **Four Dedicated Background Workers:**
+  - `worker:custody` — Asynchronous OutLayer wallet provisioning, policy signing, and custody state machine recovery.
+  - `worker:payments` — Outgoing transfer, swap, and Earn execution with idempotency keys.
+  - `worker:monitoring` — Cross-chain 1Click settlement observation and payment link monitoring.
+  - `worker:indexer` — Multi-chain RPC balance reconciliation and activity indexing.
+- **On-Chain Verification & Security:** Server-side transaction verification across NEAR, EVM, and Solana RPCs (`on-chain-verifier.ts`), strict Zod request validation, Prisma schema migrations with least-privilege DB role discipline, and crash-recovery state machines.
 
 ---
 
@@ -50,13 +66,15 @@ FLOW is a chain-abstracted multi-chain wallet, payments, and DeFi yield platform
 
 - **FLOW Earn on NEAR (`LiNEAR` & `Burrow Finance`):**
   - **Native Liquid Staking:** Stake NEAR into **LiNEAR Protocol** (`6.26% variable APY`) with auto-compounding validator rewards.
-  - **DeFi Money Market Yield:** Supply assets to **Burrow Finance** (`9.20% variable APY` including NEAR rewards).
+  - **DeFi Money Market Yield:** Supply USDC on NEAR Mainnet to **Burrow Finance** (`9.20% variable APY` including NEAR rewards).
   - **1-Step Swap & Earn via NEAR Intents:** Convert idle `SOL`, `USDC`, or `ETH` from other chains directly into native `NEAR` and start earning in a single workflow.
-  - **Live Yield & Flexible Withdrawals:** Preview projected annual returns before depositing, track real-time yield accrual, and withdraw anytime via **Instant Unstake** or **Standard (~48h)**.
-- **Cross-Chain Payment Links (`/pay/[id]`):** Request payment in the exact token and network you want; your payer settles from any of 230+ supported tokens across 39+ chains without needing a FLOW account.
-- **One Wallet, Four Mainnets:** A single login provisions permanent addresses across **NEAR**, **Solana**, **Base**, and **Ethereum** secured by NEAR OutLayer MPC custody.
-- **Live Convert & Cross-Chain Send:** Swap between assets or send across chains with instant NEAR Intents quotes and built-in gas/balance safety checks.
-- **Account-Aware FLOW AI Assistant:** Built-in wallet assistant that understands your portfolio, recent transactions, and cross-chain routes.
+  - **Live Yield & Flexible Withdrawals:** Preview projected annual returns before depositing, track live on-chain positions, and withdraw anytime via **Instant Unstake** or **Standard (~48h)**.
+- **Cross-Chain Payment Links (`/pay/[id]`):** Request payment in the exact token and network you want; your payer settles from any of 230+ supported tokens across 39+ chains without needing a FLOW account, complete with a live settlement tracker.
+- **One Wallet, Four Mainnets:** A single Google or passwordless email login provisions permanent addresses across **NEAR**, **Solana**, **Base**, and **Ethereum** secured by NEAR OutLayer MPC custody.
+- **Personal & Business Workspaces + Flow ID:** Switch between personal and business accounts, claim a `@handle` Flow ID for instant P2P transfers, and manage workspace preferences.
+- **Live Convert, Send & Cross-Chain Add Money:** Swap between assets or send across chains with instant NEAR Intents quotes, live step-by-step transaction trackers that persist across page reloads, and built-in gas/balance safety checks.
+- **Cashflow Insights, Notifications & Docs:** Real DB-backed monthly inflow/outflow insights, real-time activity notifications, and built-in Docs, FAQ, and Whitepaper pages.
+- **Account-Aware FLOW AI Assistant:** Built-in assistant that reads your live portfolio, recent settlements, and real-time 1Click quotes to explain routes, draft payment links, and preview swaps or sends.
 
 ---
 
@@ -70,7 +88,7 @@ flowchart LR
   OC -->|"1-Step Swap & Earn"| E["FLOW Earn on NEAR"]
   W -->|"Direct Deposit"| E
   E -->|"6.26% APY"| L["LiNEAR Protocol (linear-protocol.near)"]
-  E -->|"9.20% APY"| B["Burrow Finance (contract.burrow.near)"]
+  E -->|"9.20% APY"| B["Burrow Finance (contract.main.burrow.near)"]
 ```
 
 1. **Instant Wallet Setup:** Sign in with Google or an email code. FLOW provisions your multi-chain wallet via **NEAR OutLayer** and sponsors your on-chain wallet security policy on NEAR Mainnet.
@@ -109,6 +127,16 @@ cd Flow
 npm ci
 (umask 077; cp -n .env.example .env)
 npm run dev
+```
+
+### Testing & Verification
+
+The `test/` directory includes 35+ automated test suites covering custody crash recovery, provisioning state machines, on-chain verification, financial authorization, 1Click quoting, and security integration:
+
+```bash
+npm test            # Unit test suite
+npm run test:db     # Database integration tests
+npm run test:security
 ```
 
 ---

@@ -162,10 +162,10 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
                       <div
                         key={idx}
                         className={`flex h-14 items-center justify-center rounded-2xl bg-white dark:bg-[#161616] text-[20px] font-semibold text-[#0B0B0B] dark:text-white shadow-2xs transition-all duration-150 sm:h-16 sm:text-[22px] ${isActive
-                            ? "border-2 border-[#FF1A1A] scale-[1.04]"
-                            : digit
-                              ? "border border-[#0B0B0B]/25 dark:border-white/25"
-                              : "border border-[#DCDCDC] dark:border-white/[0.12]"
+                          ? "border-2 border-[#FF1A1A] scale-[1.04]"
+                          : digit
+                            ? "border border-[#0B0B0B]/25 dark:border-white/25"
+                            : "border border-[#DCDCDC] dark:border-white/[0.12]"
                           }`}
                       >
                         {digit ? (
