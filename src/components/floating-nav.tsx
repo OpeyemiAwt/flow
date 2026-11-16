@@ -165,7 +165,6 @@ export function FloatingNav({
     dashboard: t.navHome,
     send: t.navSend,
     receive: t.actionAddMoney,
-    request: t.navConvert,
     earn: t.navEarn,
   };
   const [signingOut, setSigningOut] = useState(false);
