@@ -339,8 +339,7 @@ async function getReservedAtomic(
           'PENDING_CUSTODY',
           'LEASED',
           'SIGNING_IN_PROGRESS',
-          'CONFIRMING',
-          'UNKNOWN_AMBIGUOUS'
+          'CONFIRMING'
         )
     `;
   });

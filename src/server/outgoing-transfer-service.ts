@@ -264,8 +264,7 @@ async function computeAvailableBalanceForDeployment(
         AND status IN (
           'PENDING_CUSTODY',
           'LEASED',
-          'SIGNING_IN_PROGRESS',
-          'UNKNOWN_AMBIGUOUS'
+          'SIGNING_IN_PROGRESS'
         )
     `;
   });

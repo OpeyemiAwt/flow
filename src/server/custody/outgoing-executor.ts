@@ -1028,10 +1028,7 @@ async function processNextQueuedOutgoingJob(
         message.startsWith("OutLayer rate limit exceeded") ||
         message.startsWith("Requested OutLayer resource was not found") ||
         message.startsWith("Bitcoin is unsupported"));
-    const status =
-      signingStarted && !isPreSignProviderRejection
-        ? "UNKNOWN_AMBIGUOUS"
-        : "FAILED";
+    const status = "FAILED";
     await db.$executeRaw`
       SELECT flow.fail_outgoing_transfer_before_broadcast(
         ${job.id}::uuid,
