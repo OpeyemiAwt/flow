@@ -132,6 +132,14 @@ export async function loadUserInsightsData(
               AND wa.reorg_status = 'CANONICAL'
               AND wa.atomic_amount > 0
               AND UPPER(wa.direction) IN ('IN', 'INBOUND', 'INCOMING', 'OUT', 'OUTBOUND', 'OUTGOING')
+              AND COALESCE(wa.counterparty_address, '') NOT IN ('linear-protocol.near', 'contract.main.burrow.near')
+              AND NOT EXISTS (
+                SELECT 1
+                FROM flow.outgoing_transfer_jobs otj
+                WHERE otj.account_id = wa.account_id
+                  AND otj.provider_deposit_memo LIKE 'EARN:%'
+                  AND (otj.source_tx_hash = wa.tx_hash OR otj.destination_tx_hash = wa.tx_hash)
+              )
             GROUP BY 1, 2, 3, 4
           `,
         ]);
