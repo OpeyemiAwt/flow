@@ -132,7 +132,8 @@ export async function loadUserInsightsData(
               AND wa.reorg_status = 'CANONICAL'
               AND wa.atomic_amount > 0
               AND UPPER(wa.direction) IN ('IN', 'INBOUND', 'INCOMING', 'OUT', 'OUTBOUND', 'OUTGOING')
-              AND COALESCE(wa.counterparty_address, '') NOT IN ('linear-protocol.near', 'contract.main.burrow.near')
+              AND COALESCE(wa.from_address, '') NOT IN ('linear-protocol.near', 'contract.main.burrow.near')
+              AND COALESCE(wa.to_address, '') NOT IN ('linear-protocol.near', 'contract.main.burrow.near')
               AND NOT EXISTS (
                 SELECT 1
                 FROM flow.outgoing_transfer_jobs otj
