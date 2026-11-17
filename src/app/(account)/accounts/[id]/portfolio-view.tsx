@@ -4095,6 +4095,7 @@ export function PortfolioView({
             <EarnView
               accountId={accountId}
               heldAssets={heldAssets}
+              hideBalance={hideBalance}
               nearPriceUsd={tokenPrices["near-mainnet:NEAR"] ?? 5.25}
               onNavigateToTab={changeTab}
               onSelectConvert={(sourceId, destId) => {

@@ -1024,6 +1024,7 @@ async function processNextQueuedOutgoingJob(
       code === "CUSTODY_PROVIDER_ERROR" &&
       (message.startsWith("OutLayer authentication failed") ||
         message.startsWith("OutLayer rejected the request") ||
+        message.startsWith("OutLayer wallet gas balance is underfunded") ||
         message.startsWith("OutLayer rate limit exceeded") ||
         message.startsWith("Requested OutLayer resource was not found") ||
         message.startsWith("Bitcoin is unsupported"));

@@ -84,6 +84,13 @@ export function classifyProviderError(
       ...metadata,
     };
   }
+  if (safeStatus === 402) {
+    return {
+      classification: "BAD_REQUEST",
+      safeMessage: "OutLayer wallet gas balance is underfunded (402 wallet_underfunded).",
+      ...metadata,
+    };
+  }
   if (safeStatus === 400) {
     if (context?.chain === "bitcoin") {
       return {

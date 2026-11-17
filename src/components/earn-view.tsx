@@ -27,6 +27,7 @@ export interface EarnViewProps {
     displayBalance: string;
     usdValue: string;
   }>;
+  hideBalance?: boolean;
   nearPriceUsd?: number;
   onNavigateToTab: (tab: NavTabId) => void;
   onSelectConvert: (sourceDeploymentId?: string, destDeploymentId?: string) => void;
@@ -143,6 +144,7 @@ const PROTOCOLS: ProtocolEarnConfig[] = [
 export function EarnView({
   accountId,
   heldAssets,
+  hideBalance = false,
   nearPriceUsd = 5.25,
   onNavigateToTab,
   onSelectConvert,
@@ -197,8 +199,36 @@ export function EarnView({
       sourceDisplayAmount: string;
       sourceAssetSymbol: string;
       sourceTxHash: string | null;
+      errorCode?: string | null;
+      errorMessage?: string | null;
+      createdAt?: string;
     }>
   >([]);
+  const [recentEarnJobs, setRecentEarnJobs] = useState<
+    Array<{
+      publicId: string;
+      status: string;
+      providerDepositMemo: string | null;
+      sourceDisplayAmount: string;
+      sourceAssetSymbol: string;
+      sourceTxHash: string | null;
+      errorCode?: string | null;
+      errorMessage?: string | null;
+      createdAt?: string;
+    }>
+  >([]);
+  const [trackedJobId, setTrackedJobId] = useState<string | null>(null);
+  const [trackedJobFallback, setTrackedJobFallback] = useState<{
+    publicId: string;
+    status: string;
+    providerDepositMemo: string | null;
+    sourceDisplayAmount: string;
+    sourceAssetSymbol: string;
+    sourceTxHash: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    createdAt?: string;
+  } | null>(null);
 
   // Live on-chain protocol positions
   const [positions, setPositions] = useState<
@@ -253,6 +283,7 @@ export function EarnView({
         });
       }
       setActiveEarnJobs(Array.isArray(data.activeJobs) ? data.activeJobs : []);
+      setRecentEarnJobs(Array.isArray(data.recentJobs) ? data.recentJobs : []);
     } catch {
       // Keep last known on-chain snapshot on transient network hiccup
     } finally {
@@ -264,14 +295,36 @@ export function EarnView({
     void fetchEarnPositions();
   }, [fetchEarnPositions]);
 
+  const trackedJob = useMemo(() => {
+    if (!trackedJobId) return null;
+    return (
+      recentEarnJobs.find((j) => j.publicId === trackedJobId) ??
+      activeEarnJobs.find((j) => j.publicId === trackedJobId) ??
+      (trackedJobFallback?.publicId === trackedJobId ? trackedJobFallback : null)
+    );
+  }, [trackedJobId, recentEarnJobs, activeEarnJobs, trackedJobFallback]);
+
+  const trackedJobIsTerminal =
+    trackedJob?.status === "CONFIRMED" ||
+    trackedJob?.status === "FAILED" ||
+    trackedJob?.status === "UNKNOWN_AMBIGUOUS";
+
   useEffect(() => {
-    if (activeEarnJobs.length === 0) return;
+    if (activeEarnJobs.length === 0 && (!trackedJobId || trackedJobIsTerminal)) {
+      return;
+    }
     const timer = setInterval(() => {
       void fetchEarnPositions();
       onSyncPortfolio?.();
-    }, 3500);
+    }, 2500);
     return () => clearInterval(timer);
-  }, [activeEarnJobs.length, fetchEarnPositions, onSyncPortfolio]);
+  }, [
+    activeEarnJobs.length,
+    trackedJobId,
+    trackedJobIsTerminal,
+    fetchEarnPositions,
+    onSyncPortfolio,
+  ]);
 
   // Live yield accrual ticker
   const [ticker, setTicker] = useState(0);
@@ -394,15 +447,13 @@ export function EarnView({
         );
       }
 
+      if (data?.job?.publicId) {
+        setTrackedJobFallback(data.job);
+        setTrackedJobId(data.job.publicId);
+      }
       await fetchEarnPositions();
       onSyncPortfolio?.();
       triggerHaptic("success");
-      pushToast({
-        title: "Deposit Submitted",
-        description: `Queued ${parsed.toFixed(4)} ${activeModalProtocol.assetSymbol} deposit to ${activeModalProtocol.name} on NEAR Mainnet.`,
-        variant: "success",
-        durationMs: 5000,
-      });
       setActiveModalProtocol(null);
     } catch (err: unknown) {
       const message =
@@ -474,15 +525,13 @@ export function EarnView({
         );
       }
 
+      if (data?.job?.publicId) {
+        setTrackedJobFallback(data.job);
+        setTrackedJobId(data.job.publicId);
+      }
       await fetchEarnPositions();
       onSyncPortfolio?.();
       triggerHaptic("success");
-      pushToast({
-        title: "Withdrawal Submitted",
-        description: `Queued ${parsed.toFixed(4)} ${activeModalProtocol.assetSymbol} withdrawal from ${activeModalProtocol.name} on NEAR Mainnet.`,
-        variant: "success",
-        durationMs: 5000,
-      });
       setActiveModalProtocol(null);
     } catch (err: unknown) {
       const message =
@@ -528,15 +577,19 @@ export function EarnView({
         </span>
 
         <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-neutral-950 dark:text-white font-sans select-none tabular-nums">
-          <MotionNumber
-            value={totalEarningUsd}
-            format={(n) =>
-              `$${n.toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}`
-            }
-          />
+          {hideBalance ? (
+            "$••••••"
+          ) : (
+            <MotionNumber
+              value={totalEarningUsd}
+              format={(n) =>
+                `$${n.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`
+              }
+            />
+          )}
         </h1>
 
         {/* Pill Badge: dynamic max live APY */}
@@ -659,15 +712,19 @@ export function EarnView({
                   {/* Right: Deposited Amount */}
                   <div className="text-right shrink-0">
                     <div className="font-mono font-semibold text-sm sm:text-base text-neutral-950 dark:text-white tabular-nums">
-                      <MotionNumber
-                        value={pos.depositedUsd}
-                        format={(n) =>
-                          `$${n.toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}`
-                        }
-                      />
+                      {hideBalance ? (
+                        "$••••••"
+                      ) : (
+                        <MotionNumber
+                          value={pos.depositedUsd}
+                          format={(n) =>
+                            `$${n.toLocaleString("en-US", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}`
+                          }
+                        />
+                      )}
                     </div>
                     <div className="text-xs text-neutral-400 dark:text-neutral-500 font-medium">
                       Deposited
@@ -717,16 +774,27 @@ export function EarnView({
                     </button>
                   )}
 
-                  {activeEarnJobs.some((j) =>
-                    j.providerDepositMemo?.startsWith(
-                      `EARN:${protocol.protocolKey.toUpperCase()}:`,
-                    ),
-                  ) && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      Confirming on NEAR
-                    </span>
-                  )}
+                  {(() => {
+                    const activeProtocolJob = activeEarnJobs.find((j) =>
+                      j.providerDepositMemo?.startsWith(
+                        `EARN:${protocol.protocolKey.toUpperCase()}:`,
+                      ),
+                    );
+                    if (!activeProtocolJob) return null;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTrackedJobFallback(activeProtocolJob);
+                          setTrackedJobId(activeProtocolJob.publicId);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 transition-colors cursor-pointer"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Confirming on NEAR
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1008,6 +1076,207 @@ export function EarnView({
                       Confirm {modalAction === "DEPOSIT" ? "Deposit" : "Withdrawal"}
                     </span>
                   )}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* -------------------------------------------------------------
+          LIVE EARN SETTLEMENT TRACKER MODAL
+         ------------------------------------------------------------- */}
+      {mounted &&
+        trackedJob &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+              onClick={() => {
+                if (trackedJobIsTerminal) {
+                  setTrackedJobId(null);
+                  setTrackedJobFallback(null);
+                }
+              }}
+            />
+
+            <div className="relative z-10 w-full max-w-md rounded-3xl bg-[#141414] border border-white/[0.1] shadow-2xl overflow-hidden text-white">
+              <div className="p-6 space-y-5">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                      Live Earn Settlement
+                    </div>
+                    <h3 className="mt-1 text-base font-bold text-white">
+                      {trackedJob.sourceDisplayAmount} {trackedJob.sourceAssetSymbol} →{" "}
+                      {trackedJob.providerDepositMemo?.includes(":LINEAR:")
+                        ? "LiNEAR"
+                        : "Burrow Finance"}
+                    </h3>
+                    <div className="mt-0.5 text-[11px] font-mono text-neutral-500">
+                      {trackedJob.publicId}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrackedJobId(null);
+                      setTrackedJobFallback(null);
+                    }}
+                    className="p-1.5 rounded-full hover:bg-white/[0.08] text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    aria-label="Close live tracker"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="border-t border-white/[0.08]" />
+
+                {/* Stepper */}
+                {(() => {
+                  const status = trackedJob.status;
+                  const isFailed =
+                    status === "FAILED" || status === "UNKNOWN_AMBIGUOUS";
+                  const isConfirmed = status === "CONFIRMED";
+                  const stepIdx = isConfirmed
+                    ? 4
+                    : status === "CONFIRMING"
+                      ? 2
+                      : status === "LEASED" || status === "SIGNING_IN_PROGRESS"
+                        ? 1
+                        : 0;
+
+                  const steps = [
+                    {
+                      label: trackedJob.providerDepositMemo?.includes("WITHDRAW")
+                        ? "Withdrawal queued."
+                        : "Deposit queued.",
+                      sub: "Recorded in Flow custody queue",
+                    },
+                    {
+                      label: "Custody policy & signing.",
+                      sub: "NEAR OutLayer MPC authorization",
+                    },
+                    {
+                      label: "Confirming on NEAR Mainnet.",
+                      sub: "Awaiting final on-chain receipt",
+                    },
+                    {
+                      label: "Settled on-chain.",
+                      sub: trackedJob.providerDepositMemo?.includes("WITHDRAW")
+                        ? "Funds returned to wallet"
+                        : "Position active & earning",
+                    },
+                  ];
+
+                  return (
+                    <div className="space-y-4">
+                      {steps.map((step, i) => {
+                        const done = isConfirmed || (!isFailed && i < stepIdx);
+                        const active = !isConfirmed && !isFailed && i === stepIdx;
+                        const failedAtStep = isFailed && i === Math.min(stepIdx + 1, 2);
+
+                        return (
+                          <div key={step.label} className="flex items-start gap-3">
+                            <div className="mt-0.5 relative flex items-center justify-center w-6 h-6 shrink-0">
+                              <span
+                                className={`w-6 h-6 rounded-full flex items-center justify-center border ${
+                                  failedAtStep
+                                    ? "bg-red-500/20 border-red-500 text-red-400"
+                                    : done
+                                      ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                                      : active
+                                        ? "bg-emerald-500/15 border-emerald-400 text-emerald-300 animate-pulse"
+                                        : "bg-white/[0.04] border-white/[0.12] text-neutral-500"
+                                }`}
+                              >
+                                <span
+                                  className={`w-2 h-2 rounded-full ${
+                                    failedAtStep
+                                      ? "bg-red-400"
+                                      : done || active
+                                        ? "bg-emerald-400"
+                                        : "bg-neutral-600"
+                                  }`}
+                                />
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <div
+                                className={`text-sm font-semibold ${
+                                  failedAtStep
+                                    ? "text-red-400"
+                                    : done || active
+                                      ? "text-white"
+                                      : "text-neutral-500"
+                                }`}
+                              >
+                                {step.label}
+                              </div>
+                              <div className="text-xs text-neutral-400">
+                                {active ? "In progress..." : done ? "Completed" : step.sub}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {isFailed && (
+                        <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/25 text-xs text-red-200 space-y-1">
+                          <div className="font-semibold text-red-300">
+                            Transaction could not be completed
+                          </div>
+                          <div>
+                            {trackedJob.errorMessage ||
+                              trackedJob.errorCode ||
+                              "Custody execution failed before on-chain settlement."}
+                          </div>
+                        </div>
+                      )}
+
+                      {trackedJob.sourceTxHash && (
+                        <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between gap-2 text-xs">
+                          <span className="text-neutral-400 font-mono truncate">
+                            Tx: {trackedJob.sourceTxHash}
+                          </span>
+                          <a
+                            href={`https://nearblocks.io/txns/${trackedJob.sourceTxHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 inline-flex items-center gap-1 text-emerald-400 font-semibold hover:underline"
+                          >
+                            <span>View</span>
+                            <IconExternalLink size={12} />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrackedJobId(null);
+                    setTrackedJobFallback(null);
+                  }}
+                  className="w-full py-3 rounded-2xl text-xs font-semibold bg-white/[0.08] hover:bg-white/[0.14] text-white transition-colors cursor-pointer"
+                >
+                  {trackedJobIsTerminal ? "Done" : "Hide (continues in background)"}
                 </button>
               </div>
             </div>

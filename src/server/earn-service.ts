@@ -392,8 +392,7 @@ export async function getEarnPositions(
       job.status === "PENDING_CUSTODY" ||
       job.status === "LEASED" ||
       job.status === "SIGNING_IN_PROGRESS" ||
-      job.status === "CONFIRMING" ||
-      job.status === "UNKNOWN_AMBIGUOUS",
+      job.status === "CONFIRMING",
   );
 
   return reply(200, {
