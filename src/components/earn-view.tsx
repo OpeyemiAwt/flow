@@ -161,6 +161,7 @@ export function EarnView({
     burrow?: number;
     source?: string;
   } | null>(null);
+  const [apysLoaded, setApysLoaded] = useState(false);
 
   const protocols = useMemo<ProtocolEarnConfig[]>(() => {
     return PROTOCOLS.map((p) => {
@@ -254,6 +255,8 @@ export function EarnView({
       setActiveEarnJobs(Array.isArray(data.activeJobs) ? data.activeJobs : []);
     } catch {
       // Keep last known on-chain snapshot on transient network hiccup
+    } finally {
+      setApysLoaded(true);
     }
   }, [accountId, nearPriceUsd]);
 
@@ -539,11 +542,18 @@ export function EarnView({
         {/* Pill Badge: dynamic max live APY */}
         <div className="pt-0.5">
           <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-neutral-200/50 dark:bg-neutral-800/60 text-xs text-neutral-600 dark:text-neutral-300 font-medium border border-neutral-300/40 dark:border-white/[0.06] select-none">
-            <span>
+            <span className="inline-flex items-center gap-1">
               Up to{" "}
-              <strong className="font-bold text-neutral-950 dark:text-white">
-                {Math.max(...protocols.map((p) => p.apy)).toFixed(2)}% APY
-              </strong>{" "}
+              {apysLoaded ? (
+                <strong className="font-bold text-neutral-950 dark:text-white">
+                  {Math.max(...protocols.map((p) => p.apy)).toFixed(2)}% APY
+                </strong>
+              ) : (
+                <span
+                  aria-label="Loading live APY"
+                  className="inline-block h-3.5 w-16 rounded-full bg-neutral-300/80 dark:bg-white/15 animate-pulse"
+                />
+              )}{" "}
               on your dollars
             </span>
           </div>
@@ -617,7 +627,14 @@ export function EarnView({
                         {protocol.name}
                       </h3>
                       <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
-                        {protocol.apyLabel}
+                        {apysLoaded ? (
+                          protocol.apyLabel
+                        ) : (
+                          <span
+                            aria-label="Loading live rate"
+                            className="inline-block h-3.5 w-24 rounded-full bg-neutral-200 dark:bg-white/10 animate-pulse align-middle mt-0.5"
+                          />
+                        )}
                       </p>
 
                       {/* Subtext e.g. "Includes NEAR rewards ⌄" */}
