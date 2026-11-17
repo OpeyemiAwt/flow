@@ -82,6 +82,7 @@ const NEAR_FALLBACK_RPC =
   "https://free.rpc.fastnear.com";
 const YOCTO_SCALE = 10n ** 24n;
 const BURROW_EXTRA_DECIMALS_SCALE = 10n ** 12n; // 18 internal - 6 USDC
+const NEAR_WITHDRAW_GAS_RESERVE_YOCTO = 50_000_000_000_000_000_000_000n; // 0.05 NEAR for 1-yocto withdraw calls
 
 async function queryNearMainnetView<T>(
   contractId: string,
@@ -500,7 +501,7 @@ export async function executeEarnAction(
     sourceAtomicAmount = nearAtomic;
     recipientAddress = LINEAR_CONTRACT;
   } else if (body.protocol === "linear" && body.action === "WITHDRAW") {
-    if (liveNearAtomic < NEAR_GAS_RESERVE_YOCTO) {
+    if (liveNearAtomic < NEAR_WITHDRAW_GAS_RESERVE_YOCTO) {
       throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
     }
     let requestedNearAtomic: bigint;
@@ -586,7 +587,7 @@ export async function executeEarnAction(
     recipientAddress = BURROW_CONTRACT;
   } else {
     // burrow WITHDRAW
-    if (liveNearAtomic < NEAR_GAS_RESERVE_YOCTO) {
+    if (liveNearAtomic < NEAR_WITHDRAW_GAS_RESERVE_YOCTO) {
       throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
     }
     let usdcAtomic: bigint;
