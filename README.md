@@ -50,6 +50,7 @@ FLOW is a chain-abstracted multi-chain wallet, payments, and DeFi yield platform
 | :--- | :--- | :--- |
 | **Cross-Chain Convert (`1 USDC → NEAR` settlement via `intents.near`)** | **NEAR Mainnet** | [`FVBog9QABfhJu6f6TJhmrZHudbJzmuH1dbbh87GJEu7f`](https://nearblocks.io/txns/FVBog9QABfhJu6f6TJhmrZHudbJzmuH1dbbh87GJEu7f) |
 | **Cross-Chain Convert (`1 USDC` source deposit on Base)** | **Base Mainnet** | [`0xe791468f059854dc1d9ced070b56b90eea13d7c9400cf52f637aee54e26b91d0`](https://basescan.org/tx/0xe791468f059854dc1d9ced070b56b90eea13d7c9400cf52f637aee54e26b91d0) |
+| **FLOW Earn (`LiNEAR` liquid staking deposit)** | **NEAR Mainnet** | [`J4UAYwABTzpoUDY7wb4pZPNDd4Juko8EfqKWrR67Pveh`](https://nearblocks.io/txns/J4UAYwABTzpoUDY7wb4pZPNDd4Juko8EfqKWrR67Pveh) |
 
 ---
 

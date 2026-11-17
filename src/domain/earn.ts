@@ -3,7 +3,7 @@ export const BURROW_CONTRACT = "contract.main.burrow.near";
 export const BURROW_USDC_CONTRACT =
   "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
 
-export const NEAR_GAS_RESERVE_YOCTO = 50_000_000_000_000_000_000_000n;
+export const NEAR_GAS_RESERVE_YOCTO = 120_000_000_000_000_000_000_000n;
 export const BURROW_STORAGE_DEPOSIT_YOCTO = 250_000_000_000_000_000_000_000n;
 
 export const EARN_MEMO = {

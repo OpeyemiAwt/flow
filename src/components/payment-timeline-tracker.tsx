@@ -80,13 +80,17 @@ function resolveStage(transfer: TrackedTransfer): {
       isIssue: true,
     };
   }
-  if (status === "SETTLING") {
+  if (status === "SETTLING" || status === "CONFIRMING") {
     return { completedMax: 3, activeIndex: 4, isSettled: false, isIssue: false };
   }
   if (status === "SUBMITTED" || status === "PROCESSING" || status === "DETECTED") {
     return { completedMax: 2, activeIndex: 3, isSettled: false, isIssue: false };
   }
-  if (status === "DEPOSIT_CONFIRMED" || Boolean(transfer.sourceTxHash)) {
+  if (
+    status === "DEPOSIT_CONFIRMED" ||
+    status === "SIGNING_IN_PROGRESS" ||
+    Boolean(transfer.sourceTxHash)
+  ) {
     return { completedMax: 1, activeIndex: 2, isSettled: false, isIssue: false };
   }
   return { completedMax: 0, activeIndex: 1, isSettled: false, isIssue: false };

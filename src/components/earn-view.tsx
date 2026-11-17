@@ -18,6 +18,7 @@ import {
 } from "./icons.tsx";
 import type { CatalogTokenDeployment } from "../domain/supported-assets-catalog.ts";
 import type { NavTabId } from "./floating-nav.tsx";
+import { PaymentTimelineTracker } from "./payment-timeline-tracker.tsx";
 import type { ToastVariant } from "./toast-provider.tsx";
 
 export interface EarnViewProps {
@@ -56,8 +57,8 @@ interface ProtocolEarnConfig {
   accentColor: string;
 }
 
-const EARN_GAS_RESERVE_NEAR = 0.05;
-const BURROW_FIRST_DEPOSIT_RESERVE_NEAR = 0.3;
+const EARN_GAS_RESERVE_NEAR = 0.12;
+const BURROW_FIRST_DEPOSIT_RESERVE_NEAR = 0.37;
 
 function formatEarnErrorMessage(
   data: unknown,
@@ -86,11 +87,11 @@ function formatEarnErrorMessage(
     case "INSUFFICIENT_SPENDABLE_BALANCE":
       return protocolKey === "burrow"
         ? "Insufficient USDC on NEAR Mainnet. Burrow deposits require USDC on NEAR (not Base/Ethereum)."
-        : "Insufficient NEAR balance after reserving 0.05 NEAR for network gas.";
+        : "Insufficient NEAR balance after reserving 0.12 NEAR for gas and storage.";
     case "INSUFFICIENT_GAS_BALANCE":
       return protocolKey === "burrow"
-        ? "Insufficient NEAR for gas and Burrow storage deposit (requires 0.30 NEAR on first deposit, or 0.05 NEAR thereafter)."
-        : "Insufficient NEAR for network gas (requires at least 0.05 NEAR).";
+        ? "Insufficient NEAR for gas and Burrow storage deposit (requires 0.37 NEAR on first deposit, or 0.12 NEAR thereafter)."
+        : "Insufficient NEAR for network gas and storage (requires at least 0.12 NEAR).";
     case "BALANCE_REFRESH_REQUIRED":
       return "Your NEAR wallet balance is still syncing or unavailable. Please refresh your portfolio and try again.";
     case "INSUFFICIENT_PROTOCOL_POSITION":
@@ -305,8 +306,10 @@ export function EarnView({
   }, [trackedJobId, recentEarnJobs, activeEarnJobs, trackedJobFallback]);
 
   const trackedJobIsTerminal =
+    trackedJob?.status === "SETTLED" ||
     trackedJob?.status === "CONFIRMED" ||
     trackedJob?.status === "FAILED" ||
+    trackedJob?.status === "REFUNDED" ||
     trackedJob?.status === "UNKNOWN_AMBIGUOUS";
 
   useEffect(() => {
@@ -996,8 +999,8 @@ export function EarnView({
                   {modalAction === "DEPOSIT" && (
                     <p className="mt-2 text-[11px] text-neutral-500 dark:text-neutral-400">
                       {activeModalProtocol.protocolKey === "burrow"
-                        ? `Uses USDC on NEAR Mainnet · Requires ${BURROW_FIRST_DEPOSIT_RESERVE_NEAR.toFixed(2)} NEAR for first-time storage + gas (wallet: ${availableNearNum.toFixed(2)} NEAR).`
-                        : `${EARN_GAS_RESERVE_NEAR.toFixed(2)} NEAR is reserved for network gas (wallet: ${availableNearNum.toFixed(4)} NEAR).`}
+                        ? `Uses USDC on NEAR Mainnet · Requires ${BURROW_FIRST_DEPOSIT_RESERVE_NEAR.toFixed(2)} NEAR minimum for first-time storage + gas (wallet: ${availableNearNum.toFixed(2)} NEAR).`
+                        : `Minimum ${EARN_GAS_RESERVE_NEAR.toFixed(2)} NEAR is reserved for gas and storage (wallet: ${availableNearNum.toFixed(4)} NEAR).`}
                     </p>
                   )}
                 </div>
@@ -1102,185 +1105,44 @@ export function EarnView({
               }}
             />
 
-            <div className="relative z-10 w-full max-w-md rounded-3xl bg-[#141414] border border-white/[0.1] shadow-2xl overflow-hidden text-white">
-              <div className="p-6 space-y-5">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-                      Live Earn Settlement
-                    </div>
-                    <h3 className="mt-1 text-base font-bold text-white">
-                      {trackedJob.sourceDisplayAmount} {trackedJob.sourceAssetSymbol} →{" "}
-                      {trackedJob.providerDepositMemo?.includes(":LINEAR:")
-                        ? "LiNEAR"
-                        : "Burrow Finance"}
-                    </h3>
-                    <div className="mt-0.5 text-[11px] font-mono text-neutral-500">
-                      {trackedJob.publicId}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTrackedJobId(null);
-                      setTrackedJobFallback(null);
-                    }}
-                    className="p-1.5 rounded-full hover:bg-white/[0.08] text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                    aria-label="Close live tracker"
-                  >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="border-t border-white/[0.08]" />
-
-                {/* Stepper */}
-                {(() => {
-                  const status = trackedJob.status;
-                  const isFailed =
-                    status === "FAILED" || status === "UNKNOWN_AMBIGUOUS";
-                  const isConfirmed = status === "CONFIRMED";
-                  const stepIdx = isConfirmed
-                    ? 4
-                    : status === "CONFIRMING"
-                      ? 2
-                      : status === "LEASED" || status === "SIGNING_IN_PROGRESS"
-                        ? 1
-                        : 0;
-
-                  const steps = [
-                    {
-                      label: trackedJob.providerDepositMemo?.includes("WITHDRAW")
-                        ? "Withdrawal queued."
-                        : "Deposit queued.",
-                      sub: "Recorded in Flow custody queue",
-                    },
-                    {
-                      label: "Custody policy & signing.",
-                      sub: "NEAR OutLayer MPC authorization",
-                    },
-                    {
-                      label: "Confirming on NEAR Mainnet.",
-                      sub: "Awaiting final on-chain receipt",
-                    },
-                    {
-                      label: "Settled on-chain.",
-                      sub: trackedJob.providerDepositMemo?.includes("WITHDRAW")
-                        ? "Funds returned to wallet"
-                        : "Position active & earning",
-                    },
-                  ];
-
-                  return (
-                    <div className="space-y-4">
-                      {steps.map((step, i) => {
-                        const done = isConfirmed || (!isFailed && i < stepIdx);
-                        const active = !isConfirmed && !isFailed && i === stepIdx;
-                        const failedAtStep = isFailed && i === Math.min(stepIdx + 1, 2);
-
-                        return (
-                          <div key={step.label} className="flex items-start gap-3">
-                            <div className="mt-0.5 relative flex items-center justify-center w-6 h-6 shrink-0">
-                              <span
-                                className={`w-6 h-6 rounded-full flex items-center justify-center border ${
-                                  failedAtStep
-                                    ? "bg-red-500/20 border-red-500 text-red-400"
-                                    : done
-                                      ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                                      : active
-                                        ? "bg-emerald-500/15 border-emerald-400 text-emerald-300 animate-pulse"
-                                        : "bg-white/[0.04] border-white/[0.12] text-neutral-500"
-                                }`}
-                              >
-                                <span
-                                  className={`w-2 h-2 rounded-full ${
-                                    failedAtStep
-                                      ? "bg-red-400"
-                                      : done || active
-                                        ? "bg-emerald-400"
-                                        : "bg-neutral-600"
-                                  }`}
-                                />
-                              </span>
-                            </div>
-                            <div className="min-w-0">
-                              <div
-                                className={`text-sm font-semibold ${
-                                  failedAtStep
-                                    ? "text-red-400"
-                                    : done || active
-                                      ? "text-white"
-                                      : "text-neutral-500"
-                                }`}
-                              >
-                                {step.label}
-                              </div>
-                              <div className="text-xs text-neutral-400">
-                                {active ? "In progress..." : done ? "Completed" : step.sub}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {isFailed && (
-                        <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/25 text-xs text-red-200 space-y-1">
-                          <div className="font-semibold text-red-300">
-                            Transaction could not be completed
-                          </div>
-                          <div>
-                            {trackedJob.errorMessage ||
-                              trackedJob.errorCode ||
-                              "Custody execution failed before on-chain settlement."}
-                          </div>
-                        </div>
-                      )}
-
-                      {trackedJob.sourceTxHash && (
-                        <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between gap-2 text-xs">
-                          <span className="text-neutral-400 font-mono truncate">
-                            Tx: {trackedJob.sourceTxHash}
-                          </span>
-                          <a
-                            href={`https://nearblocks.io/txns/${trackedJob.sourceTxHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 inline-flex items-center gap-1 text-emerald-400 font-semibold hover:underline"
-                          >
-                            <span>View</span>
-                            <IconExternalLink size={12} />
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTrackedJobId(null);
-                    setTrackedJobFallback(null);
-                  }}
-                  className="w-full py-3 rounded-2xl text-xs font-semibold bg-white/[0.08] hover:bg-white/[0.14] text-white transition-colors cursor-pointer"
-                >
-                  {trackedJobIsTerminal ? "Done" : "Hide (continues in background)"}
-                </button>
-              </div>
+            <div className="relative z-10 w-full max-w-md space-y-3">
+              <PaymentTimelineTracker
+                transfer={{
+                  id: trackedJob.publicId,
+                  publicId: trackedJob.publicId,
+                  jobKind: "SEND",
+                  sourceNetwork: "near-mainnet",
+                  sourceAssetSymbol: trackedJob.sourceAssetSymbol,
+                  sourceDisplayAmount: trackedJob.sourceDisplayAmount,
+                  destinationNetwork: "near-mainnet",
+                  destinationAssetSymbol: trackedJob.providerDepositMemo?.includes(
+                    ":LINEAR:",
+                  )
+                    ? "LiNEAR"
+                    : "Burrow Finance",
+                  quotedDestinationDisplayAmount: trackedJob.sourceDisplayAmount,
+                  status: trackedJob.status,
+                  sourceTxHash: trackedJob.sourceTxHash ?? null,
+                  destinationTxHash: null,
+                  errorMessage:
+                    trackedJob.errorMessage ?? trackedJob.errorCode ?? null,
+                  settledAt:
+                    (trackedJob as { settledAt?: string | null }).settledAt ??
+                    null,
+                  createdAt:
+                    trackedJob.createdAt ?? new Date().toISOString(),
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setTrackedJobId(null);
+                  setTrackedJobFallback(null);
+                }}
+                className="w-full py-3 rounded-2xl text-xs font-semibold bg-[#1D1D1F] hover:bg-[#2A2A2D] border border-white/[0.1] text-white transition-colors cursor-pointer shadow-lg"
+              >
+                {trackedJobIsTerminal ? "Done" : "Hide (continues in background)"}
+              </button>
             </div>
           </div>,
           document.body,
