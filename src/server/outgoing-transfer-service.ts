@@ -101,9 +101,9 @@ export function serializeOutgoingTransfer(row: OutgoingTransferRow) {
     quotedDestinationAtomicAmount: row.quoted_destination_atomic_amount,
     quotedDestinationDisplayAmount: row.quoted_destination_atomic_amount
       ? formatAtomicToDisplay(
-          row.quoted_destination_atomic_amount,
-          row.destination_decimals,
-        )
+        row.quoted_destination_atomic_amount,
+        row.destination_decimals,
+      )
       : null,
     providerDepositAddress: row.provider_deposit_address,
     providerDepositMemo: row.provider_deposit_memo,
@@ -209,7 +209,7 @@ async function computeAvailableBalanceForDeployment(
     if (!walletAddress) {
       throw new ApiFailure(409, "ACTIVE_MAINNET_WALLET_REQUIRED");
     }
-    const networkKey = deployment.networkKey.replace(/-mainnet$/, "") as
+    const networkKey = deployment.networkKey as
       | "ethereum"
       | "base"
       | "solana"
@@ -244,7 +244,7 @@ async function computeAvailableBalanceForDeployment(
     }
 
     // Best-effort background DB refresh so the portfolio view stays up to date
-    void requestAccountSync(id, token, "BALANCE_REFRESH").catch(() => {});
+    void requestAccountSync(id, token, "BALANCE_REFRESH").catch(() => { });
   } else {
     availableAtomic = BigInt(balance.atomicBalance);
   }
@@ -277,11 +277,11 @@ async function computeAvailableBalanceForDeployment(
 
   const nativeGasRecord = nativeDeployment
     ? portfolio.balances.find(
-        (record) =>
-          record.networkAsset.isVerified &&
-          record.networkAsset.status === "ACTIVE" &&
-          isBalanceMatchingDeployment(record, nativeDeployment),
-      )
+      (record) =>
+        record.networkAsset.isVerified &&
+        record.networkAsset.status === "ACTIVE" &&
+        isBalanceMatchingDeployment(record, nativeDeployment),
+    )
     : undefined;
   const nativeBalanceAtomic =
     liveNativeBalanceAtomic ??
@@ -337,8 +337,8 @@ export async function executeSendTransfer(
   }
   const destDeployment = body.destinationDeploymentId
     ? MAINNET_SUPPORTED_DEPLOYMENTS.find(
-        (d) => d.id === body.destinationDeploymentId,
-      )
+      (d) => d.id === body.destinationDeploymentId,
+    )
     : sourceDeployment;
   if (!destDeployment) {
     throw new ApiFailure(400, "UNSUPPORTED_DESTINATION_ASSET");
@@ -364,9 +364,6 @@ export async function executeSendTransfer(
       rawFlowId: trimmedRecipient,
       destinationNetwork: destDeployment.networkKey,
     });
-    if (resolved.accountId === id) {
-      throw new ApiFailure(400, "SELF_SEND_NOT_ALLOWED");
-    }
     trimmedRecipient = resolved.recipientAddress;
   }
   const addressValidation = validateAddressForNetwork(
@@ -391,15 +388,6 @@ export async function executeSendTransfer(
   const walletId = wallet?.id;
   if (!wallet || !walletId) {
     throw new ApiFailure(409, "ACTIVE_MAINNET_WALLET_REQUIRED");
-  }
-  const isSelfAddress = wallet.addresses.some((entry) => {
-    const own = entry.address.trim();
-    return destDeployment.ecosystem === "solana"
-      ? own === trimmedRecipient
-      : own.toLowerCase() === trimmedRecipient.toLowerCase();
-  });
-  if (isSelfAddress) {
-    throw new ApiFailure(400, "SELF_SEND_NOT_ALLOWED");
   }
 
   let committedQuote: {

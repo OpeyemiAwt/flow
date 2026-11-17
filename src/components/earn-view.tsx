@@ -447,9 +447,10 @@ export function EarnView({
         );
       }
 
-      if (data?.job?.publicId) {
-        setTrackedJobFallback(data.job);
-        setTrackedJobId(data.job.publicId);
+      const createdJob = data?.transfer ?? data?.job;
+      if (createdJob?.publicId) {
+        setTrackedJobFallback(createdJob);
+        setTrackedJobId(createdJob.publicId);
       }
       await fetchEarnPositions();
       onSyncPortfolio?.();
@@ -525,9 +526,10 @@ export function EarnView({
         );
       }
 
-      if (data?.job?.publicId) {
-        setTrackedJobFallback(data.job);
-        setTrackedJobId(data.job.publicId);
+      const createdJob = data?.transfer ?? data?.job;
+      if (createdJob?.publicId) {
+        setTrackedJobFallback(createdJob);
+        setTrackedJobId(createdJob.publicId);
       }
       await fetchEarnPositions();
       onSyncPortfolio?.();
