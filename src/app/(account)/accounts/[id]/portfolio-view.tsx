@@ -953,6 +953,7 @@ export function PortfolioView({
         MAINNET_SUPPORTED_DEPLOYMENTS[0]!,
     );
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
+  const [tokenChanges24h, setTokenChanges24h] = useState<Record<string, number>>({});
   const [ledgerMovements, setLedgerMovements] = useState<
     LedgerMovement[] | null
   >(null);
@@ -968,7 +969,10 @@ export function PortfolioView({
         },
       );
       const data = response.ok
-        ? ((await response.json()) as { tokens: DiscoveredToken[] })
+        ? ((await response.json()) as {
+            tokens: DiscoveredToken[];
+            priceChanges24h?: Record<string, number>;
+          })
         : null;
       const now = Date.now();
       for (const token of data?.tokens ?? []) {
@@ -982,6 +986,9 @@ export function PortfolioView({
         ) {
           prices[token.id] = token.priceUsd;
         }
+      }
+      if (!signal?.aborted && data?.priceChanges24h) {
+        setTokenChanges24h(data.priceChanges24h);
       }
     } catch {}
     if (!signal?.aborted) setTokenPrices(prices);
@@ -1440,30 +1447,46 @@ export function PortfolioView({
       return null;
     }
     const totalNum = parseFloat(totalBalanceUsd.replace(/[$,]/g, "")) || 0;
-    if (totalNum <= 0) {
+    if (totalNum <= 0 || heldAssets.length === 0) {
       return {
         amount: "$0.00",
         percent: "+0.00%",
         isPositive: true,
       };
     }
-    const hasCrypto = heldAssets.some(
-      (h) => h.deployment.kind !== "STABLECOIN",
-    );
-    const estimatedChangePercent = hasCrypto ? 0.42 : 0.0;
-    const deltaAmount = (totalNum * estimatedChangePercent) / 100;
+
+    let deltaAmount = 0;
+    let baselineUsd = 0;
+
+    for (const item of heldAssets) {
+      const itemUsd = parseFloat(item.usdValue.replace(/[$,]/g, "")) || 0;
+      if (itemUsd <= 0) continue;
+      const sym = item.deployment.symbol.toUpperCase();
+      const changePct =
+        item.deployment.kind === "STABLECOIN"
+          ? 0
+          : tokenChanges24h[sym] ?? 0;
+      const denom = 1 + changePct / 100;
+      const prevUsd = denom > 0 ? itemUsd / denom : itemUsd;
+      deltaAmount += itemUsd - prevUsd;
+      baselineUsd += prevUsd;
+    }
+
+    const weightedPercent =
+      baselineUsd > 0 ? (deltaAmount / baselineUsd) * 100 : 0;
+
     return {
       amount:
         deltaAmount >= 0
           ? `+$${deltaAmount.toFixed(2)}`
           : `-$${Math.abs(deltaAmount).toFixed(2)}`,
       percent:
-        deltaAmount >= 0
-          ? `+${estimatedChangePercent.toFixed(2)}%`
-          : `${estimatedChangePercent.toFixed(2)}%`,
+        weightedPercent >= 0
+          ? `+${weightedPercent.toFixed(2)}%`
+          : `${weightedPercent.toFixed(2)}%`,
       isPositive: deltaAmount >= 0,
     };
-  }, [totalBalanceUsd, heldAssets]);
+  }, [totalBalanceUsd, heldAssets, tokenChanges24h]);
 
   // Carousel banners content
   const carouselSlides = [
