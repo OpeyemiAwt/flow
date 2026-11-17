@@ -56,15 +56,15 @@ FLOW is a chain-abstracted multi-chain wallet, payments, and DeFi yield platform
 
 ## About FLOW
 
-**FLOW** is a chain-abstracted multi-chain money app built for everyday people, freelancers, and global teams. It combines the simplicity of a modern neobank with the openness of on-chain rails—letting anyone hold, send, convert, request, and earn yield across **NEAR**, **Solana**, **Base**, and **Ethereum** from a single account, without managing seed phrases, browser extensions, or bridging workflows.
+**FLOW** is a chain-abstracted multi-chain money app built exclusively for **personal accounts** (no business or team accounts). It combines the simplicity of a modern neobank with the openness of on-chain rails—letting individuals hold, send, convert, request, and earn yield across **NEAR**, **Solana**, **Base**, and **Ethereum** from one personal account, without managing seed phrases, browser extensions, or bridging workflows.
 
 ### What We Built
 
-- **Unified Multi-Chain Account:** Passwordless Google or email sign-in automatically provisions permanent mainnet addresses across NEAR, Solana, Base, and Ethereum, backed by **NEAR OutLayer** MPC custody and on-chain security policies.
-- **Cross-Chain Payments & Request Links (`/pay/[id]`):** Create shareable payment links or invoices specifying the exact asset and chain you want to receive. Payers can settle from any of 230+ supported tokens across 39+ blockchains—no FLOW account required—via **NEAR Intents (1Click)**.
+- **Unified Multi-Chain Personal Account:** Passwordless Google or email sign-in automatically provisions permanent mainnet addresses across NEAR, Solana, Base, and Ethereum, backed by **NEAR OutLayer** MPC custody and on-chain security policies.
+- **Cross-Chain Payments & Request Links (`/pay/[id]`):** Create shareable payment links specifying the exact asset and chain you want to receive. Payers can settle from any of 230+ supported tokens across 39+ blockchains—no FLOW account required—via **NEAR Intents (1Click)**.
 - **Live Convert, Send & Cross-Chain Add Money:** Move value across chains or send to external wallets and `@handle` **Flow IDs** with real-time quotes, live step-by-step transaction trackers that survive page reloads, and built-in gas reserve protection.
 - **Native NEAR DeFi Yield (`FLOW Earn`):** Stake `NEAR` with **LiNEAR Protocol** or supply `USDC` on NEAR Mainnet to **Burrow Finance** with live on-chain APY/APR reads, real-time position tracking, 1-step **Swap & Earn** from other chains, and flexible instant or standard withdrawals.
-- **Personal & Business Workspaces:** Separate personal balances from team/business treasuries, track monthly inflows and outflows in **Cashflow Insights**, receive real-time settlement notifications, and query your portfolio or routes with the **FLOW AI Assistant**.
+- **Cashflow Insights, Notifications & FLOW AI:** Track your personal monthly inflows and outflows in **Cashflow Insights**, receive real-time settlement notifications, and query your portfolio or routes with the **FLOW AI Assistant**.
 
 ### Why We Built It
 
@@ -77,10 +77,12 @@ We built **FLOW** so users only think about **who** they are paying, **what** th
 
 ### Who It Is For
 
-- **Everyday Crypto Users:** Anyone who wants one clean wallet for NEAR, Solana, Base, and Ethereum with Google/email login and zero seed-phrase anxiety.
-- **Freelancers, Creators & Global Contractors:** Professionals who send payment links to clients worldwide and want to receive their preferred token regardless of which chain the client pays from.
-- **Teams & Businesses:** Organizations managing shared treasury accounts, outgoing transfers, and monthly cashflow reporting across chains.
+- **Everyday Crypto Users:** Individuals who want one clean personal wallet for NEAR, Solana, Base, and Ethereum with Google/email login and zero seed-phrase anxiety.
+- **Freelancers & Independent Creators:** Individuals who send payment links to clients worldwide and want to receive their preferred token regardless of which chain the client pays from.
+- **Cross-Border Senders & Recipients:** People moving money between friends, family, or personal wallets across chains without juggling bridges or gas tokens.
 - **DeFi Savers:** Holders with idle `SOL`, `ETH`, or `USDC` on other networks who want to swap into NEAR and earn native staking or lending yield in one place.
+
+> **Scope Note:** FLOW is designed strictly for **personal accounts**—business and multi-user team accounts are not supported.
 
 ### Benefits
 
@@ -116,7 +118,7 @@ FLOW runs a real, mainnet-connected multi-service architecture backed by Postgre
   - **Live Yield & Flexible Withdrawals:** Preview projected annual returns before depositing, track live on-chain positions, and withdraw anytime via **Instant Unstake** or **Standard (~48h)**.
 - **Cross-Chain Payment Links (`/pay/[id]`):** Request payment in the exact token and network you want; your payer settles from any of 230+ supported tokens across 39+ chains without needing a FLOW account, complete with a live settlement tracker.
 - **One Wallet, Four Mainnets:** A single Google or passwordless email login provisions permanent addresses across **NEAR**, **Solana**, **Base**, and **Ethereum** secured by NEAR OutLayer MPC custody.
-- **Personal & Business Workspaces + Flow ID:** Switch between personal and business accounts, claim a `@handle` Flow ID for instant P2P transfers, and manage workspace preferences.
+- **Personal Account & Flow ID:** Manage your personal multi-chain account, claim a `@handle` Flow ID for instant P2P transfers, and customize account preferences.
 - **Live Convert, Send & Cross-Chain Add Money:** Swap between assets or send across chains with instant NEAR Intents quotes, live step-by-step transaction trackers that persist across page reloads, and built-in gas/balance safety checks.
 - **Cashflow Insights, Notifications & Docs:** Real DB-backed monthly inflow/outflow insights, real-time activity notifications, and built-in Docs, FAQ, and Whitepaper pages.
 - **Account-Aware FLOW AI Assistant:** Built-in assistant that reads your live portfolio, recent settlements, and real-time 1Click quotes to explain routes, draft payment links, and preview swaps or sends.
