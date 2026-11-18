@@ -199,7 +199,7 @@ async function fetchBurrowLiveApr(): Promise<number | null> {
   return Math.round(apr * 10_000) / 100;
 }
 
-async function fetchLiveEarnApys(): Promise<LiveEarnApys> {
+export async function fetchLiveEarnApys(): Promise<LiveEarnApys> {
   const now = Date.now();
   if (cachedEarnApys && cachedEarnApys.expiresAt > now) {
     return { ...cachedEarnApys.value, source: "cached" };

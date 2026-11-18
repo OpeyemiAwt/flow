@@ -954,6 +954,7 @@ export function PortfolioView({
     );
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const [tokenChanges24h, setTokenChanges24h] = useState<Record<string, number>>({});
+  const [linearLiveApy, setLinearLiveApy] = useState<number | null>(null);
   const [ledgerMovements, setLedgerMovements] = useState<
     LedgerMovement[] | null
   >(null);
@@ -1488,10 +1489,50 @@ export function PortfolioView({
     };
   }, [totalBalanceUsd, heldAssets, tokenChanges24h]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/earn/apys", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          ok?: boolean;
+          apys?: { linear?: number };
+        };
+        if (
+          !controller.signal.aborted &&
+          typeof data?.apys?.linear === "number" &&
+          Number.isFinite(data.apys.linear)
+        ) {
+          setLinearLiveApy(data.apys.linear);
+        }
+      } catch {
+        // Keep skeleton or retry on next visit
+      }
+    })();
+    return () => controller.abort();
+  }, []);
+
   // Carousel banners content
   const carouselSlides = [
     {
-      title: "Earn 9.2% APY on idle NEAR balances",
+      title: (
+        <>
+          Earn{" "}
+          {linearLiveApy !== null ? (
+            `${linearLiveApy.toFixed(2)}%`
+          ) : (
+            <span
+              aria-label="Loading live APY"
+              className="inline-block h-5 w-16 rounded-full bg-neutral-200 dark:bg-white/10 animate-pulse align-middle"
+            />
+          )}{" "}
+          APY on idle NEAR balances
+        </>
+      ),
       description:
         "Non-custodial liquid staking powered by LiNEAR Protocol. Auto-compounds with zero lockup.",
       badge: "FLOW Earn • NEAR Yield",
