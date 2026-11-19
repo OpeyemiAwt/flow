@@ -96,6 +96,10 @@ function formatEarnErrorMessage(
       return "Your NEAR wallet balance is still syncing or unavailable. Please refresh your portfolio and try again.";
     case "INSUFFICIENT_PROTOCOL_POSITION":
       return "Requested withdrawal exceeds your active protocol position.";
+    case "LINEAR_INSTANT_UNSTAKE_UNAVAILABLE":
+      return "LiNEAR only supports Standard (~48h) unstaking on-chain.";
+    case "UNSTAKED_COOLDOWN_NOT_READY":
+      return "Your unstaked NEAR is still in the ~48h cooldown period.";
     case "PAYMENT_EXECUTION_DISABLED":
       return "On-chain Earn execution is currently disabled in this environment.";
     case "ACTIVE_MAINNET_WALLET_REQUIRED":
@@ -190,7 +194,12 @@ export function EarnView({
   const [modalAction, setModalAction] = useState<"DEPOSIT" | "WITHDRAW">("DEPOSIT");
   const [amountInput, setAmountInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [unstakeType, setUnstakeType] = useState<"INSTANT" | "DELAYED">("INSTANT");
+  const [unstakeType, setUnstakeType] = useState<"INSTANT" | "DELAYED">("DELAYED");
+  const [linearUnstaked, setLinearUnstaked] = useState<{
+    amount: number;
+    display: string;
+    canWithdraw: boolean;
+  }>({ amount: 0, display: "0", canWithdraw: false });
   const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({});
   const [activeEarnJobs, setActiveEarnJobs] = useState<
     Array<{
@@ -257,8 +266,19 @@ export function EarnView({
       if (!data?.ok || !data.positions) return;
 
       const linearNear = parseFloat(data.positions.linear?.nearDisplay ?? "0") || 0;
+      const linearUnstakedDisplay = String(
+        data.positions.linear?.unstakedNearDisplay ?? "0",
+      );
+      const linearUnstakedAmount = parseFloat(linearUnstakedDisplay) || 0;
+      const linearCanWithdraw = Boolean(data.positions.linear?.canWithdraw);
       const burrowUsdc = parseFloat(data.positions.burrow?.usdcDisplay ?? "0") || 0;
       const now = Date.now();
+
+      setLinearUnstaked({
+        amount: linearUnstakedAmount,
+        display: linearUnstakedDisplay,
+        canWithdraw: linearCanWithdraw,
+      });
 
       setPositions({
         linear: {
@@ -553,6 +573,51 @@ export function EarnView({
     }
   };
 
+  const handleClaimLinearUnstaked = async () => {
+    if (!linearUnstaked.canWithdraw || linearUnstaked.amount <= 0) return;
+    triggerHaptic("medium");
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/earn/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          protocol: "linear",
+          action: "CLAIM",
+          displayAmount: linearUnstaked.display || linearUnstaked.amount.toString(),
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          formatEarnErrorMessage(
+            data,
+            "Could not claim unstaked NEAR.",
+            "linear",
+          ),
+        );
+      }
+      const createdJob = data?.transfer ?? data?.job;
+      if (createdJob?.publicId) {
+        setTrackedJobFallback(createdJob);
+        setTrackedJobId(createdJob.publicId);
+      }
+      await fetchEarnPositions();
+      onSyncPortfolio?.();
+      triggerHaptic("success");
+    } catch (err: unknown) {
+      pushToast({
+        title: "Claim Failed",
+        description:
+          err instanceof Error ? err.message : "Could not claim unstaked NEAR.",
+        variant: "error",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Computed modal available balance (reserves 0.05 NEAR for gas on LiNEAR deposits)
   const modalAvailable = useMemo(() => {
     if (!activeModalProtocol) return 0;
@@ -779,6 +844,23 @@ export function EarnView({
                     </button>
                   )}
 
+                  {protocol.id === "linear" && linearUnstaked.amount > 0 && (
+                    linearUnstaked.canWithdraw ? (
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => void handleClaimLinearUnstaked()}
+                        className="flow-press inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        Claim {linearUnstaked.amount.toFixed(4)} NEAR
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-neutral-100 dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300">
+                        Unstaking {linearUnstaked.amount.toFixed(4)} NEAR (~48h)
+                      </span>
+                    )
+                  )}
+
                   {(() => {
                     const activeProtocolJob = activeEarnJobs.find((j) =>
                       j.providerDepositMemo?.startsWith(
@@ -913,18 +995,15 @@ export function EarnView({
 
               {/* Deposit / Withdraw Input Form */}
               <div className="space-y-4">
-                {/* Unstake route toggle if withdraw */}
-                {modalAction === "WITHDRAW" && (
-                  <SegmentedTabPill
-                    tabs={[
-                      { id: "INSTANT", label: "Instant Unstake" },
-                      { id: "DELAYED", label: "Standard (~48h)" },
-                    ] as const}
-                    activeTab={unstakeType}
-                    onChange={setUnstakeType}
-                    className="w-full"
-                  />
-                )}
+                {/* Unstake info if withdrawing from LiNEAR */}
+                {modalAction === "WITHDRAW" &&
+                  activeModalProtocol.protocolKey === "linear" && (
+                    <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-white/[0.04] border border-neutral-200/70 dark:border-white/[0.08] text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                      <strong>Standard Unstake (~48h):</strong> LiNEAR unstaking
+                      takes ~4 NEAR epochs (~48 hours) before your NEAR becomes
+                      available to claim back to your wallet.
+                    </div>
+                  )}
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5 text-xs">

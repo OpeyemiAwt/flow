@@ -680,19 +680,72 @@ async function executeNearEarnJob(
   }
 
   if (
+    memo === EARN_MEMO.LINEAR_CLAIM_UNSTAKED &&
+    targetAddress === LINEAR_CONTRACT
+  ) {
+    await markSigningStarted();
+    const res = await outlayer.callNearContract(apiKey, {
+      receiverId: LINEAR_CONTRACT,
+      methodName: "withdraw_all",
+      args: {},
+      gas: "100000000000000",
+      deposit: "0",
+    });
+    const polled = await pollOutLayerRequestForTxHash(
+      outlayer,
+      apiKey,
+      res.request_id,
+      res.tx_hash,
+    );
+    return { ...polled, feeAtomic: "0" };
+  }
+
+  if (
     (memo === EARN_MEMO.LINEAR_WITHDRAW_INSTANT ||
       memo === EARN_MEMO.LINEAR_WITHDRAW_DELAYED) &&
     targetAddress === LINEAR_CONTRACT
   ) {
     await markSigningStarted();
-    const methodName =
-      memo === EARN_MEMO.LINEAR_WITHDRAW_DELAYED
-        ? "unstake"
-        : "instant_unstake";
+    const isDelayed = memo === EARN_MEMO.LINEAR_WITHDRAW_DELAYED;
+    let methodName = isDelayed ? "unstake" : "instant_unstake";
+    let args: Record<string, unknown> = { amount: job.source_atomic_amount };
+
+    if (isDelayed) {
+      const [priceRaw, currentSharesRaw] = await Promise.all([
+        queryNearViewJson<string>(
+          primary,
+          fallback,
+          LINEAR_CONTRACT,
+          "ft_price",
+          {},
+        ).catch(() => null),
+        queryNearViewJson<string>(
+          primary,
+          fallback,
+          LINEAR_CONTRACT,
+          "ft_balance_of",
+          {
+            account_id: job.source_address,
+          },
+        ).catch(() => null),
+      ]);
+      const requestedShares = BigInt(job.source_atomic_amount);
+      const currentShares = currentSharesRaw ? BigInt(currentSharesRaw) : 0n;
+      if (currentShares > 0n && requestedShares >= currentShares) {
+        methodName = "unstake_all";
+        args = {};
+      } else if (priceRaw) {
+        const nearAmount = (requestedShares * BigInt(priceRaw)) / 10n ** 24n;
+        if (nearAmount > 0n) {
+          args = { amount: nearAmount.toString() };
+        }
+      }
+    }
+
     const res = await outlayer.callNearContract(apiKey, {
       receiverId: LINEAR_CONTRACT,
       methodName,
-      args: { amount: job.source_atomic_amount },
+      args,
       gas: "100000000000000",
       deposit: "0",
     });

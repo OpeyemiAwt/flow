@@ -27,7 +27,7 @@ import { serializeOutgoingTransfer } from "./outgoing-transfer-service.ts";
 
 const earnExecuteSchema = z.strictObject({
   protocol: z.enum(["linear", "burrow"]),
-  action: z.enum(["DEPOSIT", "WITHDRAW"]),
+  action: z.enum(["DEPOSIT", "WITHDRAW", "CLAIM"]),
   unstakeType: z.enum(["INSTANT", "DELAYED"]).optional(),
   displayAmount: z.string().trim().min(1).max(64),
   idempotencyKey: z.string().uuid().optional(),
@@ -240,22 +240,35 @@ async function fetchLinearPosition(nearAddress: string): Promise<{
   nearAtomic: string;
   nearDisplay: string;
   priceAtomic: string;
+  unstakedNearAtomic: string;
+  unstakedNearDisplay: string;
+  canWithdraw: boolean;
 }> {
-  const [sharesRaw, priceRaw] = await Promise.all([
+  const [sharesRaw, priceRaw, accountRaw] = await Promise.all([
     queryNearMainnetView<string>(LINEAR_CONTRACT, "ft_balance_of", {
       account_id: nearAddress,
     }),
     queryNearMainnetView<string>(LINEAR_CONTRACT, "ft_price", {}),
+    queryNearMainnetView<{
+      unstaked_balance?: string;
+      can_withdraw?: boolean;
+    } | null>(LINEAR_CONTRACT, "get_account", {
+      account_id: nearAddress,
+    }).catch(() => null),
   ]);
   const sharesAtomic = BigInt(sharesRaw ?? "0");
   const priceAtomic = BigInt(priceRaw ?? YOCTO_SCALE.toString());
   const nearAtomic = (sharesAtomic * priceAtomic) / YOCTO_SCALE;
+  const unstakedNearAtomic = BigInt(accountRaw?.unstaked_balance ?? "0");
   return {
     sharesAtomic: sharesAtomic.toString(),
     sharesDisplay: formatAtomicToDisplay(sharesAtomic, 24),
     nearAtomic: nearAtomic.toString(),
     nearDisplay: formatAtomicToDisplay(nearAtomic, 24),
     priceAtomic: priceAtomic.toString(),
+    unstakedNearAtomic: unstakedNearAtomic.toString(),
+    unstakedNearDisplay: formatAtomicToDisplay(unstakedNearAtomic, 24),
+    canWithdraw: Boolean(accountRaw?.can_withdraw) && unstakedNearAtomic > 0n,
   };
 }
 
@@ -373,6 +386,9 @@ export async function getEarnPositions(
           nearAtomic: "0",
           nearDisplay: "0",
           priceAtomic: YOCTO_SCALE.toString(),
+          unstakedNearAtomic: "0",
+          unstakedNearDisplay: "0",
+          canWithdraw: false,
         }),
     nearAddress
       ? fetchBurrowUsdcPosition(nearAddress)
@@ -500,7 +516,26 @@ export async function executeEarnAction(
     sourceDecimals = 24;
     sourceAtomicAmount = nearAtomic;
     recipientAddress = LINEAR_CONTRACT;
+  } else if (body.protocol === "linear" && body.action === "CLAIM") {
+    if (liveNearAtomic < NEAR_WITHDRAW_GAS_RESERVE_YOCTO) {
+      throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
+    }
+    const position = await fetchLinearPosition(nearAddress);
+    const unstakedAtomic = BigInt(position.unstakedNearAtomic);
+    if (!position.canWithdraw || unstakedAtomic <= 0n) {
+      throw new ApiFailure(400, "UNSTAKED_COOLDOWN_NOT_READY");
+    }
+    memo = EARN_MEMO.LINEAR_CLAIM_UNSTAKED;
+    sourceAssetId = LINEAR_CONTRACT;
+    sourceSymbol = "NEAR";
+    sourceDecimals = 24;
+    sourceAtomicAmount = unstakedAtomic;
+    recipientAddress = LINEAR_CONTRACT;
+    expectedDestAtomic = unstakedAtomic;
   } else if (body.protocol === "linear" && body.action === "WITHDRAW") {
+    if (body.unstakeType === "INSTANT") {
+      throw new ApiFailure(400, "LINEAR_INSTANT_UNSTAKE_UNAVAILABLE");
+    }
     if (liveNearAtomic < NEAR_WITHDRAW_GAS_RESERVE_YOCTO) {
       throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
     }
@@ -542,16 +577,13 @@ export async function executeEarnAction(
     if (sharesToWithdraw <= 0n || sharesToWithdraw > spendableShares) {
       throw new ApiFailure(400, "INSUFFICIENT_PROTOCOL_POSITION");
     }
-    memo =
-      body.unstakeType === "DELAYED"
-        ? EARN_MEMO.LINEAR_WITHDRAW_DELAYED
-        : EARN_MEMO.LINEAR_WITHDRAW_INSTANT;
+    memo = EARN_MEMO.LINEAR_WITHDRAW_DELAYED;
     sourceAssetId = LINEAR_CONTRACT;
     sourceSymbol = "LiNEAR";
     sourceDecimals = 24;
     sourceAtomicAmount = sharesToWithdraw;
     recipientAddress = LINEAR_CONTRACT;
-    expectedDestAtomic = requestedNearAtomic;
+    expectedDestAtomic = clampedNearAtomic;
   } else if (body.protocol === "burrow" && body.action === "DEPOSIT") {
     let usdcAtomic: bigint;
     try {
