@@ -517,15 +517,24 @@ export async function executeEarnAction(
     const sharesAtomic = BigInt(position.sharesAtomic);
     const positionNearAtomic = BigInt(position.nearAtomic);
     const priceAtomic = BigInt(position.priceAtomic);
-    if (sharesAtomic <= 0n || requestedNearAtomic > positionNearAtomic) {
+    // Allow 0.0001 NEAR tolerance for JS float / display rounding on Max withdraw
+    const withdrawTolerance = 10n ** 20n;
+    if (
+      sharesAtomic <= 0n ||
+      requestedNearAtomic > positionNearAtomic + withdrawTolerance
+    ) {
       throw new ApiFailure(400, "INSUFFICIENT_PROTOCOL_POSITION");
     }
+    const clampedNearAtomic =
+      requestedNearAtomic > positionNearAtomic
+        ? positionNearAtomic
+        : requestedNearAtomic;
     const reservedShares = await getReservedAtomic(id, token, LINEAR_CONTRACT);
     const spendableShares = sharesAtomic - reservedShares;
-    let sharesToWithdraw = (requestedNearAtomic * YOCTO_SCALE) / priceAtomic;
-    // Clamp to full shares if within 0.000001 NEAR of max so no dust remains
+    let sharesToWithdraw = (clampedNearAtomic * YOCTO_SCALE) / priceAtomic;
+    // Clamp to full shares if within 0.0001 NEAR of max so no dust remains
     if (
-      requestedNearAtomic >= positionNearAtomic - 10n ** 18n ||
+      clampedNearAtomic >= positionNearAtomic - withdrawTolerance ||
       sharesToWithdraw > sharesAtomic
     ) {
       sharesToWithdraw = sharesAtomic;
