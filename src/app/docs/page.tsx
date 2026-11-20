@@ -24,17 +24,20 @@ export const metadata: Metadata = {
 };
 
 const TOC_ITEMS: readonly TocItem[] = [
-  { id: "getting-started", label: "1. Getting started" },
+  { id: "getting-started", label: "1. Quickstart & getting started" },
   { id: "supported-networks", label: "2. Supported networks & assets" },
   { id: "dashboard", label: "3. Dashboard & activity" },
-  { id: "receive", label: "4. Receive — direct deposits" },
+  { id: "receive", label: "4. Receive: direct deposits" },
   { id: "send", label: "5. Send & @flow IDs" },
   { id: "convert", label: "6. Convert" },
-  { id: "add-money", label: "7. Add Money — native NEAR" },
+  { id: "add-money", label: "7. Add Money: native NEAR" },
   { id: "request-payment", label: "8. Request Payment / Links" },
-  { id: "states-troubleshooting", label: "9. States & troubleshooting" },
-  { id: "security-privacy", label: "10. Account security & privacy" },
-  { id: "faq", label: "11. FAQ" },
+  { id: "earn", label: "9. FLOW Earn & fee breakdown" },
+  { id: "states-troubleshooting", label: "10. States & troubleshooting" },
+  { id: "security-privacy", label: "11. Security, anti-phishing & privacy" },
+  { id: "glossary", label: "12. Core concepts & glossary" },
+  { id: "faq", label: "13. FAQ" },
+  { id: "changelog", label: "14. Changelog" },
 ];
 
 const FAQ_ITEMS = [
@@ -64,15 +67,23 @@ const FAQ_ITEMS = [
   },
   {
     q: "Which gas token do I need when converting or sending (e.g., Base to NEAR)?",
-    a: "You only need the native gas token on the network you are sending from—for example, at least 0.00001 ETH on Base when converting or sending from Base to NEAR. You do not need NEAR gas in advance to receive your converted NEAR.",
+    a: "You only need the native gas token on the network you are sending from (for example, at least 0.00001 ETH on Base when converting or sending from Base to NEAR). You do not need NEAR gas in advance to receive your converted NEAR.",
   },
   {
     q: "If I pay a deposit address and the page refreshes or closes, will I still be credited?",
-    a: "Yes. As long as you sent the quoted amount on the right network before the quote deadline expired, FLOW monitors your deposit in the background until it settles into your wallet—and active, non-expired deposit addresses also persist across page reloads.",
+    a: "Yes. As long as you sent the quoted amount on the right network before the quote deadline expired, FLOW monitors your deposit in the background until it settles into your wallet. Active, non-expired deposit addresses also persist across page reloads.",
   },
   {
     q: "What happens if someone sends less or more than the quoted amount? Will they be refunded?",
-    a: "If less than the required amount is sent, the payment is not credited unless topped up before expiry, and the partial deposit is refunded by the routing provider to your refund address. On fixed-amount payment links, the recipient still receives the exact requested amount and excess overpayment above the quote buffer is refunded to your refund address—provided a valid source-chain refund address was entered and the refund covers network fee minimums.",
+    a: "If less than the required amount is sent, the payment is not credited unless topped up before expiry, and the partial deposit is refunded by the routing provider to your refund address. On fixed-amount payment links, the recipient still receives the exact requested amount and excess overpayment above the quote buffer is refunded to your refund address, provided a valid source-chain refund address was entered and the refund covers network fee minimums.",
+  },
+  {
+    q: "How do LiNEAR and Burrow withdrawals and gas reserves work?",
+    a: "LiNEAR deposits reserve 0.12 NEAR for gas and NEAR account storage, and withdrawals require a 0.05 NEAR gas floor with a standard ~48h (~4 epochs) unstaking cooldown before you click Claim NEAR. Burrow Finance accepts USDC on NEAR Mainnet and requires 0.37 NEAR on first-time deposit (0.25 NEAR contract storage plus 0.12 NEAR gas).",
+  },
+  {
+    q: "Does FLOW support business or multi-user team accounts?",
+    a: "No. FLOW is built exclusively for personal accounts so individual users get a fast, focused experience.",
   },
 ] as const;
 
@@ -87,9 +98,10 @@ export default function DocsPage() {
           FLOW Documentation
         </h1>
         <p className="mt-4 max-w-3xl text-base leading-7 text-[#555] dark:text-neutral-300">
-          Learn how to use FLOW to manage wallets, receive, send, convert and
-          request payments across supported networks. Looking for architecture,
-          design principles, and trust assumptions? Read the{" "}
+          Learn how to use FLOW to manage personal multi-chain wallets, receive,
+          send, convert, request payments, and earn native yield on NEAR.
+          Looking for architecture, design principles, and trust assumptions?
+          Read the{" "}
           <Link
             href="/whitepaper"
             className="font-semibold text-[#D51B24] underline underline-offset-4 hover:opacity-80"
@@ -98,6 +110,40 @@ export default function DocsPage() {
           </Link>
           .
         </p>
+        <div className="mt-5 flex flex-wrap gap-2.5 text-xs">
+          <Link
+            href="/sign-in"
+            className="rounded-full bg-[#0B0B0B] dark:bg-white px-3.5 py-1.5 font-semibold text-white dark:text-[#0B0B0B] hover:opacity-90"
+          >
+            Open App
+          </Link>
+          <Link
+            href="/whitepaper"
+            className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3.5 py-1.5 font-medium text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
+          >
+            Whitepaper
+          </Link>
+          <Link
+            href="/privacy"
+            className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3.5 py-1.5 font-medium text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
+          >
+            Privacy Policy
+          </Link>
+          <Link
+            href="/terms"
+            className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3.5 py-1.5 font-medium text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
+          >
+            Terms of Service
+          </Link>
+          <a
+            href="https://github.com/OpeyemiAwt/flow"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3.5 py-1.5 font-medium text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
+          >
+            GitHub
+          </a>
+        </div>
       </div>
 
       <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
@@ -145,8 +191,16 @@ export default function DocsPage() {
                   SETUP_FAILED / RECOVERY_PENDING
                 </code>
                 . Wallet readiness requires verified provider custody
-                registration and security policy confirmation—a displayed address
+                registration and security policy confirmation. A displayed address
                 alone does not establish readiness.
+              </li>
+              <li>
+                <strong>5-Minute Quickstart:</strong> (1) Sign in with Google or
+                email OTP on your personal account, (2) wait for your wallet
+                status to reach ACTIVE, (3) fund via Receive or Cross-Chain Add
+                Money, and (4) send to an address or{" "}
+                <code className="font-mono text-xs">@flow</code> ID, convert
+                assets, create a payment link, or deposit into FLOW Earn.
               </li>
             </ul>
           </section>
@@ -203,7 +257,7 @@ export default function DocsPage() {
                 Rendered directly from FLOW&apos;s curated mainnet catalog.
                 Guest-checkout source assets can span additional chains/tokens
                 when supported by live NEAR Intents / 1Click discovery and an
-                executable route—FLOW does not promise &ldquo;every
+                executable route. FLOW does not promise &ldquo;every
                 token.&rdquo;
               </p>
               <div className="mt-3 overflow-x-auto rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08]">
@@ -283,7 +337,7 @@ export default function DocsPage() {
               id="h-receive"
               className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
             >
-              4. Receive — direct deposits
+              4. Receive: direct deposits
             </h2>
             <ol className="list-decimal space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
               <li>Choose the network and supported asset you want to receive.</li>
@@ -303,7 +357,7 @@ export default function DocsPage() {
               <strong>Warning:</strong> Sending an asset on the wrong network or
               sending an unsupported token to a Receive address can result in
               permanent loss or difficult recovery. Direct Receive is{" "}
-              <strong>not</strong> a payment link—it does not generate a quote,
+              <strong>not</strong> a payment link: it does not generate a quote,
               swap route, or one-off deposit address.
             </div>
           </section>
@@ -325,7 +379,7 @@ export default function DocsPage() {
             <ol className="list-decimal space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
               <li>Choose a funded source asset and network.</li>
               <li>
-                Enter and verify the recipient&apos;s wallet address—or enter
+                Enter and verify the recipient&apos;s wallet address, or enter
                 their permanent <code className="font-mono text-xs">@flow</code>{" "}
                 ID (e.g. <code className="font-mono text-xs">name@flow</code>)
                 to resolve their active wallet address for the chosen
@@ -396,7 +450,7 @@ export default function DocsPage() {
               id="h-add-money"
               className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
             >
-              7. Add Money — native NEAR
+              7. Add Money: native NEAR
             </h2>
             <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
               Add Money lets you fund your permanent NEAR Mainnet wallet with
@@ -464,7 +518,61 @@ export default function DocsPage() {
 
           <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
 
-          {/* 2.9 Transaction states and troubleshooting */}
+          {/* 2.9 FLOW Earn & Fee Breakdown */}
+          <section
+            id="earn"
+            aria-labelledby="h-earn"
+            className="scroll-mt-24 space-y-4"
+          >
+            <h2
+              id="h-earn"
+              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
+            >
+              9. FLOW Earn &amp; fee breakdown
+            </h2>
+            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
+              FLOW Earn connects directly to verified NEAR Mainnet DeFi
+              contracts and displays live on-chain yields fetched from NEAR
+              Mainnet RPC.
+            </p>
+            <div className="overflow-x-auto rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08]">
+              <table className="w-full min-w-[540px] border-collapse text-left text-xs">
+                <thead className="bg-[#F8F6F3] dark:bg-[#1A1A1C] text-[#555] dark:text-neutral-300">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Workflow</th>
+                    <th className="px-4 py-3 font-semibold">Asset &amp; Contract</th>
+                    <th className="px-4 py-3 font-semibold">Gas / Storage Reserve</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EFECE6] dark:divide-white/[0.06] text-[#3B3B3B] dark:text-neutral-300">
+                  <tr>
+                    <td className="px-4 py-2.5 font-semibold">LiNEAR Deposit</td>
+                    <td className="px-4 py-2.5 font-mono">NEAR (linear-protocol.near)</td>
+                    <td className="px-4 py-2.5">0.12 NEAR reserved for gas and NEAR account storage</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2.5 font-semibold">LiNEAR Withdraw &amp; Claim</td>
+                    <td className="px-4 py-2.5 font-mono">LiNEAR (unstake / withdraw_all)</td>
+                    <td className="px-4 py-2.5">0.05 NEAR gas floor; ~48h (~4 epochs) cooldown before Claim NEAR</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2.5 font-semibold">Burrow Finance Deposit</td>
+                    <td className="px-4 py-2.5 font-mono">NEAR-Mainnet USDC (contract.main.burrow.near)</td>
+                    <td className="px-4 py-2.5">0.37 NEAR on first deposit (0.25 NEAR storage + 0.12 NEAR gas); 0.12 NEAR thereafter</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2.5 font-semibold">Send &amp; Convert</td>
+                    <td className="px-4 py-2.5 font-mono">NEAR, Solana, Base, Ethereum</td>
+                    <td className="px-4 py-2.5">Native gas on the source chain plus live 1Click routing quote</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
+
+          {/* 2.10 Transaction states and troubleshooting */}
           <section
             id="states-troubleshooting"
             aria-labelledby="h-states"
@@ -474,7 +582,7 @@ export default function DocsPage() {
               id="h-states"
               className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
             >
-              9. Transaction states and troubleshooting
+              10. Transaction states and troubleshooting
             </h2>
             <div className="overflow-x-auto rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08]">
               <table className="w-full min-w-[540px] border-collapse text-left text-xs">
@@ -597,7 +705,7 @@ export default function DocsPage() {
               id="h-security"
               className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
             >
-              10. Account security and privacy
+              11. Account security, anti-phishing &amp; privacy
             </h2>
             <ul className="list-disc space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
               <li>
@@ -615,7 +723,7 @@ export default function DocsPage() {
                 devices immediately.
               </li>
               <li>
-                On-chain transaction confirmations can be irreversible—always
+                On-chain transaction confirmations can be irreversible. Always
                 double-check destination network, asset, and recipient before
                 confirming.
               </li>
@@ -624,6 +732,19 @@ export default function DocsPage() {
                 wallets via provider-backed custody infrastructure (OutLayer)
                 with encrypted custody credentials and policy enforcement; it
                 should not be treated as purely local browser key custody.
+              </li>
+              <li>
+                <strong>Official Verification &amp; Anti-Phishing:</strong> Only
+                sign in at{" "}
+                <code className="font-mono text-xs">https://flow.devhub.forum</code>.
+                Verify NEAR Mainnet contract IDs before approving interactions:{" "}
+                <code className="font-mono text-xs">outlayer.near</code>,{" "}
+                <code className="font-mono text-xs">intents.near</code>,{" "}
+                <code className="font-mono text-xs">linear-protocol.near</code>,
+                and{" "}
+                <code className="font-mono text-xs">contract.main.burrow.near</code>.
+                FLOW team members will never DM you asking for OTP codes or
+                private credentials.
               </li>
             </ul>
             <p className="text-sm text-[#555] dark:text-neutral-400">
@@ -647,7 +768,63 @@ export default function DocsPage() {
 
           <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
 
-          {/* 2.11 Compact FAQ */}
+          {/* 2.12 Core Concepts & Glossary */}
+          <section
+            id="glossary"
+            aria-labelledby="h-glossary"
+            className="scroll-mt-24 space-y-4"
+          >
+            <h2
+              id="h-glossary"
+              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
+            >
+              12. Core concepts &amp; glossary
+            </h2>
+            <dl className="grid gap-3 sm:grid-cols-2">
+              {[
+                {
+                  term: "Chain Abstraction",
+                  def: "Separating what asset you want to hold or send from which network holds your liquidity, handled via NEAR OutLayer and NEAR Intents.",
+                },
+                {
+                  term: "Flow ID (@handle.flow)",
+                  def: "A unique human-readable handle linked to your personal FLOW account so other FLOW users can send to you without copying long hex or base58 addresses.",
+                },
+                {
+                  term: "MPC Policy Custody",
+                  def: "Multi-party computation custody via NEAR OutLayer (outlayer.near) where on-chain policies authorize transactions without exposing raw seed phrases.",
+                },
+                {
+                  term: "NEAR Intents (1Click)",
+                  def: "Cross-chain intent quoting and solver settlement protocol that routes tokens across NEAR, Solana, Base, Ethereum, and 35+ additional networks.",
+                },
+                {
+                  term: "Storage Deposit",
+                  def: "NEAR Protocol's state-staking requirement locking a small amount of NEAR for account or DeFi contract storage (e.g., 0.25 NEAR on first Burrow deposit).",
+                },
+                {
+                  term: "Unstaking Cooldown",
+                  def: "The ~48 hour (~4 NEAR epochs) protocol waiting period after requesting a LiNEAR withdrawal before Claim NEAR becomes active.",
+                },
+              ].map((entry) => (
+                <div
+                  key={entry.term}
+                  className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4"
+                >
+                  <dt className="text-sm font-bold text-[#0B0B0B] dark:text-white">
+                    {entry.term}
+                  </dt>
+                  <dd className="mt-1 text-xs leading-5 text-[#444] dark:text-neutral-300">
+                    {entry.def}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
+
+          {/* 2.13 Compact FAQ */}
           <section
             id="faq"
             aria-labelledby="h-faq"
@@ -657,7 +834,7 @@ export default function DocsPage() {
               id="h-faq"
               className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
             >
-              11. Frequently asked questions
+              13. Frequently asked questions
             </h2>
             <dl className="space-y-4">
               {FAQ_ITEMS.map((item) => (
@@ -674,6 +851,56 @@ export default function DocsPage() {
                 </div>
               ))}
             </dl>
+          </section>
+
+          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
+
+          {/* 2.14 Changelog */}
+          <section
+            id="changelog"
+            aria-labelledby="h-changelog"
+            className="scroll-mt-24 space-y-4"
+          >
+            <h2
+              id="h-changelog"
+              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
+            >
+              14. Changelog
+            </h2>
+            <div className="space-y-3 text-sm text-[#444] dark:text-neutral-300">
+              <div className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4">
+                <p className="font-mono text-xs font-bold text-[#0B0B0B] dark:text-white">
+                  v1.2.0 (November 2026)
+                </p>
+                <p className="mt-1">
+                  Added live on-chain LiNEAR APY and Burrow APR feeds, 0.12 NEAR
+                  deposit gas/storage reserve enforcement, LiNEAR unstaking
+                  status and Claim NEAR button, live Earn settlement tracker
+                  modal, asset-weighted 24h dashboard PnL, and deduplicated
+                  transaction notifications.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4">
+                <p className="font-mono text-xs font-bold text-[#0B0B0B] dark:text-white">
+                  v1.1.0 (November 2026)
+                </p>
+                <p className="mt-1">
+                  Added focus-only Live Payment and Conversion Trackers with
+                  reload persistence, Flow ID (@handle.flow) transfers, Cashflow
+                  Insights, and account-aware FLOW AI.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4">
+                <p className="font-mono text-xs font-bold text-[#0B0B0B] dark:text-white">
+                  v1.0.0 (November 2026)
+                </p>
+                <p className="mt-1">
+                  Initial mainnet release with NEAR OutLayer MPC provisioning,
+                  Google and email OTP sign-in, cross-chain Payment Links
+                  (/pay/[id]), and NEAR Intents 1Click routing.
+                </p>
+              </div>
+            </div>
           </section>
         </article>
       </div>
