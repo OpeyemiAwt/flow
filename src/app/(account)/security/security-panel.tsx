@@ -878,18 +878,9 @@ export function SecurityPanel({
                         ) : (
                           <button
                             type="button"
-                            disabled={
-                              !googleLinked || mailboxPaused || securityBusy
-                            }
-                            title={
-                              !googleLinked
-                                ? "Connect Google SSO before disabling Email OTP."
-                                : undefined
-                            }
-                            onClick={() =>
-                              setPendingSecurityAction("disable-email")
-                            }
-                            className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-[11px] font-semibold hover:border-red-300 hover:text-red-600 disabled:opacity-40 transition-colors"
+                            disabled
+                            aria-disabled="true"
+                            className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400 text-[11px] font-semibold opacity-40 cursor-not-allowed"
                           >
                             Disable Email OTP
                           </button>
@@ -932,18 +923,9 @@ export function SecurityPanel({
                         ) : (
                           <button
                             type="button"
-                            disabled={
-                              !emailEnrolled || mailboxPaused || securityBusy
-                            }
-                            title={
-                              !emailEnrolled
-                                ? "Enroll Email OTP before disconnecting Google SSO."
-                                : undefined
-                            }
-                            onClick={() =>
-                              setPendingSecurityAction("unlink-google")
-                            }
-                            className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-[11px] font-semibold hover:border-red-300 hover:text-red-600 disabled:opacity-40 transition-colors"
+                            disabled
+                            aria-disabled="true"
+                            className="px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400 text-[11px] font-semibold opacity-40 cursor-not-allowed"
                           >
                             Disconnect Google
                           </button>
