@@ -14,6 +14,7 @@ import { useToast } from "../../../../components/toast-provider.tsx";
 import { useTranslation } from "../../../../components/language-provider.tsx";
 import { TabContentSkeleton } from "../../../../components/page-skeletons.tsx";
 import { PaymentTimelineTracker } from "../../../../components/payment-timeline-tracker.tsx";
+import { SlideToPay } from "../../../../components/slide-to-pay.tsx";
 import {
   AssetsHeldModal,
   type HeldAssetItem,
@@ -719,7 +720,7 @@ export function PortfolioView({
         const pathTab = pathMatch?.[1]?.toLowerCase();
         if (
           pathTab &&
-          ["send", "receive", "request", "earn", "activity", "settings"].includes(
+          ["send", "convert", "receive", "request", "earn", "activity", "settings"].includes(
             pathTab,
           )
         ) {
@@ -730,7 +731,7 @@ export function PortfolioView({
         const viewParam = params.get("view");
         if (
           viewParam &&
-          ["dashboard", "send", "receive", "request", "earn", "activity", "settings"].includes(
+          ["dashboard", "send", "convert", "receive", "request", "earn", "activity", "settings"].includes(
             viewParam,
           )
         ) {
@@ -884,6 +885,7 @@ export function PortfolioView({
 
   // Send vs Convert state (Matches media_1794490079738_c27b1dd5.jpg)
   const [sendMode, setSendModeState] = useState<"SEND" | "CONVERT">("SEND");
+  const [sendStep, setSendStep] = useState<1 | 2 | 3 | 4>(1);
   const setSendMode = useCallback(
     (mode: "SEND" | "CONVERT") => {
       setSendModeState(mode);
@@ -1330,7 +1332,7 @@ export function PortfolioView({
     getMainnetWalletAddress(wallet, convertDestDeployment.networkKey) ?? "";
 
   const sendPreview = useOutgoingPreview({
-    active: activeTab === "send" && sendMode === "SEND",
+    active: activeTab === "send",
     accountId,
     operation: "SEND",
     source: sendSource,
@@ -1348,7 +1350,7 @@ export function PortfolioView({
     balances: portfolio.balances,
   });
   const convertPreview = useOutgoingPreview({
-    active: activeTab === "send" && sendMode === "CONVERT",
+    active: activeTab === "convert",
     accountId,
     operation: "CONVERT",
     source: convertSource,
@@ -2746,12 +2748,555 @@ export function PortfolioView({
         )}
 
         {/* ===================================================================
-            TAB 2: SEND (Matches FLOW Send_ Solana to Base-6.png & media_1794481849794_6d251fd6.jpg & media_1794490079448_49cd9a38.jpg)
+            TAB 2: SEND (Guided 4-Step Flow + Slide to Pay)
            =================================================================== */}
         {activeTab === "send" && (
           <MotionTabPanel className="max-w-2xl mx-auto space-y-6">
             {activeOutgoingTransfer &&
-            activeOutgoingTransfer.jobKind === sendMode ? (
+            activeOutgoingTransfer.jobKind === "SEND" ? (
+              <div className="space-y-4">
+                <PaymentTimelineTracker transfer={activeOutgoingTransfer} />
+                {[
+                  "FAILED",
+                  "REFUNDED",
+                  "EXCEPTION_REFUND_REQUIRED",
+                  "UNKNOWN_AMBIGUOUS",
+                ].includes(activeOutgoingTransfer.status) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveOutgoingTransfer(null);
+                      setSendStep(1);
+                    }}
+                    className="w-full py-3 rounded-full text-xs font-semibold border border-neutral-200 dark:border-white/[0.12] bg-white dark:bg-[#141414] text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                  >
+                    Back to Send
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
+                    Send
+                  </h1>
+                  <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
+                    Send any asset in your wallet to any supported address or{" "}
+                    <span className="font-mono">@flow</span> ID.
+                  </p>
+                  <div className="mt-2.5">
+                    <NearIntentsBadge />
+                  </div>
+                </div>
+
+                {/* Step Progress Slide Bar */}
+                <div
+                  aria-label="Send progress"
+                  className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4 shadow-2xs space-y-3"
+                >
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { step: 1 as const, label: "Your Asset" },
+                      { step: 2 as const, label: "Recipient" },
+                      { step: 3 as const, label: "Amount" },
+                      { step: 4 as const, label: "Review & Pay" },
+                    ].map((item) => {
+                      const isCompleted = sendStep > item.step;
+                      const isCurrent = sendStep === item.step;
+                      const canJump = isCompleted;
+                      return (
+                        <button
+                          key={item.step}
+                          type="button"
+                          disabled={!canJump}
+                          onClick={() => {
+                            if (canJump) setSendStep(item.step);
+                          }}
+                          className={`text-left space-y-1.5 ${
+                            canJump ? "cursor-pointer" : "cursor-default"
+                          }`}
+                        >
+                          <div className="h-1.5 w-full rounded-full bg-neutral-200 dark:bg-white/[0.08] overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                isCompleted
+                                  ? "w-full bg-emerald-500"
+                                  : isCurrent
+                                    ? "w-1/2 bg-neutral-950 dark:bg-white"
+                                    : "w-0"
+                              }`}
+                            />
+                          </div>
+                          <div className="flex items-center gap-1 text-[11px] font-semibold truncate">
+                            <span
+                              className={
+                                isCompleted
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : isCurrent
+                                    ? "text-neutral-950 dark:text-white"
+                                    : "text-neutral-400 dark:text-neutral-500"
+                              }
+                            >
+                              {item.step}. {item.label}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
+                  {/* STEP 1: Pick Your Asset */}
+                  {sendStep === 1 && (
+                    <div className="space-y-4">
+                      <div>
+                        <h2 className="text-base font-bold text-neutral-950 dark:text-white">
+                          1. Pick the asset you want to send
+                        </h2>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                          Choose which balance in your wallet will fund this payment.
+                        </p>
+                      </div>
+
+                      {heldAssets.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-neutral-200 dark:border-white/[0.1] p-5 text-center space-y-2">
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                            No available assets in your wallet yet.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => changeTab("receive")}
+                            className="flow-liquid-btn-primary px-4 py-2 rounded-full text-xs font-semibold cursor-pointer"
+                          >
+                            Add Money
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {heldAssets.map((asset) => {
+                            const selected =
+                              sendSource?.deployment.id === asset.deployment.id;
+                            return (
+                              <button
+                                key={asset.deployment.id}
+                                type="button"
+                                onClick={() =>
+                                  setSendSourceDeploymentId(asset.deployment.id)
+                                }
+                                className={`w-full flex items-center justify-between gap-3 p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                                  selected
+                                    ? "border-neutral-950 dark:border-white bg-neutral-50 dark:bg-white/[0.06] shadow-2xs"
+                                    : "border-neutral-200/80 dark:border-white/[0.08] hover:bg-neutral-50/70 dark:hover:bg-white/[0.03]"
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <AssetAvatar
+                                    symbol={asset.deployment.symbol}
+                                    size={34}
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-bold text-neutral-950 dark:text-white truncate">
+                                      {asset.deployment.symbol}
+                                    </div>
+                                    <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                                      {asset.deployment.networkName}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="text-sm font-mono font-semibold text-neutral-950 dark:text-white">
+                                    {hideBalance
+                                      ? "••••••"
+                                      : formatApproxDisplay(asset.displayBalance)}
+                                  </div>
+                                  <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                                    {hideBalance ? "$••••••" : asset.usdValue}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={!sendSource}
+                        onClick={() => setSendStep(2)}
+                        className="flow-liquid-btn-primary w-full py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  )}
+
+                  {/* STEP 2: Pick Recipient Receives Asset & Address */}
+                  {sendStep === 2 && (
+                    <div className="space-y-4">
+                      <div>
+                        <h2 className="text-base font-bold text-neutral-950 dark:text-white">
+                          2. What should the recipient receive?
+                        </h2>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                          Select the destination token &amp; network, then enter
+                          their address or <span className="font-mono">@flow</span> ID.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                          Recipient receives
+                        </label>
+                        <CombinedAssetNetworkPicker
+                          ariaLabel={
+                            "Recipient receives " +
+                            sendDestDeployment.symbol +
+                            " on " +
+                            sendDestDeployment.networkName
+                          }
+                          selectedId={sendDestDeploymentId}
+                          onSelect={(dep) => {
+                            if (dep.networkKey !== sendDestDeployment.networkKey)
+                              setSendRecipientAddress("");
+                            setSendDestDeploymentId(dep.id);
+                          }}
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor="recipient-address-input"
+                          className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200"
+                        >
+                          Recipient {sendDestDeployment.networkName} address
+                        </label>
+                        <div className="relative flex items-center">
+                          <input
+                            id="recipient-address-input"
+                            type="text"
+                            value={sendRecipientAddress}
+                            onChange={(e) =>
+                              setSendRecipientAddress(e.target.value)
+                            }
+                            placeholder={
+                              "Address on " +
+                              sendDestDeployment.networkName +
+                              " or name@flow"
+                            }
+                            className="w-full pl-4 pr-10 py-3 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 font-mono focus:outline-hidden"
+                          />
+                          {sendRecipientAddress.trim().length > 0 &&
+                            sendAddressValidation.valid && (
+                              <span className="absolute right-3.5 flex items-center justify-center text-emerald-500">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              </span>
+                            )}
+                        </div>
+                        {sendRecipientAddress.trim().length > 0 ? (
+                          sendIsFlowId &&
+                          sendAddressValidation.valid &&
+                          flowIdResolution.recipientAddress ? (
+                            <div className="mt-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs">
+                              <div className="flex items-center justify-between gap-2 text-emerald-700 dark:text-emerald-300 font-semibold">
+                                <span>
+                                  Active Flow ID: {flowIdResolution.flowId}
+                                  {flowIdResolution.accountName
+                                    ? ` (${flowIdResolution.accountName})`
+                                    : ""}
+                                </span>
+                                <span className="text-[10px] uppercase tracking-wider">
+                                  {sendDestDeployment.symbol} · {sendDestDeployment.networkName}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 font-mono text-[11px] text-emerald-700/80 dark:text-emerald-300/80 truncate">
+                                → {flowIdResolution.recipientAddress}
+                              </p>
+                            </div>
+                          ) : (
+                            <p
+                              className={`mt-1 text-xs font-medium ${
+                                sendAddressValidation.valid
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-[#FF1A1A]"
+                              }`}
+                            >
+                              {sendAddressValidation.valid
+                                ? `Valid ${sendDestDeployment.networkName} address format.`
+                                : sendAddressValidation.reason}
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                            ⓘ Enter a {sendDestDeployment.networkName} ({sendDestDeployment.symbol}) address or a recipient&apos;s <span className="font-mono">@flow</span> ID.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setSendStep(1)}
+                          className="flow-liquid-btn px-5 py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 cursor-pointer"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!sendAddressValidation.valid}
+                          onClick={() => setSendStep(3)}
+                          className="flow-liquid-btn-primary flex-1 py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          Continue
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 3: Enter Amount */}
+                  {sendStep === 3 && (
+                    <div className="space-y-4">
+                      <div>
+                        <h2 className="text-base font-bold text-neutral-950 dark:text-white">
+                          3. Enter amount to send
+                        </h2>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                          Sending {sendSource?.deployment.symbol} ({sendSource?.deployment.networkName}) →{" "}
+                          {sendDestDeployment.symbol} ({sendDestDeployment.networkName}).
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                            You send
+                          </label>
+                          <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                            <span>
+                              Available:{" "}
+                              {hideBalance
+                                ? "••••••"
+                                : sendSourceBalance
+                                  ? formatApproxDisplay(sendSourceBalance)
+                                  : "Unavailable"}{" "}
+                              {sendSource?.deployment.symbol}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!sendSourceBalance}
+                              onClick={() =>
+                                setSendAmount(getMaxAmountForSource(sendSource))
+                              }
+                              className="text-xs font-bold text-neutral-950 dark:text-white hover:underline cursor-pointer"
+                            >
+                              Max
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3">
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            autoFocus
+                            aria-label="Send amount"
+                            value={sendAmount}
+                            onKeyDown={blockNegativeKey}
+                            onChange={(e) =>
+                              setSendAmount(sanitizeNonNegativeDecimal(e.target.value))
+                            }
+                            placeholder="0.00"
+                            className="min-w-0 flex-1 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden font-mono"
+                          />
+                          <div className="shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.08] text-xs font-bold text-neutral-950 dark:text-white">
+                            {sendSource && (
+                              <AssetAvatar
+                                symbol={sendSource.deployment.symbol}
+                                size={18}
+                              />
+                            )}
+                            <span>{sendSource?.deployment.symbol}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {[0.25, 0.5, 0.75, 1].map((pct) => (
+                            <button
+                              key={pct}
+                              type="button"
+                              disabled={!sendSourceBalance}
+                              onClick={() => {
+                                const maxNum =
+                                  parseFloat(getMaxAmountForSource(sendSource)) || 0;
+                                if (maxNum <= 0) return;
+                                setSendAmount(
+                                  pct === 1
+                                    ? maxNum.toString()
+                                    : (Math.floor(maxNum * pct * 1e6) / 1e6).toString(),
+                                );
+                              }}
+                              className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-neutral-200/70 hover:bg-neutral-300/70 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer disabled:opacity-40"
+                            >
+                              {pct === 1 ? "Max" : `${pct * 100}%`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <OutgoingQuoteDetails
+                        preview={sendPreview}
+                        symbol={sendDestDeployment.symbol}
+                      />
+
+                      <div className="flex items-center gap-2.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setSendStep(2)}
+                          className="flow-liquid-btn px-5 py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 cursor-pointer"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            !sendSource ||
+                            sendPreview.insufficientBalance ||
+                            sendPreview.insufficientGas ||
+                            !positiveQuoteAmount(
+                              sendAmount,
+                              sendSource.deployment.decimals,
+                            ) ||
+                            (sendSource.deployment.id !== sendDestDeployment.id &&
+                              (!sendPreview.quote || sendPreview.loading))
+                          }
+                          onClick={() => setSendStep(4)}
+                          className="flow-liquid-btn-primary flex-1 py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          {sendPreview.loading ? "Updating quote…" : "Review Payment"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 4: Review & Slide to Pay */}
+                  {sendStep === 4 && (
+                    <div className="space-y-4">
+                      <div>
+                        <h2 className="text-base font-bold text-neutral-950 dark:text-white">
+                          4. Review &amp; Slide to Pay
+                        </h2>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                          Confirm the details below and slide to authorize this payment.
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-4 space-y-3 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            You send
+                          </span>
+                          <span className="font-mono font-bold text-neutral-950 dark:text-white">
+                            {sendAmount} {sendSource?.deployment.symbol} ({sendSource?.deployment.networkName})
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            Recipient receives
+                          </span>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {sendSource?.deployment.id === sendDestDeployment.id
+                              ? sendAmount
+                              : formatApproxDisplay(
+                                  sendPreview.quote?.recipientDisplayAmount ??
+                                    sendAmount,
+                                )}{" "}
+                            {sendDestDeployment.symbol} ({sendDestDeployment.networkName})
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-neutral-500 dark:text-neutral-400">
+                            Recipient
+                          </span>
+                          <span className="font-mono font-semibold text-neutral-900 dark:text-neutral-200 truncate max-w-[65%]">
+                            {sendIsFlowId && flowIdResolution.flowId
+                              ? `${flowIdResolution.flowId} (${truncateMiddle(flowIdResolution.recipientAddress ?? "", 6, 4)})`
+                              : truncateMiddle(sendRecipientAddress, 10, 8)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <OutgoingQuoteDetails
+                        preview={sendPreview}
+                        symbol={sendDestDeployment.symbol}
+                      />
+
+                      <SlideToPay
+                        label={
+                          executionDisabled
+                            ? "Sending Paused (Preview)"
+                            : `Slide to Pay ${sendAmount} ${sendSource?.deployment.symbol ?? ""}`
+                        }
+                        submittingLabel="Submitting payment…"
+                        loading={outgoingExecuting}
+                        disabled={
+                          executionDisabled ||
+                          outgoingExecuting ||
+                          !sendSource ||
+                          !sendAddressValidation.valid ||
+                          sendPreview.insufficientBalance ||
+                          sendPreview.insufficientGas ||
+                          !positiveQuoteAmount(
+                            sendAmount,
+                            sendSource.deployment.decimals,
+                          ) ||
+                          (sendSource.deployment.id !== sendDestDeployment.id &&
+                            (!sendPreview.quote || sendPreview.loading))
+                        }
+                        onConfirm={() => {
+                          setOutgoingError(null);
+                          const key = crypto.randomUUID();
+                          setOutgoingIdempotencyKey(key);
+                          void executeAuthorizedTransfer("SEND", key);
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        disabled={outgoingExecuting}
+                        onClick={() => setSendStep(3)}
+                        className="w-full py-2 text-xs font-semibold text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        ← Edit amount
+                      </button>
+
+                      {outgoingError && (
+                        <p
+                          role="alert"
+                          className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3.5 py-2.5 text-xs text-[#FF1A1A] dark:text-red-400"
+                        >
+                          {outgoingError}
+                        </p>
+                      )}
+
+                      {renderOutgoingStatusCard("SEND")}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </MotionTabPanel>
+        )}
+
+        {/* ===================================================================
+            TAB 2.5: CONVERT & BRIDGE (Separate Page at /app/convert)
+           =================================================================== */}
+        {activeTab === "convert" && (
+          <MotionTabPanel className="max-w-2xl mx-auto space-y-6">
+            {activeOutgoingTransfer &&
+            activeOutgoingTransfer.jobKind === "CONVERT" ? (
               <div className="space-y-4">
                 <PaymentTimelineTracker transfer={activeOutgoingTransfer} />
                 {[
@@ -2765,7 +3310,7 @@ export function PortfolioView({
                     onClick={() => setActiveOutgoingTransfer(null)}
                     className="w-full py-3 rounded-full text-xs font-semibold border border-neutral-200 dark:border-white/[0.12] bg-white dark:bg-[#141414] text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                   >
-                    Back to {sendMode === "CONVERT" ? "Convert" : "Send"}
+                    Back to Convert
                   </button>
                 )}
               </div>
@@ -2773,239 +3318,18 @@ export function PortfolioView({
               <>
                 <div>
                   <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
-                    Send &amp; Convert
+                    Convert &amp; Bridge
                   </h1>
                   <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
-                    Review transfer and conversion quotes from NEAR Intents.
+                    Swap or bridge assets across NEAR, Solana, Base, and Ethereum
+                    directly into your own wallet.
                   </p>
                   <div className="mt-2.5">
                     <NearIntentsBadge />
                   </div>
                 </div>
 
-                {/* Segmented Mode Switcher: Send vs Convert */}
-                <SegmentedTabPill
-                  tabs={[
-                    { id: "SEND", label: "Send" },
-                    { id: "CONVERT", label: "Convert" },
-                  ] as const}
-                  activeTab={sendMode}
-                  onChange={setSendMode}
-                />
-
                 <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
-              {sendMode === "SEND" ? (
-                <>
-                  {/* You Send Card */}
-                  <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
-                        You send
-                      </label>
-                      <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
-                        <span>
-                          Available:{" "}
-                          {hideBalance
-                            ? "••••••"
-                            : sendSourceBalance
-                              ? formatApproxDisplay(sendSourceBalance)
-                              : "Unavailable"}{" "}
-                          {sendSource?.deployment.symbol}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={!sendSourceBalance}
-                          onClick={() =>
-                            setSendAmount(getMaxAmountForSource(sendSource))
-                          }
-                          className="text-xs font-bold text-neutral-950 dark:text-white hover:underline cursor-pointer"
-                        >
-                          Max
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        aria-label="Send amount"
-                        value={sendAmount}
-                        onKeyDown={blockNegativeKey}
-                        onChange={(e) =>
-                          setSendAmount(sanitizeNonNegativeDecimal(e.target.value))
-                        }
-                        placeholder="1.00"
-                        className="min-w-0 flex-1 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden"
-                      />
-                      <div className="shrink-0 w-40 sm:w-56">
-                        <CombinedAssetNetworkPicker
-                          options={heldAssets.map((asset) => asset.deployment)}
-                          selectedId={sendSource?.deployment.id ?? ""}
-                          onSelect={(dep) => setSendSourceDeploymentId(dep.id)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Recipient Address */}
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="recipient-address-input"
-                      className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200"
-                    >
-                      Recipient {sendDestDeployment.networkName} address
-                    </label>
-                    <div className="relative flex items-center">
-                      <input
-                        id="recipient-address-input"
-                        type="text"
-                        value={sendRecipientAddress}
-                        onChange={(e) =>
-                          setSendRecipientAddress(e.target.value)
-                        }
-                        placeholder={
-                          "Address on " +
-                          sendDestDeployment.networkName +
-                          " or name@flow"
-                        }
-                        className="w-full pl-4 pr-10 py-3 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 font-mono focus:outline-hidden"
-                      />
-                      {sendRecipientAddress.trim().length > 0 &&
-                        sendAddressValidation.valid && (
-                          <span className="absolute right-3.5 flex items-center justify-center text-emerald-500">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          </span>
-                        )}
-                    </div>
-                    {sendRecipientAddress.trim().length > 0 ? (
-                      sendIsFlowId &&
-                      sendAddressValidation.valid &&
-                      flowIdResolution.recipientAddress ? (
-                        <div className="mt-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs">
-                          <div className="flex items-center justify-between gap-2 text-emerald-700 dark:text-emerald-300 font-semibold">
-                            <span>
-                              Active Flow ID: {flowIdResolution.flowId}
-                              {flowIdResolution.accountName
-                                ? ` (${flowIdResolution.accountName})`
-                                : ""}
-                            </span>
-                            <span className="text-[10px] uppercase tracking-wider">
-                              {sendDestDeployment.symbol} · {sendDestDeployment.networkName}
-                            </span>
-                          </div>
-                          <p className="mt-0.5 font-mono text-[11px] text-emerald-700/80 dark:text-emerald-300/80 truncate">
-                            → {flowIdResolution.recipientAddress}
-                          </p>
-                        </div>
-                      ) : (
-                        <p
-                          className={`mt-1 text-xs font-medium ${
-                            sendAddressValidation.valid
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : "text-[#FF1A1A]"
-                          }`}
-                        >
-                          {sendAddressValidation.valid
-                            ? `Valid ${sendDestDeployment.networkName} address format.`
-                            : sendAddressValidation.reason}
-                        </p>
-                      )
-                    ) : (
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        ⓘ Enter a {sendDestDeployment.networkName} ({sendDestDeployment.symbol}) address or a recipient&apos;s <span className="font-mono">@flow</span> ID.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Recipient Receives */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
-                      Recipient receives
-                    </label>
-                    <CombinedAssetNetworkPicker
-                      ariaLabel={
-                        "Recipient receives " +
-                        sendDestDeployment.symbol +
-                        " on " +
-                        sendDestDeployment.networkName
-                      }
-                      selectedId={sendDestDeploymentId}
-                      onSelect={(dep) => {
-                        if (dep.networkKey !== sendDestDeployment.networkKey)
-                          setSendRecipientAddress("");
-                        setSendDestDeploymentId(dep.id);
-                      }}
-                    />
-                  </div>
-
-                  <OutgoingQuoteDetails
-                    preview={sendPreview}
-                    symbol={sendDestDeployment.symbol}
-                  />
-
-                  {/* Action Buttons */}
-                  <div className="pt-2 flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={sendPreview.review}
-                      disabled={!sendPreview.canReview || sendPreview.loading}
-                      className="flow-liquid-btn w-full py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
-                    >
-                      {sendPreview.loading
-                        ? "Updating quote…"
-                        : "Review Quote"}
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={
-                        executionDisabled ||
-                        outgoingExecuting ||
-                        !sendSource ||
-                        !sendAddressValidation.valid ||
-                        sendPreview.insufficientBalance ||
-                        sendPreview.insufficientGas ||
-                        !positiveQuoteAmount(
-                          sendAmount,
-                          sendSource.deployment.decimals,
-                        ) ||
-                        (sendSource.deployment.id !== sendDestDeployment.id &&
-                          (!sendPreview.quote || sendPreview.loading))
-                      }
-                      onClick={() => {
-                        setOutgoingError(null);
-                        const key = crypto.randomUUID();
-                        setOutgoingIdempotencyKey(key);
-                        void executeAuthorizedTransfer("SEND", key);
-                      }}
-                      className="flow-liquid-btn-primary w-full py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                    >
-                      {executionDisabled
-                        ? "Sending Paused (Preview)"
-                        : outgoingExecuting
-                          ? "Sending…"
-                          : "Send Now"}
-                    </button>
-                  </div>
-
-                  {outgoingError && (
-                    <p
-                      role="alert"
-                      className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3.5 py-2.5 text-xs text-[#FF1A1A] dark:text-red-400"
-                    >
-                      {outgoingError}
-                    </p>
-                  )}
-
-                  {renderOutgoingStatusCard("SEND")}
-                </>
-              ) : (
-                <>
-                  {/* CONVERT MODE (Priority 3) */}
                   <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
@@ -3066,7 +3390,7 @@ export function PortfolioView({
                               value={h.deployment.id}
                             >
                               {h.deployment.symbol} ({h.deployment.networkName})
-                              —{" "}
+                              {" - "}
                               {hideBalance
                                 ? "••••••"
                                 : formatApproxDisplay(h.displayBalance)}
@@ -3101,7 +3425,6 @@ export function PortfolioView({
                     symbol={convertDestDeployment.symbol}
                   />
 
-                  {/* Action Buttons for Convert */}
                   <div className="pt-2 flex flex-col gap-2">
                     <button
                       type="button"
@@ -3145,7 +3468,7 @@ export function PortfolioView({
                         ? "Swap Paused (Preview)"
                         : outgoingExecuting
                           ? "Converting…"
-                          : "Convert Now"}
+                          : "Convert & Bridge Now"}
                     </button>
                   </div>
 
@@ -3159,8 +3482,6 @@ export function PortfolioView({
                   )}
 
                   {renderOutgoingStatusCard("CONVERT")}
-                </>
-              )}
                 </div>
               </>
             )}
@@ -4201,7 +4522,7 @@ export function PortfolioView({
                 if (sourceId) setConvertSourceDeploymentId(sourceId);
                 if (destId) setConvertDestDeploymentId(destId);
                 setSendMode("CONVERT");
-                changeTab("send");
+                changeTab("convert");
               }}
               onSelectDeposit={(depId) => {
                 const target = MAINNET_SUPPORTED_DEPLOYMENTS.find(
@@ -4380,7 +4701,7 @@ export function PortfolioView({
             setConvertSourceDeploymentId(deployment.id);
             setConvertDestDeploymentId("near-mainnet:NEAR");
             setSendMode("CONVERT");
-            changeTab("send");
+            changeTab("convert");
           }
         }}
       />

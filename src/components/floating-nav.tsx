@@ -25,6 +25,7 @@ import {
 export type NavTabId =
   | "dashboard"
   | "send"
+  | "convert"
   | "receive"
   | "request"
   | "earn"
@@ -44,7 +45,7 @@ export interface FloatingNavProps {
 }
 
 interface NavTabItem {
-  id: "dashboard" | "send" | "receive" | "request" | "earn";
+  id: "dashboard" | "send" | "convert" | "receive" | "request" | "earn";
   label: string;
   icon: ReactNode;
 }
@@ -84,6 +85,27 @@ const TABS: NavTabItem[] = [
       >
         <line x1="22" y1="2" x2="11" y2="13" />
         <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      </svg>
+    ),
+  },
+  {
+    id: "convert",
+    label: "Convert",
+    icon: (
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="17 1 21 5 17 9" />
+        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+        <polyline points="7 23 3 19 7 15" />
+        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
       </svg>
     ),
   },
@@ -164,6 +186,7 @@ export function FloatingNav({
   const navLabels: Partial<Record<NavTabId, string>> = {
     dashboard: t.navHome,
     send: t.navSend,
+    convert: "Convert",
     receive: t.actionAddMoney,
     earn: t.navEarn,
   };

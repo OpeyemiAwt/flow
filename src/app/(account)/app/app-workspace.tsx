@@ -15,6 +15,7 @@ import {
 export const VALID_APP_TABS: ReadonlySet<WorkspaceTab> = new Set([
   "dashboard",
   "send",
+  "convert",
   "receive",
   "request",
   "earn",
