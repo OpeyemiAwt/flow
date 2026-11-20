@@ -954,6 +954,7 @@ export function PortfolioView({
   const [paymentLinksModalFilter, setPaymentLinksModalFilter] = useState<
     "ACTIVE" | "PAST" | null
   >(null);
+  const [requestView, setRequestView] = useState<"LIST" | "CREATE">("LIST");
   const [togglingPaymentRequestId, setTogglingPaymentRequestId] = useState<
     string | null
   >(null);
@@ -2205,6 +2206,7 @@ export function PortfolioView({
         activeTab={activeTab}
         onTabChange={(tab) => {
           if (tab === "receive") setDepositMode("DIRECT");
+          if (tab === "request") setRequestView("LIST");
           changeTab(tab);
         }}
         unreadCount={unreadNotifications}
@@ -4430,325 +4432,330 @@ export function PortfolioView({
             TAB 4: REQUEST PAYMENT (Matches media_1794481849816_2576ee33.jpg)
            =================================================================== */}
         {activeTab === "request" && (
-          <MotionTabPanel className="max-w-4xl mx-auto space-y-8">
-            <div>
-              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
-                Request Payment
-              </h1>
-              <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
-                Create shareable checkout links with live cross-chain rate
-                previews.
-              </p>
-            </div>
-
-            {/* Create Payment Link Form */}
-            <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
-              <h2 className="text-base font-bold text-neutral-950 dark:text-white">
-                Create a payment link
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-                <div className="sm:col-span-8">
-                  <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    value={prTitle}
-                    onChange={(e) => setPrTitle(e.target.value)}
-                    placeholder="e.g., Project design deposit"
-                    className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
-                  />
+          <MotionTabPanel className="max-w-4xl mx-auto space-y-6">
+            {requestView === "LIST" ? (
+              <>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                    Requests
+                  </p>
+                  <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
+                    Ask to get paid
+                  </h1>
+                  <p className="max-w-xl text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                    Send someone a FLOW link to pay you a fixed or open amount.
+                    They can settle from NEAR, Solana, Base, or Ethereum and
+                    funds arrive straight in your wallet.
+                  </p>
                 </div>
 
-                <div className="sm:col-span-4">
-                  <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
-                    Amount
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      disabled={prAmountMode === "OPTIONAL"}
-                      value={prAmount}
-                      onKeyDown={blockNegativeKey}
-                      onChange={(e) =>
-                        setPrAmount(sanitizeNonNegativeDecimal(e.target.value))
-                      }
-                      placeholder="0.00"
-                      className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden disabled:opacity-40"
-                    />
-                    <select
-                      value={prAmountMode}
-                      onChange={(e) =>
-                        setPrAmountMode(e.target.value as "FIXED" | "OPTIONAL")
-                      }
-                      className="px-3 py-2 rounded-2xl text-xs font-semibold bg-neutral-100 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-900 dark:text-white focus:outline-hidden cursor-pointer"
-                    >
-                      <option value="FIXED">Fixed</option>
-                      <option value="OPTIONAL">Open</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
-                  Description (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={prDescription}
-                  onChange={(e) => setPrDescription(e.target.value)}
-                  placeholder="Add details for the payer (e.g., scope, timeline, invoice #)"
-                  className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
-                />
-              </div>
-
-              {/* Recipient Receives: Unified Picker */}
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200">
-                  Recipient receives
-                </label>
-                <CombinedAssetNetworkPicker
-                  selectedId={prDestinationDeployment.id}
-                  onSelect={(dep) => setPrDestinationDeployment(dep)}
-                />
-                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-mono">
-                  Settles directly to your {prDestinationDeployment.networkName}{" "}
-                  wallet:{" "}
-                  <span className="font-bold text-neutral-800 dark:text-neutral-200">
-                    {truncateMiddle(prRecipientAddress, 8, 6)}
-                  </span>
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-                <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                  ⓘ Payer source options (tokens and networks) are chosen later
-                  at guest checkout.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={handleCreatePaymentRequest}
-                  disabled={prCreating || !prTitle}
-                  className="flow-liquid-btn-primary px-6 py-3 rounded-full text-xs font-semibold disabled:opacity-40 cursor-pointer shrink-0"
-                >
-                  {prCreating ? "Creating Link..." : "Create Payment Link"}
-                </button>
-              </div>
-
-              {prSuccessUrl && (
-                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between gap-3 animate-in fade-in">
-                  <div className="truncate">
-                    <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                      Payment Link Ready!
-                    </p>
-                    <p className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 truncate mt-0.5">
-                      {prSuccessUrl}
-                    </p>
-                  </div>
+                <div className="flex items-center justify-between pt-2">
+                  <h2 className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                    Your requests
+                  </h2>
                   <button
                     type="button"
-                    onClick={() => copyText("prCreated", prSuccessUrl)}
-                    className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setPrSuccessUrl(null);
+                      setRequestView("CREATE");
+                    }}
+                    className="flow-liquid-btn inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold text-neutral-950 dark:text-white shadow-xs cursor-pointer"
                   >
-                    {copiedKey === "prCreated" ? "Copied!" : "Copy Link"}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 2-Column Links: Active Links vs Past Links */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left Column: Active Links */}
-              <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
-                      Active Links
-                    </h3>
-                    <span className="text-xs font-semibold tabular-nums text-neutral-400 dark:text-neutral-500">
-                      {
-                        paymentRequests.filter((r) => r.status === "ACTIVE")
-                          .length
-                      }
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentLinksModalFilter("ACTIVE")}
-                    className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
-                  >
-                    View all →
+                    <span aria-hidden="true">+</span>
+                    <span>New request</span>
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {paymentRequests.filter((r) => r.status === "ACTIVE").length >
-                  0 ? (
-                    paymentRequests
-                      .filter((r) => r.status === "ACTIVE")
-                      .map((req) => (
-                        <div
-                          key={req.id}
-                          className="p-3.5 rounded-2xl border border-neutral-200/70 dark:border-white/[0.06] bg-neutral-50/50 dark:bg-[#1A1A1A] flex flex-col gap-2.5"
+                <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] shadow-xs overflow-hidden">
+                  {paymentRequests.length === 0 ? (
+                    <div className="py-16 px-6 flex flex-col items-center justify-center text-center">
+                      <div className="h-12 w-12 rounded-full bg-neutral-100 dark:bg-white/[0.06] flex items-center justify-center text-neutral-700 dark:text-neutral-200 mb-4">
+                        <svg
+                          width="22"
+                          height="22"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="text-xs font-bold text-neutral-950 dark:text-white">
-                                {req.title}
-                              </div>
-                              <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                                {req.amountMode === "FIXED"
-                                  ? `${req.displayAmount} ${req.destinationAssetSymbol} • ${req.destinationNetwork}`
-                                  : `Open amount • ${req.destinationNetwork}`}
-                              </div>
-                            </div>
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 shrink-0">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                              Active
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 pt-1 border-t border-neutral-200/50 dark:border-white/[0.06]">
-                            <Link
-                              href={`/pay/${req.publicId}`}
-                              target="_blank"
-                              className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200"
-                            >
-                              View
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => copyText(req.id, req.shareUrl)}
-                              className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
-                            >
-                              {copiedKey === req.id ? "Copied!" : "Copy Link"}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={togglingPaymentRequestId === req.id}
-                              onClick={() =>
-                                void handleTogglePaymentRequestStatus(
-                                  req,
-                                  "DISABLED",
-                                )
-                              }
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white ml-auto disabled:opacity-40 cursor-pointer"
-                            >
-                              {togglingPaymentRequestId === req.id
-                                ? "Updating…"
-                                : "Pause"}
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                  ) : (
-                    <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500">
-                      No active payment links.
+                          <rect x="2" y="6" width="20" height="12" rx="2" />
+                          <circle cx="12" cy="12" r="2.5" />
+                          <path d="M12 2v4" />
+                          <path d="m10 4 2 2 2-2" />
+                        </svg>
+                      </div>
+                      <h3 className="text-base font-bold text-neutral-950 dark:text-white">
+                        No requests yet
+                      </h3>
+                      <p className="mt-1.5 max-w-xs text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        Create a request and share a FLOW pay link that anyone
+                        can settle in a tap.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPrSuccessUrl(null);
+                          setRequestView("CREATE");
+                        }}
+                        className="mt-6 flow-liquid-btn-primary inline-flex items-center gap-1.5 px-6 py-3 rounded-full text-xs font-semibold cursor-pointer"
+                      >
+                        <span aria-hidden="true">+</span>
+                        <span>New request</span>
+                      </button>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Past Links */}
-              <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
-                      Past Links
-                    </h3>
-                    <span className="text-xs font-semibold tabular-nums text-neutral-400 dark:text-neutral-500">
-                      {
-                        paymentRequests.filter((r) => r.status !== "ACTIVE")
-                          .length
-                      }
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentLinksModalFilter("PAST")}
-                    className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white cursor-pointer"
-                  >
-                    View all →
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {paymentRequests.filter((r) => r.status !== "ACTIVE").length >
-                  0 ? (
-                    paymentRequests
-                      .filter((r) => r.status !== "ACTIVE")
-                      .map((req) => (
-                        <div
-                          key={req.id}
-                          className="p-3.5 rounded-2xl border border-neutral-200/70 dark:border-white/[0.06] bg-neutral-50/50 dark:bg-[#1A1A1A] flex flex-col gap-2.5"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="text-xs font-bold text-neutral-950 dark:text-white">
-                                {req.title}
+                  ) : (
+                    <div className="divide-y divide-neutral-100 dark:divide-white/[0.06]">
+                      {paymentRequests.map((req) => {
+                        const isActive = req.status === "ACTIVE";
+                        const isPaused = req.status === "DISABLED";
+                        return (
+                          <div
+                            key={req.id}
+                            className="p-4 sm:px-6 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-neutral-50/70 dark:hover:bg-white/[0.02] transition-colors"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <span className="text-sm font-bold text-neutral-950 dark:text-white truncate">
+                                  {req.title}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center gap-1.5 text-[11px] font-medium shrink-0 ${
+                                    isActive
+                                      ? "text-emerald-700 dark:text-emerald-400"
+                                      : "text-neutral-500 dark:text-neutral-400"
+                                  }`}
+                                >
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full ${
+                                      isActive
+                                        ? "bg-emerald-500"
+                                        : "bg-neutral-400 dark:bg-neutral-500"
+                                    }`}
+                                  />
+                                  {isActive
+                                    ? "Active"
+                                    : req.status === "COMPLETED"
+                                      ? "Completed"
+                                      : isPaused
+                                        ? "Paused"
+                                        : "Expired"}
+                                </span>
                               </div>
-                              <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                              <div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
                                 {req.amountMode === "FIXED"
                                   ? `${req.displayAmount} ${req.destinationAssetSymbol} • ${req.destinationNetwork}`
                                   : `Open amount • ${req.destinationNetwork}`}
                               </div>
                             </div>
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-600 dark:text-neutral-400 shrink-0">
-                              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 dark:bg-neutral-500" />
-                              {req.status === "COMPLETED"
-                                ? "Completed"
-                                : req.status === "DISABLED"
-                                  ? "Paused"
-                                  : "Expired"}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 pt-1 border-t border-neutral-200/50 dark:border-white/[0.06]">
-                            <Link
-                              href={`/pay/${req.publicId}`}
-                              target="_blank"
-                              className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200"
-                            >
-                              View
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => copyText(req.id, req.shareUrl)}
-                              className="flow-liquid-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
-                            >
-                              {copiedKey === req.id ? "Copied!" : "Copy Link"}
-                            </button>
-                            {req.status === "DISABLED" && (
+
+                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                              <Link
+                                href={`/pay/${req.publicId}`}
+                                target="_blank"
+                                className="flow-liquid-btn px-3 py-1.5 rounded-full text-xs font-semibold text-neutral-800 dark:text-neutral-200"
+                              >
+                                View
+                              </Link>
                               <button
                                 type="button"
-                                disabled={togglingPaymentRequestId === req.id}
-                                onClick={() =>
-                                  void handleTogglePaymentRequestStatus(
-                                    req,
-                                    "ACTIVE",
-                                  )
-                                }
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-[#FF1A1A] hover:underline ml-auto disabled:opacity-40 cursor-pointer"
+                                onClick={() => copyText(req.id, req.shareUrl)}
+                                className="flow-liquid-btn px-3 py-1.5 rounded-full text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
                               >
-                                {togglingPaymentRequestId === req.id
-                                  ? "Updating…"
-                                  : "Resume"}
+                                {copiedKey === req.id ? "Copied!" : "Copy Link"}
                               </button>
-                            )}
+                              {isActive && (
+                                <button
+                                  type="button"
+                                  disabled={togglingPaymentRequestId === req.id}
+                                  onClick={() =>
+                                    void handleTogglePaymentRequestStatus(
+                                      req,
+                                      "DISABLED",
+                                    )
+                                  }
+                                  className="px-3 py-1.5 rounded-full border border-neutral-200 dark:border-white/[0.1] text-xs font-semibold text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/[0.06] disabled:opacity-40 transition-colors cursor-pointer"
+                                >
+                                  {togglingPaymentRequestId === req.id
+                                    ? "Updating…"
+                                    : "Pause"}
+                                </button>
+                              )}
+                              {isPaused && (
+                                <button
+                                  type="button"
+                                  disabled={togglingPaymentRequestId === req.id}
+                                  onClick={() =>
+                                    void handleTogglePaymentRequestStatus(
+                                      req,
+                                      "ACTIVE",
+                                    )
+                                  }
+                                  className="px-3 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors cursor-pointer"
+                                >
+                                  {togglingPaymentRequestId === req.id
+                                    ? "Updating…"
+                                    : "Resume"}
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))
-                  ) : (
-                    <div className="py-6 text-center text-xs text-neutral-400 dark:text-neutral-500">
-                      No past payment links.
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setRequestView("LIST")}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white transition-colors cursor-pointer"
+                  >
+                    <span aria-hidden="true">←</span>
+                    <span>Back to requests</span>
+                  </button>
+                  <div>
+                    <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
+                      New payment link
+                    </h1>
+                    <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
+                      Create a shareable FLOW link with live cross-chain
+                      settlement to your wallet.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Create Payment Link Form */}
+                <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                    <div className="sm:col-span-8">
+                      <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
+                        Title
+                      </label>
+                      <input
+                        type="text"
+                        value={prTitle}
+                        onChange={(e) => setPrTitle(e.target.value)}
+                        placeholder="e.g., Project design deposit"
+                        className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-4">
+                      <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
+                        Amount
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          disabled={prAmountMode === "OPTIONAL"}
+                          value={prAmount}
+                          onKeyDown={blockNegativeKey}
+                          onChange={(e) =>
+                            setPrAmount(sanitizeNonNegativeDecimal(e.target.value))
+                          }
+                          placeholder="0.00"
+                          className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden disabled:opacity-40"
+                        />
+                        <select
+                          value={prAmountMode}
+                          onChange={(e) =>
+                            setPrAmountMode(e.target.value as "FIXED" | "OPTIONAL")
+                          }
+                          className="px-3 py-2 rounded-2xl text-xs font-semibold bg-neutral-100 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-900 dark:text-white focus:outline-hidden cursor-pointer"
+                        >
+                          <option value="FIXED">Fixed</option>
+                          <option value="OPTIONAL">Open</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
+                      Description (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={prDescription}
+                      onChange={(e) => setPrDescription(e.target.value)}
+                      placeholder="Add details for the payer (e.g., scope, timeline, invoice #)"
+                      className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Recipient Receives: Unified Picker */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                      Recipient receives
+                    </label>
+                    <CombinedAssetNetworkPicker
+                      selectedId={prDestinationDeployment.id}
+                      onSelect={(dep) => setPrDestinationDeployment(dep)}
+                    />
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-mono">
+                      Settles directly to your{" "}
+                      {prDestinationDeployment.networkName} wallet:{" "}
+                      <span className="font-bold text-neutral-800 dark:text-neutral-200">
+                        {truncateMiddle(prRecipientAddress, 8, 6)}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                      ⓘ Payer source options (tokens and networks) are chosen
+                      later at guest checkout.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={handleCreatePaymentRequest}
+                      disabled={prCreating || !prTitle}
+                      className="flow-liquid-btn-primary px-6 py-3 rounded-full text-xs font-semibold disabled:opacity-40 cursor-pointer shrink-0"
+                    >
+                      {prCreating ? "Creating Link..." : "Create Payment Link"}
+                    </button>
+                  </div>
+
+                  {prSuccessUrl && (
+                    <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                      <div className="truncate">
+                        <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                          Payment Link Ready!
+                        </p>
+                        <p className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 truncate mt-0.5">
+                          {prSuccessUrl}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => copyText("prCreated", prSuccessUrl)}
+                          className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+                        >
+                          {copiedKey === "prCreated" ? "Copied!" : "Copy Link"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRequestView("LIST")}
+                          className="px-3.5 py-1.5 rounded-full text-xs font-semibold border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer"
+                        >
+                          View all
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </MotionTabPanel>
         )}
 
