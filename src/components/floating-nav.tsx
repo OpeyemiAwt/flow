@@ -56,8 +56,8 @@ const TABS: NavTabItem[] = [
     label: "Home",
     icon: (
       <svg
-        width="20"
-        height="20"
+        width="22"
+        height="22"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -74,8 +74,8 @@ const TABS: NavTabItem[] = [
     label: "Add money",
     icon: (
       <svg
-        width="20"
-        height="20"
+        width="22"
+        height="22"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -94,8 +94,8 @@ const TABS: NavTabItem[] = [
     label: "Request",
     icon: (
       <svg
-        width="20"
-        height="20"
+        width="22"
+        height="22"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -113,8 +113,8 @@ const TABS: NavTabItem[] = [
     label: "Earn",
     icon: (
       <svg
-        width="20"
-        height="20"
+        width="22"
+        height="22"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -156,6 +156,7 @@ export function FloatingNav({
   const [currentUserName, setCurrentUserName] = useState(effectiveUserName);
   const [isDark, setIsDark] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const mobileProfileRef = useRef<HTMLDivElement>(null);
 
   const navRef = useRef<HTMLElement>(null);
   const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -291,10 +292,10 @@ export function FloatingNav({
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(e.target as Node)
-      ) {
+      const target = e.target as Node;
+      const inDesktop = profileRef.current?.contains(target) ?? false;
+      const inMobile = mobileProfileRef.current?.contains(target) ?? false;
+      if (!inDesktop && !inMobile) {
         setProfileOpen(false);
       }
     }
@@ -305,6 +306,189 @@ export function FloatingNav({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [profileOpen]);
+
+  const renderProfileMenu = (direction: "down" | "up") => (
+    <div
+      className={`flow-anim-fade-up absolute ${
+        direction === "up"
+          ? "left-0 bottom-full mb-3"
+          : "right-0 mt-2.5"
+      } w-60 rounded-2xl bg-white/95 dark:bg-[#161618]/95 backdrop-blur-xl border border-neutral-200/90 dark:border-white/10 shadow-2xl p-1.5 z-50`}
+    >
+      <div className="px-3 py-2.5 border-b border-neutral-100 dark:border-white/[0.08] mb-1">
+        <p className="text-xs font-bold text-neutral-900 dark:text-white truncate">
+          {currentUserName}
+        </p>
+        <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+          {userEmail}
+        </p>
+      </div>
+
+      <div className="space-y-0.5 text-xs font-medium text-neutral-700 dark:text-neutral-200">
+        <Link
+          href="/security?tab=profile"
+          onClick={() => setProfileOpen(false)}
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span>Profile</span>
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => {
+            setProfileOpen(false);
+            onTabChange("activity");
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left cursor-pointer"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
+          </svg>
+          <span>{t.navActivity}</span>
+        </button>
+
+        <Link
+          href="/insights"
+          onClick={() => setProfileOpen(false)}
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 3v18h18" />
+            <path d="m19 9-5 5-4-4-3 3" />
+          </svg>
+          <span>{t.navInsights}</span>
+        </Link>
+
+        {userEmail?.trim().toLowerCase() ===
+          "opeyemimosesawt@gmail.com" && (
+          <Link
+            href="/analytics"
+            onClick={() => setProfileOpen(false)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 3v18h18" />
+              <path d="M18 9l-5 5-4-4-3 3" />
+            </svg>
+            <span>{t.navAnalytics}</span>
+          </Link>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            const next = !isDark;
+            setIsDark(next);
+            applyDarkTheme(next);
+          }}
+          aria-label="Toggle appearance theme"
+          className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left cursor-pointer"
+        >
+          <span className="flex items-center gap-2.5">
+            {isDark ? <IconSun size={16} /> : <IconMoon size={16} />}
+            <span>Appearance</span>
+          </span>
+          <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+            {isDark ? "Dark" : "Light"}
+          </span>
+        </button>
+
+        <Link
+          href="/security"
+          onClick={() => setProfileOpen(false)}
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          <span>{t.navSettings}</span>
+        </Link>
+      </div>
+
+      <div className="my-1 border-t border-neutral-100 dark:border-white/[0.08]" />
+
+      <button
+        type="button"
+        disabled={signingOut}
+        onClick={signOut}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors text-left cursor-pointer"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        <span>{t.navSignOut}</span>
+      </button>
+      {signOutError && (
+        <p role="alert" className="px-3 py-2 text-xs text-red-600">
+          {signOutError}
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -325,13 +509,13 @@ export function FloatingNav({
         <nav
           ref={navRef}
           aria-label="Primary navigation"
-          className="hidden md:flex justify-self-center relative items-center gap-1 p-1.5 rounded-full flow-nav-glass"
+          className="hidden md:flex justify-self-center relative items-center gap-1.5 p-2 rounded-full flow-nav-glass"
         >
           {/* Animated White Glossy Active Indicator */}
           {pillGeometry.visible && (
             <span
               aria-hidden="true"
-              className="flow-nav-active-pill pointer-events-none absolute top-1.5 bottom-1.5 left-0 rounded-full"
+              className="flow-nav-active-pill pointer-events-none absolute top-2 bottom-2 left-0 rounded-full"
               style={{
                 width: `${pillGeometry.width}px`,
                 transform: `translate3d(${pillGeometry.left}px, 0, 0) scale(${pillGliding ? 0.86 : 1})`,
@@ -353,7 +537,7 @@ export function FloatingNav({
                   onTabChange(tab.id);
                 }}
                 aria-current={isActive ? "page" : undefined}
-                className={`flow-press relative z-10 flex items-center gap-2.5 px-4 lg:px-5 py-2.5 rounded-full text-[13.5px] font-semibold transition-colors duration-200 cursor-pointer select-none ${
+                className={`flow-press relative z-10 flex items-center gap-2.5 px-5 lg:px-6 py-3.5 rounded-full text-[15px] font-semibold transition-colors duration-200 cursor-pointer select-none ${
                   isActive
                     ? pillGeometry.visible
                       ? "text-[#0B0B0B]"
@@ -377,7 +561,7 @@ export function FloatingNav({
           })}
         </nav>
 
-        {/* Right Liquid Glass Controls: AI Mascot, Notifications, My Profile */}
+        {/* Right Liquid Glass Controls: AI Mascot, Notifications, My Profile (Desktop) */}
         <div className="flex items-center justify-self-end gap-2.5">
           {/* Round Flow AI Mascot Button */}
           {onOpenAssistant && (
@@ -386,7 +570,7 @@ export function FloatingNav({
               onClick={onOpenAssistant}
               aria-label="Flow AI Assistant"
               title="Flow AI Assistant"
-              className="flow-liquid-btn relative flex h-11 w-11 items-center justify-center rounded-full text-neutral-900 dark:text-white cursor-pointer group"
+              className="flow-liquid-btn relative flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-full text-neutral-900 dark:text-white cursor-pointer group"
             >
               <FlowAiMascot
                 size={24}
@@ -402,7 +586,7 @@ export function FloatingNav({
               onClick={onOpenNotifications}
               aria-label="Notifications"
               title="Notifications"
-              className="flow-liquid-btn relative flex h-11 w-11 items-center justify-center rounded-full text-neutral-700 hover:text-neutral-950 dark:text-neutral-200 dark:hover:text-white cursor-pointer"
+              className="flow-liquid-btn relative flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-full text-neutral-700 hover:text-neutral-950 dark:text-neutral-200 dark:hover:text-white cursor-pointer"
             >
               <svg
                 width="20"
@@ -425,14 +609,14 @@ export function FloatingNav({
             </button>
           )}
 
-          {/* Liquid Glass My Profile Dropdown Button */}
-          <div className="relative" ref={profileRef}>
+          {/* Liquid Glass My Profile Dropdown Button (Desktop top bar; moved to bottom on mobile) */}
+          <div className="hidden md:block relative" ref={profileRef}>
             <button
               type="button"
               onClick={() => setProfileOpen((prev) => !prev)}
               aria-label="Account menu"
               aria-expanded={profileOpen}
-              className="flow-liquid-btn flex h-11 items-center gap-2.5 pl-1.5 pr-3.5 rounded-full select-none cursor-pointer"
+              className="flow-liquid-btn flex h-12 items-center gap-2.5 pl-1.5 pr-3.5 rounded-full select-none cursor-pointer"
             >
               <UserAvatar
                 profileId={profileId}
@@ -440,7 +624,7 @@ export function FloatingNav({
                 email={userEmail}
                 name={currentUserName}
                 alt={currentUserName}
-                size={32}
+                size={34}
               />
               <span className="hidden sm:inline text-xs font-semibold text-neutral-900 dark:text-white max-w-[130px] truncate">
                 {currentUserName}
@@ -460,200 +644,62 @@ export function FloatingNav({
               </svg>
             </button>
 
-            {/* Profile Dropdown Menu: Profile, Settings, Instant Appearance Toggle, Sign out */}
-            {profileOpen && (
-              <div className="flow-anim-fade-up absolute right-0 mt-2.5 w-60 rounded-2xl bg-white/95 dark:bg-[#161618]/95 backdrop-blur-xl border border-neutral-200/90 dark:border-white/10 shadow-2xl p-1.5 z-50">
-                <div className="px-3 py-2.5 border-b border-neutral-100 dark:border-white/[0.08] mb-1">
-                  <p className="text-xs font-bold text-neutral-900 dark:text-white truncate">
-                    {currentUserName}
-                  </p>
-                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
-                    {userEmail}
-                  </p>
-                </div>
-
-                <div className="space-y-0.5 text-xs font-medium text-neutral-700 dark:text-neutral-200">
-                  <Link
-                    href="/security?tab=profile"
-                    onClick={() => setProfileOpen(false)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
-                    <span>Profile</span>
-                  </Link>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileOpen(false);
-                      onTabChange("activity");
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left cursor-pointer"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <line x1="18" y1="20" x2="18" y2="10" />
-                      <line x1="12" y1="20" x2="12" y2="4" />
-                      <line x1="6" y1="20" x2="6" y2="14" />
-                    </svg>
-                    <span>{t.navActivity}</span>
-                  </button>
-
-                  <Link
-                    href="/insights"
-                    onClick={() => setProfileOpen(false)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M3 3v18h18" />
-                      <path d="m19 9-5 5-4-4-3 3" />
-                    </svg>
-                    <span>{t.navInsights}</span>
-                  </Link>
-
-                  {userEmail?.trim().toLowerCase() ===
-                    "opeyemimosesawt@gmail.com" && (
-                    <Link
-                      href="/analytics"
-                      onClick={() => setProfileOpen(false)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M3 3v18h18" />
-                        <path d="M18 9l-5 5-4-4-3 3" />
-                      </svg>
-                      <span>{t.navAnalytics}</span>
-                    </Link>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !isDark;
-                      setIsDark(next);
-                      applyDarkTheme(next);
-                    }}
-                    aria-label="Toggle appearance theme"
-                    className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      {isDark ? <IconSun size={16} /> : <IconMoon size={16} />}
-                      <span>Appearance</span>
-                    </span>
-                    <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
-                      {isDark ? "Dark" : "Light"}
-                    </span>
-                  </button>
-
-                  <Link
-                    href="/security"
-                    onClick={() => setProfileOpen(false)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                    </svg>
-                    <span>{t.navSettings}</span>
-                  </Link>
-                </div>
-
-                <div className="my-1 border-t border-neutral-100 dark:border-white/[0.08]" />
-
-                <button
-                  type="button"
-                  disabled={signingOut}
-                  onClick={signOut}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors text-left cursor-pointer"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                    <polyline points="16 17 21 12 16 7" />
-                    <line x1="21" y1="12" x2="9" y2="12" />
-                  </svg>
-                  <span>{t.navSignOut}</span>
-                </button>
-                {signOutError && (
-                  <p role="alert" className="px-3 py-2 text-xs text-red-600">
-                    {signOutError}
-                  </p>
-                )}
-              </div>
-            )}
+            {profileOpen && renderProfileMenu("down")}
           </div>
         </div>
       </div>
       </header>
 
-      {/* Bottom Floating Liquid Glass Pill Navigation (Mobile) */}
-      <div className="md:hidden fixed bottom-4 inset-x-0 z-50 flex justify-center px-3 pointer-events-none">
+      {/* Bottom Floating Profile Pill + Big Liquid Glass Navigation (Mobile) */}
+      <div className="md:hidden fixed bottom-4 inset-x-0 z-50 flex items-center justify-center gap-2.5 px-3 pointer-events-none">
+        {/* Mobile Profile Trigger (Opens Upwards) */}
+        <div className="relative pointer-events-auto shrink-0" ref={mobileProfileRef}>
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic("light");
+              setProfileOpen((prev) => !prev);
+            }}
+            aria-label="Account menu"
+            aria-expanded={profileOpen}
+            className="flow-nav-glass shadow-xl flex h-[62px] items-center gap-1.5 pl-2.5 pr-3 rounded-full select-none cursor-pointer"
+          >
+            <UserAvatar
+              profileId={profileId}
+              fallbackImage={userAvatarUrl}
+              email={userEmail}
+              name={currentUserName}
+              alt={currentUserName}
+              size={38}
+            />
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`text-neutral-500 dark:text-neutral-400 transition-transform duration-200 ${profileOpen ? "rotate-180" : ""}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          {profileOpen && renderProfileMenu("up")}
+        </div>
+
         <nav
           ref={mobileNavRef}
           aria-label="Mobile navigation"
-          className="relative pointer-events-auto w-full max-w-md flex items-center justify-between gap-1 p-1.5 rounded-full flow-nav-glass shadow-xl"
+          className="relative pointer-events-auto flex-1 max-w-md flex items-center justify-between gap-1 p-2 rounded-full flow-nav-glass shadow-xl"
         >
           {/* Animated White Glossy Active Indicator */}
           {mobilePillGeometry.visible && (
             <span
               aria-hidden="true"
-              className="flow-nav-active-pill pointer-events-none absolute top-1.5 bottom-1.5 left-0 rounded-full"
+              className="flow-nav-active-pill pointer-events-none absolute top-2 bottom-2 left-0 rounded-full"
               style={{
                 width: `${mobilePillGeometry.width}px`,
                 transform: `translate3d(${mobilePillGeometry.left}px, 0, 0) scale(${mobilePillGliding ? 0.86 : 1})`,
@@ -676,7 +722,7 @@ export function FloatingNav({
                 }}
                 aria-label={tab.label}
                 aria-current={isActive ? "page" : undefined}
-                className={`flow-press relative z-10 flex-1 flex items-center justify-center py-3 px-2 rounded-full transition-colors duration-200 cursor-pointer select-none ${
+                className={`flow-press relative z-10 flex-1 flex items-center justify-center py-3.5 px-2.5 rounded-full transition-colors duration-200 cursor-pointer select-none ${
                   isActive
                     ? mobilePillGeometry.visible
                       ? "text-[#0B0B0B]"
