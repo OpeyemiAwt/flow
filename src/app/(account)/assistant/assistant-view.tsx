@@ -539,7 +539,7 @@ export function AssistantView({
                             </div>
                             {accountId && (
                               <Link
-                                href="/app?tab=receive"
+                                href="/app/receive"
                                 className="mt-3 block w-full py-2 text-center text-xs font-semibold rounded-full bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 hover:opacity-90 transition-opacity"
                               >
                                 + Add Money

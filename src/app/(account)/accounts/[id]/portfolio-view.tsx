@@ -663,10 +663,13 @@ export function PortfolioView({
   }, []);
 
   const syncUrlParams = useCallback(
-    (updates: Record<string, string | null>) => {
+    (updates: Record<string, string | null>, pathnameOverride?: string) => {
       if (typeof window === "undefined") return;
       try {
         const url = new URL(window.location.href);
+        if (pathnameOverride) {
+          url.pathname = pathnameOverride;
+        }
         for (const [k, v] of Object.entries(updates)) {
           if (v === null) url.searchParams.delete(k);
           else url.searchParams.set(k, v);
@@ -694,11 +697,16 @@ export function PortfolioView({
         }, 220);
       }
       setActiveTab(tab);
-      syncUrlParams({
-        view: tab === "dashboard" ? null : tab,
-        sendMode: tab === "send" ? null : null,
-        depositMode: tab === "receive" ? null : null,
-      });
+      const nextPathname =
+        tab === "dashboard" ? "/app" : `/app/${tab}`;
+      syncUrlParams(
+        {
+          view: null,
+          sendMode: null,
+          depositMode: null,
+        },
+        nextPathname,
+      );
     },
     [activeTab, syncUrlParams],
   );
@@ -707,6 +715,17 @@ export function PortfolioView({
     const handlePopState = () => {
       if (typeof window === "undefined") return;
       try {
+        const pathMatch = window.location.pathname.match(/^\/app\/([^/]+)$/);
+        const pathTab = pathMatch?.[1]?.toLowerCase();
+        if (
+          pathTab &&
+          ["send", "receive", "request", "earn", "activity", "settings"].includes(
+            pathTab,
+          )
+        ) {
+          setActiveTab(pathTab as NavTabId);
+          return;
+        }
         const params = new URLSearchParams(window.location.search);
         const viewParam = params.get("view");
         if (
