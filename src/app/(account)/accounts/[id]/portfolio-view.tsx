@@ -567,61 +567,75 @@ function OutgoingQuoteDetails({
   preview: ReturnType<typeof useOutgoingPreview>;
   symbol: string;
 }) {
-  const { quote, loading, error, unavailableReason } = preview;
+  const { quote, loading, error, unavailableReason, canReview, review } = preview;
   return (
     <div
-      className="rounded-2xl border border-neutral-200/60 dark:border-white/[0.08] bg-neutral-50/60 dark:bg-white/[0.03] p-4 text-left"
+      className="rounded-2xl border border-neutral-200/60 dark:border-white/[0.08] bg-neutral-50/60 dark:bg-white/[0.03] px-4 py-3 text-left"
       role="status"
     >
-      {quote ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div>
-            <p className="text-neutral-500 dark:text-neutral-400">
-              Estimated to receive
+      <div className="flex items-start justify-between gap-3">
+        {quote ? (
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex items-baseline justify-between gap-2 flex-wrap">
+              <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+                Est. receive
+              </span>
+              <span className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
+                {formatApproxDisplay(quote.recipientDisplayAmount)} {symbol}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+              <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                {quote.rateDescription}
+              </span>
+              {quote.minimumRecipientDisplayAmount && (
+                <span>
+                  Min {formatApproxDisplay(quote.minimumRecipientDisplayAmount)} {symbol}
+                </span>
+              )}
+              {quote.estimatedTimeSeconds !== null && (
+                <span>~{quote.estimatedTimeSeconds}s</span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1 text-xs text-neutral-600 dark:text-neutral-400">
+            <p>
+              {loading
+                ? "Checking route…"
+                : unavailableReason || "Quote unavailable"}
             </p>
-            <p className="mt-1 font-bold text-neutral-950 dark:text-white break-words">
-              {formatApproxDisplay(quote.recipientDisplayAmount)} {symbol}
-            </p>
-            {quote.minimumRecipientDisplayAmount && (
-              <p className="mt-1 text-neutral-600 dark:text-neutral-400 break-words">
-                Quoted minimum {formatApproxDisplay(quote.minimumRecipientDisplayAmount)} {symbol}
-              </p>
+            {!unavailableReason && error && (
+              <p className="mt-1 text-[#FF1A1A] dark:text-red-400">{error}</p>
             )}
           </div>
-          <div>
-            <p className="text-neutral-500 dark:text-neutral-400">
-              Network &amp; route fees
-            </p>
-            <p className="mt-1 text-neutral-900 dark:text-neutral-200">
-              {quote.fees.description}
-            </p>
-          </div>
-          <div>
-            <p className="text-neutral-500 dark:text-neutral-400">
-              Exchange rate
-            </p>
-            <p className="mt-1 font-semibold text-neutral-950 dark:text-white">
-              {quote.rateDescription}
-            </p>
-            {quote.estimatedTimeSeconds !== null && (
-              <p className="mt-1 text-neutral-600 dark:text-neutral-400">
-                Est. arrival {quote.estimatedTimeSeconds} seconds
-              </p>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="text-xs text-neutral-600 dark:text-neutral-400">
-          <p>
-            {loading
-              ? "Checking route…"
-              : unavailableReason || "Quote unavailable"}
-          </p>
-          {!unavailableReason && error && (
-            <p className="mt-1 text-[#FF1A1A] dark:text-red-400">{error}</p>
-          )}
-        </div>
-      )}
+        )}
+
+        <button
+          type="button"
+          onClick={review}
+          disabled={!canReview || loading}
+          aria-label="Refresh quote"
+          title="Refresh quote"
+          className="shrink-0 p-2 rounded-full border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={loading ? "animate-spin" : ""}
+            aria-hidden="true"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -2815,7 +2829,7 @@ export function PortfolioView({
                         Send to address or @flow ID
                       </h2>
                       <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                        Guided 4-step payment across NEAR, Solana, Base &amp; Ethereum with Slide to Pay.
+                        Payments across NEAR, Solana, Base &amp; Ethereum.
                       </p>
                     </div>
                   </button>
@@ -3535,22 +3549,15 @@ export function PortfolioView({
                     symbol={convertDestDeployment.symbol}
                   />
 
-                  <div className="pt-2 flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={convertPreview.review}
-                      disabled={
-                        !convertPreview.canReview || convertPreview.loading
+                  <div className="pt-2">
+                    <SlideToPay
+                      label={
+                        executionDisabled
+                          ? "Swap Paused (Preview)"
+                          : `Slide to Convert ${convertAmount || ""} ${convertSource?.deployment.symbol ?? ""}`.trim()
                       }
-                      className="flow-liquid-btn w-full py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
-                    >
-                      {convertPreview.loading
-                        ? "Updating quote…"
-                        : "Review Quote"}
-                    </button>
-
-                    <button
-                      type="button"
+                      submittingLabel="Converting…"
+                      loading={outgoingExecuting}
                       disabled={
                         executionDisabled ||
                         outgoingExecuting ||
@@ -3566,20 +3573,13 @@ export function PortfolioView({
                           convertSource.deployment.decimals,
                         )
                       }
-                      onClick={() => {
+                      onConfirm={() => {
                         setOutgoingError(null);
                         const key = crypto.randomUUID();
                         setOutgoingIdempotencyKey(key);
                         void executeAuthorizedTransfer("CONVERT", key);
                       }}
-                      className="flow-liquid-btn-primary w-full py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                    >
-                      {executionDisabled
-                        ? "Swap Paused (Preview)"
-                        : outgoingExecuting
-                          ? "Converting…"
-                          : "Convert & Bridge Now"}
-                    </button>
+                    />
                   </div>
 
                   {outgoingError && (
