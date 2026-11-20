@@ -31,7 +31,7 @@ export default async function HomePage() {
   }
 
   if (targetAccountId) {
-    redirect(`/accounts/${targetAccountId}`);
+    redirect("/app");
   }
 
   if (needsOnboarding) {

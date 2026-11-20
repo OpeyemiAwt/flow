@@ -137,7 +137,7 @@ export function CompleteOnboarding({
     ) {
       redirectedRef.current = true;
       const timer = window.setTimeout(() => {
-        router.replace(`/accounts/${account.id}`);
+        router.replace("/app");
       }, 250);
       return () => window.clearTimeout(timer);
     }

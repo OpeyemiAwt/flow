@@ -72,7 +72,7 @@ export default async function Onboarding({
       );
     }
     if (account?.provisioningComplete && initialFlowId) {
-      redirect(`/accounts/${account.id}`);
+      redirect("/app");
     }
   }
 

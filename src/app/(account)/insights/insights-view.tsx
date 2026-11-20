@@ -457,7 +457,7 @@ export function InsightsView({
   });
 
   const backHref = primaryAccountId
-    ? `/accounts/${primaryAccountId}`
+    ? `/app`
     : "/accounts";
 
   return (

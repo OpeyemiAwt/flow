@@ -90,7 +90,7 @@ export async function getAccountNotifications(
       type: "PAYMENT_RECEIVED",
       title: "Payment received",
       description: `+${amount} ${a.destination_asset_symbol} on ${a.destination_network.replace("-mainnet", "")}`,
-      link: `/accounts/${accountId}?view=activity`,
+      link: `/app?view=activity`,
       isRead: false,
       createdAt: (a.settled_at ?? a.created_at).toISOString(),
     });
@@ -121,7 +121,7 @@ export async function getAccountNotifications(
       type: "PAYMENT_LINK_CREATED",
       title: "Payment link created",
       description: `"${pr.title}"`,
-      link: `/accounts/${accountId}?view=request`,
+      link: `/app?view=request`,
       isRead: false,
       createdAt: pr.created_at.toISOString(),
     });
@@ -176,7 +176,7 @@ export async function getAccountNotifications(
       type: isOutgoing ? "PAYMENT_COMPLETED" : "DEPOSIT_DETECTED",
       title: isOutgoing ? "Transfer sent" : "Deposit received",
       description: `${isOutgoing ? "-" : "+"}${amount} ${ev.asset_symbol} on ${networkLabel}`,
-      link: `/accounts/${accountId}?view=activity`,
+      link: `/app?view=activity`,
       isRead: false,
       createdAt: (ev.block_timestamp ?? ev.observed_at).toISOString(),
     });
@@ -235,7 +235,7 @@ export async function getAccountNotifications(
       description: isConvert
         ? `${amount} ${job.source_asset_symbol} → ${job.destination_asset_symbol}`
         : `-${amount} ${job.source_asset_symbol} on ${job.source_network.replace("-mainnet", "")}`,
-      link: `/accounts/${accountId}?view=activity`,
+      link: `/app?view=activity`,
       isRead: false,
       createdAt: (job.settled_at ?? job.created_at).toISOString(),
     });
@@ -285,7 +285,7 @@ export async function getAccountNotifications(
       type: "DEPOSIT_DETECTED",
       title: "Add Money settled",
       description: `+${amount} ${am.destination_asset_symbol} on near`,
-      link: `/accounts/${accountId}?view=activity`,
+      link: `/app?view=activity`,
       isRead: false,
       createdAt: (am.settled_at ?? am.created_at).toISOString(),
     });
@@ -319,7 +319,7 @@ export async function getAccountNotifications(
       type: "SYNC_NOTICE",
       title: "Balance sync notice",
       description: `Balance refresh is incomplete on ${se.network}.`,
-      link: `/accounts/${accountId}?view=dashboard`,
+      link: `/app?view=dashboard`,
       isRead: false,
       createdAt: se.observed_at.toISOString(),
     });

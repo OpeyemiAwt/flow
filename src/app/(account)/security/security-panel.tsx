@@ -165,7 +165,7 @@ export function SecurityPanel({
   const [securityBusy, setSecurityBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  const backHref = primaryAccount ? `/accounts/${primaryAccount.id}` : "/";
+  const backHref = primaryAccount ? "/app" : "/";
 
   const defaultName =
     initialProfilePreference?.displayName?.trim() || name?.trim() || email;

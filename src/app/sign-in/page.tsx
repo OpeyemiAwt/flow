@@ -36,7 +36,7 @@ export default async function SignInPage({
   }
 
   if (targetAccountId) {
-    redirect(`/accounts/${targetAccountId}`);
+    redirect("/app");
   }
 
   if (needsOnboarding) {

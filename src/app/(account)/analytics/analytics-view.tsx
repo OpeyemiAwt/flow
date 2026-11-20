@@ -66,7 +66,7 @@ export function AnalyticsView({
   }, []);
 
   const backHref = primaryAccountId
-    ? `/accounts/${primaryAccountId}`
+    ? "/app"
     : "/accounts";
 
   return (

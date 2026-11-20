@@ -124,7 +124,7 @@ export function AssistantView({
   const firstName =
     userName?.trim().split(/\s+/)[0] || userEmail.split("@")[0] || "there";
 
-  const backHref = accountId ? `/accounts/${accountId}` : "/accounts";
+  const backHref = "/app";
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -539,7 +539,7 @@ export function AssistantView({
                             </div>
                             {accountId && (
                               <Link
-                                href={`/accounts/${accountId}?tab=receive`}
+                                href="/app?tab=receive"
                                 className="mt-3 block w-full py-2 text-center text-xs font-semibold rounded-full bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 hover:opacity-90 transition-opacity"
                               >
                                 + Add Money
