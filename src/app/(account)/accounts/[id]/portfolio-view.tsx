@@ -3361,7 +3361,7 @@ export function PortfolioView({
                         label={
                           executionDisabled
                             ? "Sending Paused (Preview)"
-                            : `Slide to Pay ${sendAmount} ${sendSource?.deployment.symbol ?? ""}`
+                            : "Slide to Pay"
                         }
                         submittingLabel="Submitting payment…"
                         loading={outgoingExecuting}
@@ -3554,7 +3554,7 @@ export function PortfolioView({
                       label={
                         executionDisabled
                           ? "Swap Paused (Preview)"
-                          : `Slide to Convert ${convertAmount || ""} ${convertSource?.deployment.symbol ?? ""}`.trim()
+                          : "Slide to Convert"
                       }
                       submittingLabel="Converting…"
                       loading={outgoingExecuting}
@@ -4065,7 +4065,35 @@ export function PortfolioView({
                         ? "Deposit instructions"
                         : "Cross-chain deposit quote"}
                     </h3>
-                    <NearIntentsBadge />
+                    <div className="flex items-center gap-2">
+                      {!addMoneyIntent && (
+                        <button
+                          type="button"
+                          onClick={handleReviewCrossChainQuote}
+                          disabled={!addMoneyKey || crossChainQuoteLoading}
+                          aria-label="Refresh quote"
+                          title="Refresh quote"
+                          className="p-2 rounded-full border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className={crossChainQuoteLoading ? "animate-spin" : ""}
+                            aria-hidden="true"
+                          >
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                          </svg>
+                        </button>
+                      )}
+                      <NearIntentsBadge />
+                    </div>
                   </div>
 
                   {!addMoneyIntent ? (
@@ -4103,32 +4131,34 @@ export function PortfolioView({
                     {crossChainQuote?.minimumRecipientDisplayAmount && (
                       <div className="flex justify-between gap-4">
                         <dt className="text-neutral-500 dark:text-neutral-400">
-                          Quoted minimum
+                          Min receive
                         </dt>
                         <dd className="min-w-0 text-right font-semibold text-neutral-950 dark:text-white">
                           <span className="break-all">
-                            {crossChainQuote.minimumRecipientDisplayAmount}
+                            {formatApproxDisplay(crossChainQuote.minimumRecipientDisplayAmount)}
                           </span>{" "}
                           <span className="whitespace-nowrap">NEAR</span>
                         </dd>
                       </div>
                     )}
-                    <div className="flex justify-between gap-4">
-                      <dt className="shrink-0 text-neutral-500 dark:text-neutral-400">
-                        Network &amp; route fee
-                      </dt>
-                      <dd className="text-right font-semibold text-neutral-950 dark:text-white">
-                        {crossChainQuote?.fees.description ?? "Unavailable"}
-                      </dd>
-                    </div>
+                    {crossChainQuote?.rateDescription && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-neutral-500 dark:text-neutral-400">
+                          Rate
+                        </dt>
+                        <dd className="text-right font-semibold text-neutral-950 dark:text-white">
+                          {crossChainQuote.rateDescription}
+                        </dd>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-4">
                       <dt className="text-neutral-500 dark:text-neutral-400">
-                        Est. Arrival
+                        Est. arrival
                       </dt>
                       <dd className="font-semibold text-neutral-950 dark:text-white">
                         {crossChainQuote?.estimatedTimeSeconds == null
                           ? "—"
-                          : crossChainQuote.estimatedTimeSeconds + "s"}
+                          : `~${crossChainQuote.estimatedTimeSeconds}s`}
                       </dd>
                     </div>
                     <div className="flex justify-between gap-4 border-t border-neutral-100 dark:border-white/[0.06] pt-3">
@@ -4160,17 +4190,6 @@ export function PortfolioView({
                         {crossChainQuoteError}
                       </p>
                     )}
-
-                  <button
-                    type="button"
-                    onClick={handleReviewCrossChainQuote}
-                    disabled={!addMoneyKey || crossChainQuoteLoading}
-                    className="flow-liquid-btn w-full py-3 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 disabled:opacity-40 cursor-pointer"
-                  >
-                    {crossChainQuoteLoading
-                      ? "Updating quote…"
-                      : "Review Deposit Quote"}
-                  </button>
 
                   <button
                     type="button"
