@@ -856,7 +856,7 @@ export function EarnView({
                       </button>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-neutral-100 dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300">
-                        Unstaking {linearUnstaked.amount.toFixed(4)} NEAR (~48h)
+                        Unstaking (~48h)
                       </span>
                     )
                   )}
