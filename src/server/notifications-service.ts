@@ -140,21 +140,28 @@ export async function getAccountNotifications(
       observed_at: Date;
     }>
   >`
-      SELECT
-        id,
-        chain_id,
-        direction,
-        asset_symbol,
-        atomic_amount::text AS atomic_amount,
-        decimals,
-        block_timestamp,
-        observed_at
-      FROM flow.wallet_activities
-      WHERE account_id = ${accountId}::uuid
-        AND direction IN ('INCOMING', 'OUTGOING')
-        AND finality IN ('CONFIRMED', 'FINALIZED')
-        AND atomic_amount > 0
-      ORDER BY COALESCE(block_timestamp, observed_at) DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON (wa.tx_hash, wa.direction)
+          wa.id,
+          wa.chain_id,
+          wa.direction,
+          wa.asset_symbol,
+          wa.atomic_amount::text AS atomic_amount,
+          wa.decimals,
+          wa.block_timestamp,
+          wa.observed_at
+        FROM flow.wallet_activities wa
+        WHERE wa.account_id = ${accountId}::uuid
+          AND wa.direction IN ('INCOMING', 'OUTGOING')
+          AND wa.finality IN ('CONFIRMED', 'FINALIZED')
+          AND wa.atomic_amount > 0
+        ORDER BY
+          wa.tx_hash,
+          wa.direction,
+          COALESCE(wa.block_timestamp, wa.observed_at) DESC,
+          wa.event_index ASC
+      ) deduped
+      ORDER BY COALESCE(deduped.block_timestamp, deduped.observed_at) DESC
       LIMIT 20
   `;
 

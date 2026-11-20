@@ -4161,6 +4161,22 @@ export function PortfolioView({
               heldAssets={heldAssets}
               hideBalance={hideBalance}
               nearPriceUsd={tokenPrices["near-mainnet:NEAR"] ?? 5.25}
+              onSyncPortfolio={() => {
+                void send<SerializedAccountPortfolio>(
+                  `/api/accounts/${accountId}/portfolio/refresh`,
+                  {},
+                  "POST",
+                )
+                  .then((res) => setPortfolio(res))
+                  .catch(() => {});
+                void send<unknown>(
+                  `/api/accounts/${accountId}/activities/sync`,
+                  {},
+                  "POST",
+                )
+                  .then(() => refreshActivities())
+                  .catch(() => {});
+              }}
               onNavigateToTab={changeTab}
               onSelectConvert={(sourceId, destId) => {
                 if (sourceId) setConvertSourceDeploymentId(sourceId);

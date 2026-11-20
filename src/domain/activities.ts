@@ -110,25 +110,30 @@ export function getExplorerUrl(
   const net = network.toLowerCase();
   const chain = chainId.toLowerCase();
 
-  if (net === "base" || chain === "84532" || chain === "8453") {
+  if (
+    net === "base" ||
+    net.startsWith("base-") ||
+    chain === "84532" ||
+    chain === "8453"
+  ) {
     if (chain === "84532" || net.includes("sepolia")) {
       return `https://sepolia.basescan.org/tx/${cleanHash}`;
     }
     return `https://basescan.org/tx/${cleanHash}`;
   }
 
-  if (net === "ethereum" || chain === "1") {
+  if (net === "ethereum" || net.startsWith("ethereum-") || chain === "1") {
     return `https://etherscan.io/tx/${cleanHash}`;
   }
 
-  if (net === "solana") {
-    if (chain === "solana-devnet" || chain.includes("devnet")) {
+  if (net === "solana" || net.startsWith("solana-")) {
+    if (chain === "solana-devnet" || net.includes("devnet")) {
       return `https://solscan.io/tx/${cleanHash}?cluster=devnet`;
     }
     return `https://solscan.io/tx/${cleanHash}`;
   }
 
-  if (net === "near") {
+  if (net === "near" || net.startsWith("near-")) {
     if (chain === "near-testnet" || chain.includes("testnet")) {
       return `https://testnet.nearblocks.io/txns/${cleanHash}`;
     }
