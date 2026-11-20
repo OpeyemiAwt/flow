@@ -698,6 +698,8 @@ export function PortfolioView({
         }, 220);
       }
       setActiveTab(tab);
+      if (tab === "receive") setReceiveHubOpen(true);
+      if (tab === "send") setSendHubOpen(true);
       const nextPathname =
         tab === "dashboard" ? "/app" : `/app/${tab}`;
       syncUrlParams(
@@ -886,6 +888,8 @@ export function PortfolioView({
   // Send vs Convert state (Matches media_1794490079738_c27b1dd5.jpg)
   const [sendMode, setSendModeState] = useState<"SEND" | "CONVERT">("SEND");
   const [sendStep, setSendStep] = useState<1 | 2 | 3 | 4>(1);
+  const [sendHubOpen, setSendHubOpen] = useState(true);
+  const [receiveHubOpen, setReceiveHubOpen] = useState(true);
   const setSendMode = useCallback(
     (mode: "SEND" | "CONVERT") => {
       setSendModeState(mode);
@@ -2751,10 +2755,10 @@ export function PortfolioView({
             TAB 2: SEND (Guided 4-Step Flow + Slide to Pay)
            =================================================================== */}
         {activeTab === "send" && (
-          <MotionTabPanel className="max-w-2xl mx-auto space-y-6">
+          <MotionTabPanel className="max-w-3xl mx-auto space-y-6">
             {activeOutgoingTransfer &&
             activeOutgoingTransfer.jobKind === "SEND" ? (
-              <div className="space-y-4">
+              <div className="max-w-2xl mx-auto space-y-4">
                 <PaymentTimelineTracker transfer={activeOutgoingTransfer} />
                 {[
                   "FAILED",
@@ -2767,6 +2771,7 @@ export function PortfolioView({
                     onClick={() => {
                       setActiveOutgoingTransfer(null);
                       setSendStep(1);
+                      setSendHubOpen(false);
                     }}
                     className="w-full py-3 rounded-full text-xs font-semibold border border-neutral-200 dark:border-white/[0.12] bg-white dark:bg-[#141414] text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                   >
@@ -2774,9 +2779,114 @@ export function PortfolioView({
                   </button>
                 )}
               </div>
-            ) : (
-              <>
+            ) : sendHubOpen ? (
+              <div className="space-y-6">
                 <div>
+                  <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
+                    Send &amp; Transfer
+                  </h1>
+                  <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
+                    Send assets to any wallet or <span className="font-mono">@flow</span> ID, or bridge between your own chains.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSendHubOpen(false);
+                      setSendStep(1);
+                    }}
+                    className="group text-left rounded-[24px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-5 shadow-2xs hover:border-neutral-950/30 dark:hover:border-white/25 hover:shadow-sm transition-all cursor-pointer flex flex-col justify-between gap-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.07] flex items-center justify-center text-neutral-900 dark:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M7 17 17 7" />
+                          <path d="M7 7h10v10" />
+                        </svg>
+                      </div>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors text-sm">
+                        ›
+                      </span>
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-neutral-950 dark:text-white">
+                        Send to address or @flow ID
+                      </h2>
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        Guided 4-step payment across NEAR, Solana, Base &amp; Ethereum with Slide to Pay.
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => changeTab("convert")}
+                    className="group text-left rounded-[24px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-5 shadow-2xs hover:border-neutral-950/30 dark:hover:border-white/25 hover:shadow-sm transition-all cursor-pointer flex flex-col justify-between gap-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.07] flex items-center justify-center text-neutral-900 dark:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polyline points="17 1 21 5 17 9" />
+                          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                          <polyline points="7 23 3 19 7 15" />
+                          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                        </svg>
+                      </div>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors text-sm">
+                        ↗
+                      </span>
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-neutral-950 dark:text-white">
+                        Bridge &amp; Convert
+                      </h2>
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        Swap or bridge assets directly between your own multi-chain balances.
+                      </p>
+                    </div>
+                  </button>
+
+                  <div
+                    aria-disabled="true"
+                    className="text-left rounded-[24px] border border-neutral-200/60 dark:border-white/[0.06] bg-white/60 dark:bg-[#141414]/60 p-5 opacity-65 cursor-not-allowed flex flex-col justify-between gap-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.05] flex items-center justify-center text-neutral-500">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" />
+                          <polyline points="12 7 12 12 15 15" />
+                        </svg>
+                      </div>
+                      <span className="rounded-full bg-neutral-100 dark:bg-white/[0.08] px-2.5 py-0.5 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">
+                        Coming soon
+                      </span>
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
+                        Scheduled &amp; batch send
+                      </h2>
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        Schedule recurring transfers or send to multiple recipients at once.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-2xl mx-auto space-y-6">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSendHubOpen(true);
+                      setSendStep(1);
+                    }}
+                    className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                  >
+                    ← Back to Send options
+                  </button>
                   <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
                     Send
                   </h1>
@@ -3285,7 +3395,7 @@ export function PortfolioView({
                     </div>
                   )}
                 </div>
-              </>
+              </div>
             )}
           </MotionTabPanel>
         )}
@@ -3493,34 +3603,164 @@ export function PortfolioView({
            =================================================================== */}
         {activeTab === "receive" && (
           <MotionTabPanel className="max-w-4xl mx-auto space-y-6">
-            <div>
-              <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
-                Receive
-              </h1>
-              <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
-                Bring supported assets from other chains directly into Flow.
-              </p>
-            </div>
+            {receiveHubOpen && !addMoneyIntent ? (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
+                    Add money
+                  </h1>
+                  <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
+                    Bring assets into FLOW directly, deposit from another chain, or bridge between your balances.
+                  </p>
+                </div>
 
-            {/* Segmented Top Selector: Direct receive vs Deposit from another chain */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <SegmentedTabPill
-                tabs={[
-                  { id: "DIRECT", label: "Direct receive" },
-                  { id: "DEPOSIT", label: "Deposit from another chain" },
-                ] as const}
-                activeTab={depositMode}
-                onChange={setDepositMode}
-              />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Direct Receive */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDepositMode("DIRECT");
+                      setReceiveHubOpen(false);
+                    }}
+                    className="group text-left rounded-[24px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-5 shadow-2xs hover:border-neutral-950/30 dark:hover:border-white/25 hover:shadow-sm transition-all cursor-pointer flex flex-col justify-between gap-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.07] flex items-center justify-center text-neutral-900 dark:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <rect x="2" y="5" width="20" height="14" rx="3" />
+                          <path d="M16 12h2" />
+                        </svg>
+                      </div>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors text-sm">
+                        ›
+                      </span>
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-neutral-950 dark:text-white">
+                        Direct receive
+                      </h2>
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        Copy your permanent NEAR, Solana, Base, or Ethereum address or scan QR.
+                      </p>
+                    </div>
+                  </button>
 
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-400 dark:text-neutral-500">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </svg>
-                <span>Connect a wallet (coming later)</span>
-              </span>
-            </div>
+                  {/* Deposit from another chain */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDepositMode("DEPOSIT");
+                      setReceiveHubOpen(false);
+                    }}
+                    className="group text-left rounded-[24px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-5 shadow-2xs hover:border-neutral-950/30 dark:hover:border-white/25 hover:shadow-sm transition-all cursor-pointer flex flex-col justify-between gap-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.07] flex items-center justify-center text-neutral-900 dark:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                        </svg>
+                      </div>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors text-sm">
+                        ›
+                      </span>
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-neutral-950 dark:text-white">
+                        Deposit from another chain
+                      </h2>
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        USDC, SOL, ETH and more from 39+ chains into native NEAR via NEAR Intents.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Bridge & Convert */}
+                  <button
+                    type="button"
+                    onClick={() => changeTab("convert")}
+                    className="group text-left rounded-[24px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-5 shadow-2xs hover:border-neutral-950/30 dark:hover:border-white/25 hover:shadow-sm transition-all cursor-pointer flex flex-col justify-between gap-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.07] flex items-center justify-center text-neutral-900 dark:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polyline points="17 1 21 5 17 9" />
+                          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                          <polyline points="7 23 3 19 7 15" />
+                          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                        </svg>
+                      </div>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors text-sm">
+                        ↗
+                      </span>
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-neutral-950 dark:text-white">
+                        Bridge &amp; Convert
+                      </h2>
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        Swap or bridge existing balances across NEAR, Solana, Base, and Ethereum.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Connect a wallet (Coming soon) */}
+                  <div
+                    aria-disabled="true"
+                    className="text-left rounded-[24px] border border-neutral-200/60 dark:border-white/[0.06] bg-white/60 dark:bg-[#141414]/60 p-5 opacity-65 cursor-not-allowed flex flex-col justify-between gap-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.05] flex items-center justify-center text-neutral-500">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                        </svg>
+                      </div>
+                      <span className="rounded-full bg-neutral-100 dark:bg-white/[0.08] px-2.5 py-0.5 text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">
+                        Coming soon
+                      </span>
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
+                        Connect a wallet
+                      </h2>
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        Deposit directly from MetaMask, Phantom, or an external NEAR wallet.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  {!addMoneyIntent && (
+                    <button
+                      type="button"
+                      onClick={() => setReceiveHubOpen(true)}
+                      className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                    >
+                      ← Back to Add money
+                    </button>
+                  )}
+                  <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-950 dark:text-white">
+                    {depositMode === "DIRECT" ? "Direct receive" : "Deposit from another chain"}
+                  </h1>
+                  <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
+                    Bring supported assets from other chains directly into Flow.
+                  </p>
+                </div>
+
+                {/* Segmented Top Selector: Direct receive vs Deposit from another chain */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <SegmentedTabPill
+                    tabs={[
+                      { id: "DIRECT", label: "Direct receive" },
+                      { id: "DEPOSIT", label: "Deposit from another chain" },
+                    ] as const}
+                    activeTab={depositMode}
+                    onChange={setDepositMode}
+                  />
+                </div>
 
             {depositMode === "DIRECT" ? (
               /* 2-Column Direct Receive Layout */
@@ -4162,6 +4402,8 @@ export function PortfolioView({
                 </div>
               </div>
             )}
+            </>
+            )}
           </MotionTabPanel>
         )}
 
@@ -4531,6 +4773,7 @@ export function PortfolioView({
                 if (target) setDepositDeployment(target);
                 setDepositMode("DIRECT");
                 changeTab("receive");
+                setReceiveHubOpen(false);
               }}
               pushToast={pushToast}
             />
