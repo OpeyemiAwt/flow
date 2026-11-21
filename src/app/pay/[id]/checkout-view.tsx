@@ -285,45 +285,13 @@ export function CheckoutView({
     !isDepositExpired &&
     !isReadOnly;
 
-  // Stage B Navigation: Return safely to Payment Selection
-  const handleBackToPaymentSelection = () => {
-    if (isReadOnly) return;
-    if (isFundedOrProcessing) {
-      if (
-        typeof window !== "undefined" &&
-        typeof window.confirm === "function"
-      ) {
-        const proceed = window.confirm(
-          "A deposit has already been detected or is currently settling. Navigating away will not cancel settlement. Return to payment selection anyway?",
-        );
-        if (!proceed) return;
-      }
-    } else if (isUnderReview) {
-      if (
-        typeof window !== "undefined" &&
-        typeof window.confirm === "function"
-      ) {
-        const proceed = window.confirm(
-          "This payment attempt is currently under review. Navigating away will not cancel review. Return to payment selection anyway?",
-        );
-        if (!proceed) return;
-      }
-    } else if (
-      depositSecondsRemaining > 0 &&
-      instructions &&
-      instructions.status !== "EXPIRED" &&
-      instructions.status !== "FAILED"
-    ) {
-      if (
-        typeof window !== "undefined" &&
-        typeof window.confirm === "function"
-      ) {
-        const proceed = window.confirm(
-          "Payment instructions are currently active. Returning to payment selection will not cancel your pending deposit address. Return anyway?",
-        );
-        if (!proceed) return;
-      }
-    }
+  const [confirmLeaveModal, setConfirmLeaveModal] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
+
+  const executeBackToPaymentSelection = () => {
+    setConfirmLeaveModal(null);
     try {
       window.localStorage.removeItem(attemptStorageKey);
       const url = new URL(window.location.href);
@@ -336,6 +304,41 @@ export function CheckoutView({
     }
     setInstructions(null);
     setRefreshTrigger((n) => n + 1);
+  };
+
+  // Stage B Navigation: Return safely to Payment Selection
+  const handleBackToPaymentSelection = () => {
+    if (isReadOnly) return;
+    if (isFundedOrProcessing) {
+      setConfirmLeaveModal({
+        title: "Settlement in progress",
+        message:
+          "A deposit has already been detected or is currently settling. Navigating away will not cancel settlement. Return to payment selection anyway?",
+      });
+      return;
+    }
+    if (isUnderReview) {
+      setConfirmLeaveModal({
+        title: "Payment under review",
+        message:
+          "This payment attempt is currently under review. Navigating away will not cancel review. Return to payment selection anyway?",
+      });
+      return;
+    }
+    if (
+      depositSecondsRemaining > 0 &&
+      instructions &&
+      instructions.status !== "EXPIRED" &&
+      instructions.status !== "FAILED"
+    ) {
+      setConfirmLeaveModal({
+        title: "Leave active payment instructions?",
+        message:
+          "Payment instructions are currently active. Returning to payment selection will not cancel your pending deposit address. Return anyway?",
+      });
+      return;
+    }
+    executeBackToPaymentSelection();
   };
 
   // Stage B Regeneration: Recheck state and generate fresh quote
@@ -2110,6 +2113,56 @@ export function CheckoutView({
           </div>
         )}
       </main>
+
+      {/* Confirmation Modal */}
+      {confirmLeaveModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="checkout-confirm-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          onClick={() => setConfirmLeaveModal(null)}
+        >
+          <div
+            className="flow-anim-fade-up w-full max-w-md rounded-[28px] border border-neutral-200/90 dark:border-white/[0.1] bg-white dark:bg-[#161618] p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300">
+                <IconAlertTriangle size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3
+                  id="checkout-confirm-modal-title"
+                  className="font-serif text-xl text-neutral-950 dark:text-white"
+                >
+                  {confirmLeaveModal.title}
+                </h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+                  {confirmLeaveModal.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmLeaveModal(null)}
+                className="flow-liquid-btn px-4 py-2.5 rounded-full text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
+              >
+                Stay here
+              </button>
+              <button
+                type="button"
+                onClick={executeBackToPaymentSelection}
+                className="flow-liquid-btn-primary px-5 py-2.5 rounded-full text-xs font-semibold cursor-pointer"
+              >
+                Return anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Any Token Discovery Modal */}
       <UnifiedAssetSelectorModal
