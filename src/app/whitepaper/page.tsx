@@ -15,6 +15,21 @@ export const metadata: Metadata = {
       "A simpler payment and yield experience across blockchain networks. Architecture, custody policies, cross-chain settlement, and risk disclosures.",
     url: "https://flow.devhub.forum/whitepaper",
     type: "article",
+    images: [
+      {
+        url: "https://flow.devhub.forum/assets/og-whitepaper.png",
+        width: 1200,
+        height: 630,
+        alt: "FLOW White Paper (Version 1.0)",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "FLOW Whitepaper (Version 1.0)",
+    description:
+      "Chain-abstracted personal payments, NEAR OutLayer MPC custody, NEAR Intents routing, and native NEAR yield.",
+    images: ["https://flow.devhub.forum/assets/og-whitepaper.png"],
   },
 };
 

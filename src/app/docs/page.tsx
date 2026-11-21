@@ -20,6 +20,21 @@ export const metadata: Metadata = {
       "Practical instructions for using FLOW safely across NEAR, Solana, Ethereum, and Base.",
     url: "https://flow.devhub.forum/docs",
     type: "website",
+    images: [
+      {
+        url: "https://flow.devhub.forum/assets/og-docs.png",
+        width: 1200,
+        height: 630,
+        alt: "What is FLOW? Why are we building? — FLOW Documentation",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "FLOW Documentation",
+    description:
+      "What is FLOW? Why are we building? Practical instructions for using FLOW across NEAR, Solana, Ethereum, and Base.",
+    images: ["https://flow.devhub.forum/assets/og-docs.png"],
   },
 };
 
