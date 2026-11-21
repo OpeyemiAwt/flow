@@ -158,6 +158,7 @@ export async function indexSolanaAddressActivities(
     const isFeePayer = myIndex === 0;
 
     // Check SPL token balance changes
+    let txEventIndex = 0;
     let tokenActivityFound = false;
     if (tx.meta.preTokenBalances && tx.meta.postTokenBalances) {
       const myPreTokens = tx.meta.preTokenBalances.filter(
@@ -167,10 +168,12 @@ export async function indexSolanaAddressActivities(
         (b) => b.owner === walletAddress || b.accountIndex === myIndex,
       );
 
-      const allMints = new Set([
-        ...myPreTokens.map((t) => t.mint),
-        ...myPostTokens.map((t) => t.mint),
-      ]);
+      const allMints = Array.from(
+        new Set([
+          ...myPreTokens.map((t) => t.mint),
+          ...myPostTokens.map((t) => t.mint),
+        ]),
+      ).sort();
 
       for (const mint of allMints) {
         const preAmount = BigInt(
@@ -190,7 +193,7 @@ export async function indexSolanaAddressActivities(
 
           activities.push({
             txHash: sigInfo.signature,
-            eventIndex: activities.length,
+            eventIndex: txEventIndex++,
             fromAddress: isIncoming ? "external" : walletAddress,
             toAddress: isIncoming ? walletAddress : "external",
             contractAddress: mint,
@@ -249,7 +252,7 @@ export async function indexSolanaAddressActivities(
       if (netTransfer > 0n || !tokenActivityFound) {
         activities.push({
           txHash: sigInfo.signature,
-          eventIndex: activities.length,
+          eventIndex: txEventIndex++,
           fromAddress: direction === "INCOMING" ? "external" : walletAddress,
           toAddress: direction === "INCOMING" ? walletAddress : "external",
           contractAddress: null,

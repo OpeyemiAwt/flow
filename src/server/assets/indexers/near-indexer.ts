@@ -85,6 +85,7 @@ export async function indexNearAddressActivities(
   const activities: RawNearActivityItem[] = [];
 
   let txHashesToInspect = options.knownTxHashes ?? [];
+  const nearblocksTimestamps = new Map<string, Date>();
   if (txHashesToInspect.length === 0) {
     try {
       const apiBase = options.network.includes("testnet")
@@ -96,16 +97,64 @@ export async function indexNearAddressActivities(
       );
       if (res.ok) {
         const json = (await res.json()) as {
-          txns?: Array<{ transaction_hash?: string }>;
+          txns?: Array<{
+            transaction_hash?: string;
+            block_timestamp?: string | number | null;
+          }>;
         };
-        txHashesToInspect = (json.txns ?? [])
-          .map((t) => t.transaction_hash?.trim())
-          .filter((h): h is string => Boolean(h));
+        const hashes: string[] = [];
+        for (const t of json.txns ?? []) {
+          const hash = t.transaction_hash?.trim();
+          if (!hash) continue;
+          hashes.push(hash);
+          if (t.block_timestamp != null) {
+            try {
+              const ns = BigInt(String(t.block_timestamp));
+              const ms = Number(ns / 1_000_000n);
+              if (Number.isFinite(ms) && ms > 0) {
+                nearblocksTimestamps.set(hash, new Date(ms));
+              }
+            } catch {
+              // Ignore malformed timestamp
+            }
+          }
+        }
+        txHashesToInspect = hashes;
       }
     } catch {
       // Non-fatal fallback if Nearblocks API is temporarily unreachable
     }
   }
+
+  const blockTimestampCache = new Map<string, Date | null>();
+  const resolveNearBlockTimestamp = async (
+    txHash: string,
+    blockHash: string | undefined,
+  ): Promise<Date | null> => {
+    const fromNearblocks = nearblocksTimestamps.get(txHash);
+    if (fromNearblocks) return fromNearblocks;
+    if (!blockHash) return null;
+    if (blockTimestampCache.has(blockHash)) {
+      return blockTimestampCache.get(blockHash) ?? null;
+    }
+    try {
+      const blockRes = await callJsonRpc<{
+        header?: { timestamp?: number; timestamp_nanosec?: string };
+      }>(rpcUrl, "block", { block_id: blockHash }, options);
+      const header = blockRes.response.result?.header;
+      const rawNs = header?.timestamp_nanosec ?? (header?.timestamp != null ? String(header.timestamp) : null);
+      if (rawNs) {
+        const ms = Number(BigInt(rawNs) / 1_000_000n);
+        const dt = Number.isFinite(ms) && ms > 0 ? new Date(ms) : null;
+        blockTimestampCache.set(blockHash, dt);
+        return dt;
+      }
+    } catch {
+      // Non-fatal fallback
+    }
+    blockTimestampCache.set(blockHash, null);
+    return null;
+  };
 
   // Inspect and verify each transaction via NEAR RPC (including internal receipts)
   if (txHashesToInspect.length > 0) {
@@ -161,16 +210,20 @@ export async function indexNearAddressActivities(
             depositAtomic = receiptIncoming;
             receiver = accountId;
             isToMe = true;
+            const blockTimestamp = await resolveNearBlockTimestamp(
+              tx.transaction.hash,
+              tx.transaction_outcome.block_hash,
+            );
             activities.push({
               txHash: tx.transaction.hash,
-              eventIndex: activities.length,
+              eventIndex: 0,
               fromAddress: receiptFrom,
               toAddress: accountId,
               contractAddress: null,
               atomicAmount: depositAtomic,
               blockHeight: 0n,
               blockHash: tx.transaction_outcome.block_hash,
-              blockTimestamp: null,
+              blockTimestamp,
               finality: "FINALIZED",
               direction: "INCOMING",
               activityType: "ON_CHAIN_TRANSFER",
@@ -199,16 +252,20 @@ export async function indexNearAddressActivities(
           direction = "OUTGOING";
         }
 
+        const blockTimestamp = await resolveNearBlockTimestamp(
+          tx.transaction.hash,
+          tx.transaction_outcome.block_hash,
+        );
         activities.push({
           txHash: tx.transaction.hash,
-          eventIndex: activities.length,
+          eventIndex: 0,
           fromAddress: signer,
           toAddress: receiver,
           contractAddress: null,
           atomicAmount: depositAtomic,
           blockHeight: 0n,
           blockHash: tx.transaction_outcome.block_hash,
-          blockTimestamp: null,
+          blockTimestamp,
           finality: "FINALIZED",
           direction,
           activityType:

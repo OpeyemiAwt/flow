@@ -294,7 +294,6 @@ export async function ingestWalletActivities(
         block_timestamp = COALESCE(EXCLUDED.block_timestamp, flow.wallet_activities.block_timestamp),
         fee_atomic_amount = COALESCE(EXCLUDED.fee_atomic_amount, flow.wallet_activities.fee_atomic_amount),
         metadata = flow.wallet_activities.metadata || EXCLUDED.metadata,
-        observed_at = EXCLUDED.observed_at,
         updated_at = now()
       RETURNING (xmax = 0) AS inserted;
     `;

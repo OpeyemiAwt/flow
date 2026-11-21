@@ -131,6 +131,7 @@ export async function getAccountNotifications(
   const walletEvents = await db.$queryRaw<
     Array<{
       id: string;
+      tx_hash: string;
       chain_id: string;
       direction: string;
       asset_symbol: string;
@@ -143,6 +144,7 @@ export async function getAccountNotifications(
       SELECT * FROM (
         SELECT DISTINCT ON (wa.tx_hash, wa.direction)
           wa.id,
+          wa.tx_hash,
           wa.chain_id,
           wa.direction,
           wa.asset_symbol,
@@ -158,7 +160,8 @@ export async function getAccountNotifications(
         ORDER BY
           wa.tx_hash,
           wa.direction,
-          COALESCE(wa.block_timestamp, wa.observed_at) DESC,
+          (wa.block_timestamp IS NULL) ASC,
+          COALESCE(wa.block_timestamp, wa.observed_at) ASC,
           wa.event_index ASC
       ) deduped
       ORDER BY COALESCE(deduped.block_timestamp, deduped.observed_at) DESC
@@ -170,7 +173,7 @@ export async function getAccountNotifications(
     const networkLabel = ev.chain_id.replace("-mainnet", "");
     const isOutgoing = ev.direction === "OUTGOING";
     notifications.push({
-      id: `notif_deposit_${ev.id}`,
+      id: `notif_wallet_${ev.direction.toLowerCase()}_${ev.tx_hash}`,
       accountId,
       category: "payments",
       type: isOutgoing ? "PAYMENT_COMPLETED" : "DEPOSIT_DETECTED",

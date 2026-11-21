@@ -167,7 +167,34 @@ export async function indexEvmAddressActivities(
     }
   }
 
-  // 4. Parse logs into normalized activity items
+  // 4. Fetch real block timestamps (deduplicated per unique block number)
+  const blockTimestampMap = new Map<string, Date | null>();
+  const uniqueBlockHexes = Array.from(new Set(uniqueLogs.map((l) => l.blockNumber)));
+  await Promise.all(
+    uniqueBlockHexes.map(async (blockHex) => {
+      try {
+        const blkRes = await callJsonRpc<{ timestamp?: string }>(
+          rpcUrl,
+          "eth_getBlockByNumber",
+          [blockHex, false],
+          options,
+        );
+        const tsHex = blkRes.response.result?.timestamp;
+        if (tsHex) {
+          const sec = Number(BigInt(tsHex));
+          if (Number.isFinite(sec) && sec > 0) {
+            blockTimestampMap.set(blockHex, new Date(sec * 1000));
+            return;
+          }
+        }
+      } catch {
+        // Non-fatal fallback
+      }
+      blockTimestampMap.set(blockHex, null);
+    }),
+  );
+
+  // 5. Parse logs into normalized activity items
   const activities: RawEvmActivityItem[] = [];
 
   for (const log of uniqueLogs) {
@@ -210,7 +237,7 @@ export async function indexEvmAddressActivities(
       atomicAmount,
       blockHeight,
       blockHash: log.blockHash,
-      blockTimestamp: null,
+      blockTimestamp: blockTimestampMap.get(log.blockNumber) ?? null,
       finality,
       direction,
       activityType: "ON_CHAIN_TRANSFER",

@@ -64,13 +64,23 @@ function accountActivityRows(accountId: string) {
             AND la.account_code = 'LIABILITY_MERCHANT_PAYABLE' AND e.entry_direction = 'CREDIT'
         )
     ), account_activity AS (
-      SELECT wa.id, wa.account_id, wa.wallet_id, wa.network, wa.chain_id, wa.ecosystem, wa.activity_type,
-        wa.direction, wa.tx_hash, wa.event_index, wa.from_address, wa.to_address, wa.asset_id::text AS asset_id,
-        wa.network_asset_id, wa.asset_symbol, wa.atomic_amount, wa.decimals, wa.block_height,
-        wa.block_hash, wa.block_timestamp, wa.finality, wa.reorg_status, wa.fee_atomic_amount,
-        wa.metadata, wa.observed_at, wa.created_at, wa.updated_at
-      FROM flow.wallet_activities wa
-      WHERE wa.account_id = ${accountId}::uuid
+      SELECT * FROM (
+        SELECT DISTINCT ON (wa.network, wa.tx_hash, wa.direction)
+          wa.id, wa.account_id, wa.wallet_id, wa.network, wa.chain_id, wa.ecosystem, wa.activity_type,
+          wa.direction, wa.tx_hash, wa.event_index, wa.from_address, wa.to_address, wa.asset_id::text AS asset_id,
+          wa.network_asset_id, wa.asset_symbol, wa.atomic_amount, wa.decimals, wa.block_height,
+          wa.block_hash, wa.block_timestamp, wa.finality, wa.reorg_status, wa.fee_atomic_amount,
+          wa.metadata, wa.observed_at, wa.created_at, wa.updated_at
+        FROM flow.wallet_activities wa
+        WHERE wa.account_id = ${accountId}::uuid
+        ORDER BY
+          wa.network,
+          wa.tx_hash,
+          wa.direction,
+          (wa.block_timestamp IS NULL) ASC,
+          COALESCE(wa.block_timestamp, wa.observed_at) ASC,
+          wa.event_index ASC
+      ) deduped_wa
       UNION ALL
       SELECT receipt.*
       FROM receipt_events receipt
