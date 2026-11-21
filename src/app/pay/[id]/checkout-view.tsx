@@ -1251,31 +1251,116 @@ export function CheckoutView({
                             </span>
                           </div>
                         )}
+
+                      {(instructions.payerRefundAddress || refundAddress) && (
+                        <div className="flex items-start justify-between gap-2 pt-2 border-t border-neutral-200/80 dark:border-white/[0.08] text-[11px]">
+                          <span className="text-neutral-500 dark:text-neutral-400 shrink-0">
+                            Refund destination:
+                          </span>
+                          <span
+                            className="font-mono text-right truncate text-neutral-800 dark:text-neutral-200 max-w-[240px]"
+                            title={
+                              instructions.payerRefundAddress || refundAddress
+                            }
+                          >
+                            {instructions.payerRefundAddress || refundAddress}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                     </>
                   )}
 
-                  <PaymentTimelineTracker
-                    transfer={{
-                      id: instructions.attemptPublicId,
-                      publicId: instructions.attemptPublicId,
-                      jobKind: "CHECKOUT",
-                      sourceNetwork: instructions.sourceNetwork,
-                      sourceAssetSymbol: instructions.sourceAssetSymbol,
-                      sourceDisplayAmount: instructions.requiredDisplayAmount,
-                      destinationNetwork: instructions.destinationNetwork,
-                      destinationAssetSymbol: instructions.destinationAssetSymbol,
-                      quotedDestinationDisplayAmount:
-                        instructions.destinationDisplayAmount,
-                      status: instructions.status,
-                      sourceTxHash: instructions.sourceTxHash,
-                      destinationTxHash: instructions.destinationTxHash,
-                      errorMessage: null,
-                      settledAt: instructions.settledAt,
-                      createdAt: attemptInitiatedAt,
-                    }}
-                  />
+                  {/* Safety Instructions & Status Notices */}
+                  {!isFundedOrProcessing && !isUnderReview && (
+                    <div className="rounded-[16px] border border-red-200/80 dark:border-red-900/40 bg-red-50/60 dark:bg-red-950/30 p-4 text-xs text-neutral-800 dark:text-neutral-200 space-y-1.5">
+                      <p className="font-bold text-[#FF1A1A]">
+                        Safety Instructions
+                      </p>
+                      <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
+                        Send only{" "}
+                        <strong>{instructions.sourceAssetSymbol}</strong> on{" "}
+                        <strong>{instructions.sourceNetwork}</strong>. Other
+                        assets or networks cannot be recovered.
+                      </p>
+                      <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
+                        This deposit address is valid for{" "}
+                        <strong>
+                          {Math.floor(depositSecondsRemaining / 60)}m{" "}
+                          {depositSecondsRemaining % 60}s
+                        </strong>
+                        . Do not send funds after expiration.
+                      </p>
+                    </div>
+                  )}
+
+                  {instructions.status === "EXCEPTION_REFUND_REQUIRED" && (
+                    <div className="rounded-[14px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3.5 text-xs text-[#FF1A1A] dark:text-red-400 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <IconAlertTriangle
+                          size={14}
+                          className="shrink-0 text-[#FF1A1A]"
+                        />
+                        <span>Refund Pending:</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-red-900 dark:text-red-300">
+                        This attempt requires refund reconciliation. Check the
+                        payment status for a confirmed refund.
+                      </p>
+                    </div>
+                  )}
+
+                  {isUnderReview && (
+                    <div className="rounded-[14px] border border-purple-200 dark:border-purple-800/40 bg-purple-50 dark:bg-purple-950/30 p-3.5 text-xs text-purple-950 dark:text-purple-200 space-y-1">
+                      <p className="font-semibold text-purple-900 dark:text-purple-300">
+                        Payment Under Review:
+                      </p>
+                      <p className="text-[11px] leading-relaxed text-purple-900/80 dark:text-purple-200/80">
+                        Your deposit was received and is currently undergoing
+                        automated reconciliation. Do not initiate another
+                        payment.
+                      </p>
+                    </div>
+                  )}
+
+                  {instructions.status === "EXPIRED" &&
+                    !isFundedOrProcessing &&
+                    !isUnderReview && (
+                      <div className="space-y-2">
+                        <div className="rounded-[14px] border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">
+                          <strong>Deposit Window Expired:</strong> Do not send
+                          funds to this expired deposit address.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleGenerateNewQuote}
+                          disabled={isReadOnly}
+                          className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515] cursor-pointer"
+                        >
+                          Generate New Quote
+                        </button>
+                      </div>
+                    )}
+
+                  {instructions.status === "FAILED" &&
+                    !isFundedOrProcessing &&
+                    !isUnderReview && (
+                      <div className="space-y-2">
+                        <div className="rounded-[14px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-[#FF1A1A] dark:text-red-400">
+                          <strong>Payment Failed:</strong> This payment attempt
+                          could not be completed.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleGenerateNewQuote}
+                          disabled={isReadOnly}
+                          className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515] cursor-pointer"
+                        >
+                          Generate New Quote
+                        </button>
+                      </div>
+                    )}
                 </div>
               ) : (
                 /* ============================================================
@@ -1952,336 +2037,28 @@ export function CheckoutView({
                   </button>
                 </div>
               ) : (
-                /* STATE B: Payment Instructions (After Authorized Payment Commitment) */
-                <div className="relative rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-sm space-y-5 overflow-hidden">
-                  {/* Expired Overlay */}
-                  {isDepositExpired && (
-                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[28px] bg-white/85 dark:bg-[#0B0B0B]/85 p-6 text-center backdrop-blur-xs">
-                      <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 shadow-xs">
-                        <IconAlertTriangle size={24} />
-                      </div>
-                      <h3 className="font-serif text-2xl font-normal text-neutral-950 dark:text-white">
-                        Quote Expired
-                      </h3>
-                      <p className="mt-1.5 max-w-sm text-xs text-neutral-600 dark:text-neutral-400">
-                        The deposit deadline for this payment has expired. Do
-                        not send funds to the previous deposit address.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleGenerateNewQuote}
-                        disabled={isReadOnly}
-                        className="mt-4 rounded-full bg-[#FF1A1A] px-6 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-[#E01515] transition-all cursor-pointer"
-                      >
-                        Generate New Quote
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#FF1A1A]">
-                        PAYMENT INSTRUCTIONS
-                      </span>
-                      <h2 className="font-serif text-xl text-neutral-950 dark:text-white">
-                        Deposit Instructions
-                      </h2>
-                    </div>
-                    <span
-                      key={instructions.status}
-                      className={`flow-anim-fade-up inline-flex items-center gap-1.5 text-[11px] font-semibold ${
-                        isFundedOrProcessing
-                          ? "text-blue-700 dark:text-blue-400"
-                          : isUnderReview
-                            ? "text-purple-700 dark:text-purple-400"
-                            : instructions.status === "FAILED" ||
-                                instructions.status ===
-                                  "EXCEPTION_REFUND_REQUIRED" ||
-                                isDepositExpired
-                              ? "text-[#FF1A1A]"
-                              : "text-amber-800 dark:text-amber-400"
-                      }`}
-                    >
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          isFundedOrProcessing
-                            ? "bg-blue-600 animate-pulse"
-                            : isUnderReview
-                              ? "bg-purple-600 animate-pulse"
-                              : instructions.status === "FAILED" ||
-                                  instructions.status ===
-                                    "EXCEPTION_REFUND_REQUIRED" ||
-                                  isDepositExpired
-                                ? "bg-[#FF1A1A]"
-                                : "bg-amber-500 animate-pulse"
-                        }`}
-                      />
-                      {isFundedOrProcessing
-                        ? instructions.status === "DETECTED"
-                          ? "DEPOSIT DETECTED"
-                          : "PAYMENT PROCESSING"
-                        : isUnderReview
-                          ? "UNDER REVIEW"
-                          : instructions.status === "EXCEPTION_REFUND_REQUIRED"
-                            ? "REFUND REQUIRED"
-                            : instructions.status === "FAILED"
-                              ? "FAILED"
-                              : isDepositExpired
-                                ? "EXPIRED"
-                                : "AWAITING DEPOSIT"}
-                    </span>
-                  </div>
-
-                  {canShowDeposit && (
-                    <>
-                      <div className="flex flex-col items-center justify-center rounded-[22px] border border-neutral-200/70 dark:border-white/[0.08] bg-neutral-50 dark:bg-[#1A1A1A] p-6">
-                        <div className="p-2.5 bg-white rounded-2xl">
-                          <QrCode
-                            value={
-                              instructions.qrData || instructions.depositAddress
-                            }
-                            size={156}
-                          />
-                        </div>
-                        <p className="mt-3 text-xs font-medium text-neutral-600 dark:text-neutral-400 text-center">
-                          Deposit address for this payment on{" "}
-                          <strong className="text-neutral-900 dark:text-white">
-                            {instructions.sourceNetwork}
-                          </strong>
-                        </p>
-                      </div>
-
-                      <div className="space-y-3 text-xs">
-                        <div>
-                          <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 block mb-1">
-                            Amount to Send
-                          </span>
-                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 dark:border-white/[0.08] bg-neutral-50 dark:bg-[#1A1A1A] px-3.5 py-2.5">
-                            <span className="font-display text-base font-bold text-neutral-950 dark:text-white">
-                              {instructions.requiredDisplayAmount}{" "}
-                              <span className="text-[#FF1A1A]">
-                                {instructions.sourceAssetSymbol}
-                              </span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleCopyAmount}
-                              disabled={isDepositExpired}
-                              className="shrink-0 font-sans text-xs font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40 cursor-pointer"
-                            >
-                              {copiedAmount ? "Copied" : "Copy Amount"}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 block mb-1">
-                            Deposit Address
-                          </span>
-                          <div className="flex items-center justify-between gap-2 rounded-[12px] border border-neutral-200 dark:border-white/[0.08] bg-neutral-50 dark:bg-[#1A1A1A] px-3.5 py-2.5 font-mono text-xs">
-                            <span className="truncate select-all text-neutral-800 dark:text-neutral-200">
-                              {instructions.depositAddress}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleCopyDepositAddress}
-                              disabled={isDepositExpired}
-                              className="shrink-0 font-sans font-semibold text-[#FF1A1A] hover:underline disabled:opacity-40 cursor-pointer"
-                            >
-                              {copiedAddress ? "Copied" : "Copy Address"}
-                            </button>
-                          </div>
-                        </div>
-
-                        {instructions.depositMemo && (
-                          <div>
-                            <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 block mb-1">
-                              Required Memo / Tag
-                            </span>
-                            <div className="flex items-center justify-between gap-2 rounded-[12px] border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 px-3.5 py-2.5 font-mono text-xs">
-                              <span className="truncate select-all text-neutral-800 dark:text-amber-200">
-                                {instructions.depositMemo}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={handleCopyMemo}
-                                disabled={isDepositExpired}
-                                className="shrink-0 font-sans font-semibold text-amber-900 dark:text-amber-300 hover:underline disabled:opacity-40 cursor-pointer"
-                              >
-                                {copiedMemo ? "Copied" : "Copy Memo"}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                  <div className="space-y-3 text-xs">
-                    <div className="rounded-[14px] border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-3.5 space-y-2 text-xs">
-                      {isFundedOrProcessing ? (
-                        <div className="flex justify-between items-center">
-                          <span className="text-neutral-500 dark:text-neutral-400">
-                            Payment Status:
-                          </span>
-                          <span className="font-semibold font-mono text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse" />
-                            {instructions.status === "DETECTED"
-                              ? "Deposit Detected — Verifying"
-                              : "Payment Processing — Settling on-chain"}
-                          </span>
-                        </div>
-                      ) : isUnderReview ? (
-                        <div className="flex justify-between items-center">
-                          <span className="text-neutral-500 dark:text-neutral-400">
-                            Status:
-                          </span>
-                          <span className="font-semibold text-purple-700 dark:text-purple-400">
-                            Payment Under Review
-                          </span>
-                        </div>
-                      ) : canShowDeposit ? (
-                        <div className="flex justify-between items-center">
-                          <span className="text-neutral-500 dark:text-neutral-400">
-                            Deposit Deadline:
-                          </span>
-                          <span
-                            className={`font-mono font-bold ${
-                              depositSecondsRemaining <= 60
-                                ? "text-[#FF1A1A]"
-                                : "text-neutral-950 dark:text-white"
-                            }`}
-                          >
-                            {Math.floor(depositSecondsRemaining / 60)}:
-                            {(depositSecondsRemaining % 60)
-                              .toString()
-                              .padStart(2, "0")}{" "}
-                            remaining
-                          </span>
-                        </div>
-                      ) : null}
-
-                      {instructions.sourceTxHash && (
-                        <div className="flex justify-between items-center pt-1 border-t border-neutral-200/70 dark:border-white/[0.08]">
-                          <span className="text-neutral-500 dark:text-neutral-400">
-                            Source Tx:
-                          </span>
-                          <span
-                            className="font-mono text-neutral-800 dark:text-neutral-200 text-[11px] truncate max-w-[180px]"
-                            title={instructions.sourceTxHash}
-                          >
-                            {instructions.sourceTxHash.slice(0, 8)}...
-                            {instructions.sourceTxHash.slice(-6)}
-                          </span>
-                        </div>
-                      )}
-
-                      {(instructions.payerRefundAddress || refundAddress) && (
-                        <div className="flex justify-between items-start gap-2 pt-1 border-t border-neutral-200/70 dark:border-white/[0.08]">
-                          <span className="text-neutral-500 dark:text-neutral-400 shrink-0">
-                            Refund destination:
-                          </span>
-                          <span
-                            className="font-mono text-[11px] text-right truncate text-neutral-800 dark:text-neutral-200 max-w-[200px]"
-                            title={
-                              instructions.payerRefundAddress || refundAddress
-                            }
-                          >
-                            {instructions.payerRefundAddress || refundAddress}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Expiration and Exception Warnings */}
-                    {!isFundedOrProcessing && !isUnderReview && (
-                      <div className="rounded-[14px] border border-red-200/80 dark:border-red-900/40 bg-red-50/60 dark:bg-red-950/30 p-3.5 text-xs text-neutral-800 dark:text-neutral-200 space-y-1.5">
-                        <p className="font-bold text-[#FF1A1A]">
-                          Safety Instructions
-                        </p>
-                        <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
-                          Send only{" "}
-                          <strong>{instructions.sourceAssetSymbol}</strong> on{" "}
-                          <strong>{instructions.sourceNetwork}</strong>. Other
-                          assets or networks cannot be recovered.
-                        </p>
-                        <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
-                          This deposit address is valid for{" "}
-                          <strong>
-                            {Math.floor(depositSecondsRemaining / 60)}m{" "}
-                            {depositSecondsRemaining % 60}s
-                          </strong>
-                          . Do not send funds after expiration.
-                        </p>
-                      </div>
-                    )}
-
-                    {instructions.status === "EXCEPTION_REFUND_REQUIRED" && (
-                      <div className="rounded-[14px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3.5 text-xs text-[#FF1A1A] dark:text-red-400 space-y-1">
-                        <div className="flex items-center gap-1.5 font-bold">
-                          <IconAlertTriangle
-                            size={14}
-                            className="shrink-0 text-[#FF1A1A]"
-                          />
-                          <span>Refund Pending:</span>
-                        </div>
-                        <p className="text-[11px] leading-relaxed text-red-900 dark:text-red-300">
-                          This attempt requires refund reconciliation. Check the
-                          payment status for a confirmed refund.
-                        </p>
-                      </div>
-                    )}
-
-                    {isUnderReview && (
-                      <div className="rounded-[14px] border border-purple-200 dark:border-purple-800/40 bg-purple-50 dark:bg-purple-950/30 p-3.5 text-xs text-purple-950 dark:text-purple-200 space-y-1">
-                        <p className="font-semibold text-purple-900 dark:text-purple-300">
-                          Payment Under Review:
-                        </p>
-                        <p className="text-[11px] leading-relaxed text-purple-900/80 dark:text-purple-200/80">
-                          Your deposit was received and is currently undergoing
-                          automated reconciliation. Do not initiate another
-                          payment.
-                        </p>
-                      </div>
-                    )}
-
-                    {instructions.status === "EXPIRED" &&
-                      !isFundedOrProcessing &&
-                      !isUnderReview && (
-                        <div className="space-y-2">
-                          <div className="rounded-[14px] border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">
-                            <strong>Deposit Window Expired:</strong> Do not send
-                            funds to this expired deposit address.
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleGenerateNewQuote}
-                            disabled={isReadOnly}
-                            className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515] cursor-pointer"
-                          >
-                            Generate New Quote
-                          </button>
-                        </div>
-                      )}
-
-                    {instructions.status === "FAILED" &&
-                      !isFundedOrProcessing &&
-                      !isUnderReview && (
-                        <div className="space-y-2">
-                          <div className="rounded-[14px] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-[#FF1A1A] dark:text-red-400">
-                            <strong>Payment Failed:</strong> This
-                            payment attempt could not be completed.
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleGenerateNewQuote}
-                            disabled={isReadOnly}
-                            className="w-full rounded-full bg-[#FF1A1A] py-2.5 text-xs font-semibold text-white hover:bg-[#E01515] cursor-pointer"
-                          >
-                            Generate New Quote
-                          </button>
-                        </div>
-                      )}
-                  </div>
+                /* STATE B: Live Payment Tracker (Right Column) */
+                <div className="relative [&>div]:mt-0">
+                  <PaymentTimelineTracker
+                    transfer={{
+                      id: instructions.attemptPublicId,
+                      publicId: instructions.attemptPublicId,
+                      jobKind: "CHECKOUT",
+                      sourceNetwork: instructions.sourceNetwork,
+                      sourceAssetSymbol: instructions.sourceAssetSymbol,
+                      sourceDisplayAmount: instructions.requiredDisplayAmount,
+                      destinationNetwork: instructions.destinationNetwork,
+                      destinationAssetSymbol: instructions.destinationAssetSymbol,
+                      quotedDestinationDisplayAmount:
+                        instructions.destinationDisplayAmount,
+                      status: instructions.status,
+                      sourceTxHash: instructions.sourceTxHash,
+                      destinationTxHash: instructions.destinationTxHash,
+                      errorMessage: null,
+                      settledAt: instructions.settledAt,
+                      createdAt: attemptInitiatedAt,
+                    }}
+                  />
                 </div>
               )}
 
