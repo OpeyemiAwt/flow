@@ -18,6 +18,7 @@ import {
 } from "../domain/supported-assets-catalog.ts";
 import {
   readPaymentAttempt,
+  readPaymentRequestUsage,
   readPaymentWalletAddresses,
 } from "./payment-requests.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
@@ -278,6 +279,10 @@ export async function commitPaymentAttempt(
       throw new ApiFailure(409, "PAYMENT_REQUEST_PAUSED");
     }
     if (invoice?.status === "COMPLETED") {
+      throw new ApiFailure(409, "PAYMENT_REQUEST_COMPLETED");
+    }
+    const usage = await readPaymentRequestUsage(publicId);
+    if (usage.maxPayments !== null && usage.paidCount >= usage.maxPayments) {
       throw new ApiFailure(409, "PAYMENT_REQUEST_COMPLETED");
     }
     if (invoice?.status === "EXPIRED") {

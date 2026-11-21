@@ -727,6 +727,30 @@ export function CheckoutView({
                 ? "Review the payment request and any existing settlement."
                 : "Choose a source asset to check the available payment route."}
           </p>
+          {request.maxPayments !== null && !isCompletedReceipt && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-neutral-200/80 dark:border-white/[0.1] bg-white dark:bg-[#141414] px-3.5 py-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-200 shadow-2xs tabular-nums">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  (request.remainingPayments ?? 0) === 0
+                    ? "bg-neutral-400"
+                    : "bg-emerald-500"
+                }`}
+                aria-hidden="true"
+              />
+              {(request.remainingPayments ?? 0) === 0 ? (
+                <span>
+                  All {request.maxPayments}{" "}
+                  {request.maxPayments === 1 ? "spot" : "spots"} filled
+                </span>
+              ) : (
+                <span>
+                  {request.remainingPayments} of {request.maxPayments}{" "}
+                  {request.maxPayments === 1 ? "spot" : "spots"} left ·{" "}
+                  {request.paidCount} paid
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Expired Banner */}
@@ -940,7 +964,9 @@ export function CheckoutView({
               {request.status === "DISABLED"
                 ? "The recipient has temporarily paused this payment link. New quotes and deposits are disabled until it is resumed."
                 : request.status === "COMPLETED"
-                  ? "This payment request has already been paid and settled on-chain. The link is now expired and dormant."
+                  ? request.maxPayments !== null
+                    ? `All ${request.maxPayments} payment ${request.maxPayments === 1 ? "spot has" : "spots have"} been filled and settled on-chain. This link is now closed.`
+                    : "This payment request has already been paid and settled on-chain. The link is now expired and dormant."
                   : isExpired
                     ? "The payment window for this invoice has closed and it can no longer accept payments."
                     : "Quote unavailable. This payment request cannot accept payments."}

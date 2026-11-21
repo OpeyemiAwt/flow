@@ -49,6 +49,9 @@ export interface SerializedPaymentRequest {
   readonly status: PaymentRequestStatus;
   readonly expiresAt: string | null;
   readonly payerMemoRequired: boolean;
+  readonly maxPayments: number | null;
+  readonly paidCount: number;
+  readonly remainingPayments: number | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -86,9 +89,26 @@ export interface PublicPaymentRequest {
   readonly expiresAt: string | null;
   readonly payerMemoRequired: boolean;
   readonly isExpired: boolean;
+  readonly maxPayments: number | null;
+  readonly paidCount: number;
+  readonly remainingPayments: number | null;
   readonly eligibleSourceRoutes: readonly EligibleSourceRoute[];
   readonly recipientAddress?: string | null;
   readonly activeAttempt?: PaymentDepositInstructions | null;
+}
+
+export function parseMaxPayments(
+  metadata: Record<string, unknown> | null | undefined,
+): number | null {
+  const raw = metadata?.maxPayments;
+  if (typeof raw === "number" && Number.isInteger(raw) && raw >= 1) {
+    return raw;
+  }
+  if (typeof raw === "string" && /^[1-9]\d*$/.test(raw.trim())) {
+    const parsed = Number.parseInt(raw.trim(), 10);
+    if (Number.isSafeInteger(parsed) && parsed >= 1) return parsed;
+  }
+  return null;
 }
 
 export function generatePublicPaymentId(): string {
@@ -103,6 +123,7 @@ export function isValidPublicPaymentId(id: string): boolean {
 export function serializePaymentRequest(
   record: PaymentRequestRecord,
   origin: string,
+  paidCount = 0,
 ): SerializedPaymentRequest {
   const displayAmount =
     record.requestedAtomicAmount !== null
@@ -111,6 +132,17 @@ export function serializePaymentRequest(
           record.destinationDecimals,
         )
       : null;
+
+  const maxPayments = parseMaxPayments(record.metadata);
+  const safePaidCount = Math.max(0, Math.floor(paidCount));
+  const remainingPayments =
+    maxPayments !== null ? Math.max(0, maxPayments - safePaidCount) : null;
+  const effectiveStatus: PaymentRequestStatus =
+    record.status === "ACTIVE" &&
+    maxPayments !== null &&
+    safePaidCount >= maxPayments
+      ? "COMPLETED"
+      : record.status;
 
   return {
     id: record.id,
@@ -129,9 +161,12 @@ export function serializePaymentRequest(
         ? record.requestedAtomicAmount.toString()
         : null,
     displayAmount,
-    status: record.status,
+    status: effectiveStatus,
     expiresAt: record.expiresAt ? record.expiresAt.toISOString() : null,
     payerMemoRequired: record.payerMemoRequired,
+    maxPayments,
+    paidCount: safePaidCount,
+    remainingPayments,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
   };
@@ -158,10 +193,21 @@ export function serializePublicPaymentRequest(
   row: PublicPaymentRequestDbRow,
   origin: string,
   recipientAddress?: string | null,
+  usage?: { maxPayments: number | null; paidCount: number },
 ): PublicPaymentRequest {
   const expiresAtDate = row.expires_at ? new Date(row.expires_at) : null;
   const isExpired = expiresAtDate !== null && expiresAtDate <= new Date();
-  const effectiveStatus = isExpired ? "EXPIRED" : row.status;
+  const maxPayments = usage?.maxPayments ?? null;
+  const paidCount = Math.max(0, Math.floor(usage?.paidCount ?? 0));
+  const remainingPayments =
+    maxPayments !== null ? Math.max(0, maxPayments - paidCount) : null;
+  const isLimitReached =
+    maxPayments !== null && paidCount >= maxPayments;
+  const effectiveStatus: PaymentRequestStatus = isExpired
+    ? "EXPIRED"
+    : row.status === "ACTIVE" && isLimitReached
+      ? "COMPLETED"
+      : row.status;
 
   const displayAmount =
     row.requested_atomic_amount !== null
@@ -194,8 +240,11 @@ export function serializePublicPaymentRequest(
     expiresAt: expiresAtDate ? expiresAtDate.toISOString() : null,
     payerMemoRequired: row.payer_memo_required,
     isExpired,
+    maxPayments,
+    paidCount,
+    remainingPayments,
     eligibleSourceRoutes,
-    recipientAddress: recipientAddress ?? null,
+    recipientAddress: effectiveStatus === "COMPLETED" ? null : (recipientAddress ?? null),
   };
 }
 

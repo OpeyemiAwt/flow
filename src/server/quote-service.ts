@@ -16,6 +16,7 @@ import {
 } from "../domain/supported-assets-catalog.ts";
 import { isFinancialExecutionDisabled } from "../domain/custody.ts";
 import { supportsQuoteAddress } from "../domain/quote-addresses.ts";
+import { readPaymentRequestUsage } from "./payment-requests.ts";
 import { clientBudget } from "./auth/limits.ts";
 import { ApiFailure, reply } from "./http.ts";
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
@@ -85,6 +86,11 @@ export async function requestPaymentQuote(
   }
   if (invoice.status !== "ACTIVE")
     throw new ApiFailure(409, "PAYMENT_REQUEST_CLOSED");
+
+  const usage = await readPaymentRequestUsage(publicId);
+  if (usage.maxPayments !== null && usage.paidCount >= usage.maxPayments) {
+    throw new ApiFailure(409, "PAYMENT_REQUEST_COMPLETED");
+  }
 
   const [source, destination] = await Promise.all([
     resolveQuoteAsset(sourceId),

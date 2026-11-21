@@ -74,6 +74,33 @@ export function readPaymentWalletAddresses(publicId: string) {
       FROM flow.get_payment_request_wallet_addresses(${publicId})`;
 }
 
+export async function readPaymentRequestUsage(
+  publicId: string,
+): Promise<{ maxPayments: number | null; paidCount: number }> {
+  try {
+    const rows = await runtime().db.$queryRaw<
+      Array<{ max_payments: number | null; paid_count: number | null }>
+    >`
+      SELECT max_payments, paid_count
+      FROM flow.get_payment_request_usage(${publicId})
+    `;
+    const row = rows[0];
+    if (!row) return { maxPayments: null, paidCount: 0 };
+    return {
+      maxPayments:
+        typeof row.max_payments === "number" && row.max_payments >= 1
+          ? row.max_payments
+          : null,
+      paidCount:
+        typeof row.paid_count === "number" && row.paid_count >= 0
+          ? row.paid_count
+          : 0,
+    };
+  } catch {
+    return { maxPayments: null, paidCount: 0 };
+  }
+}
+
 export interface CreatePaymentRequestInput {
   title: string;
   description?: string | null;
@@ -83,6 +110,7 @@ export interface CreatePaymentRequestInput {
   requestedAmount?: string | null;
   expiresInHours?: number | null;
   payerMemoRequired?: boolean;
+  maxPayments?: number | null;
 }
 
 export interface UpdatePaymentRequestInput {
@@ -173,8 +201,24 @@ export async function createPaymentRequest(
     expiresAt = new Date(Date.now() + hours * 3600 * 1000);
   }
 
+  let maxPayments: number | null = null;
+  if (body.maxPayments !== undefined && body.maxPayments !== null) {
+    const parsedMax = Number(body.maxPayments);
+    if (
+      !Number.isInteger(parsedMax) ||
+      parsedMax < 1 ||
+      parsedMax > 10000
+    ) {
+      throw new ApiFailure(400, "INVALID_MAX_PAYMENTS");
+    }
+    maxPayments = parsedMax;
+  }
+
   const publicId = generatePublicPaymentId();
   const payerMemoRequired = Boolean(body.payerMemoRequired);
+  const metadataJson = JSON.stringify(
+    maxPayments !== null ? { maxPayments } : {},
+  );
   const origin = resolvePublicOrigin(request);
 
   const result = await db.$transaction(async (tx: FlowDb) => {
@@ -230,7 +274,7 @@ export async function createPaymentRequest(
         'ACTIVE'::flow.payment_request_status,
         ${expiresAt},
         ${payerMemoRequired},
-        '{}'::jsonb
+        ${metadataJson}::jsonb
       )
       RETURNING *
     `;
@@ -313,11 +357,22 @@ export async function listPaymentRequests(
         expires_at: Date | null;
         payer_memo_required: boolean;
         metadata: Record<string, unknown>;
+        paid_count: number;
         created_at: Date;
         updated_at: Date;
       }>
     >`
-      SELECT *
+      SELECT
+        pr.*,
+        COALESCE(
+          (
+            SELECT COUNT(*)::int
+            FROM flow.payment_attempts pa
+            WHERE pa.payment_request_id = pr.id
+              AND pa.status = 'SETTLED'
+          ),
+          0
+        ) AS paid_count
       FROM flow.payment_requests pr
       WHERE pr.account_id = ${accountId}::uuid
         AND (${statusParam}::text IS NULL OR pr.status::text = ${statusParam})
@@ -350,6 +405,7 @@ export async function listPaymentRequests(
           updatedAt: new Date(r.updated_at),
         },
         origin,
+        Number(r.paid_count ?? 0),
       ),
     );
 
@@ -703,12 +759,15 @@ export async function readPublicPaymentRequest(
   }
 
   const row = rows[0]!;
+  const usage = await readPaymentRequestUsage(publicId);
+  const isLimitReached =
+    usage.maxPayments !== null && usage.paidCount >= usage.maxPayments;
 
   // Resolve verified permanent recipient wallet address for destination network
-  // unless the link is paused (DISABLED).
+  // unless the link is paused (DISABLED) or has reached its max payer limit.
   let recipientAddress: string | null = null;
   let activeAttempt: PaymentDepositInstructions | null = null;
-  if (row.status !== "DISABLED") {
+  if (row.status !== "DISABLED" && !isLimitReached) {
     try {
       const recipientWalletRows = await readPaymentWalletAddresses(publicId);
       recipientAddress =
@@ -731,6 +790,7 @@ export async function readPublicPaymentRequest(
     row,
     origin,
     recipientAddress,
+    usage,
   );
 
   return reply(200, {

@@ -1097,6 +1097,10 @@ export function PortfolioView({
     "FIXED",
   );
   const [prAmount, setPrAmount] = useState<string>("1.00");
+  const [prMaxPaymentsMode, setPrMaxPaymentsMode] = useState<
+    "UNLIMITED" | "LIMITED"
+  >("UNLIMITED");
+  const [prMaxPayments, setPrMaxPayments] = useState<string>("1");
   const [prDestinationDeployment, setPrDestinationDeployment] =
     useState<CatalogTokenDeployment>(
       MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => d.id === "base-mainnet:USDC") ??
@@ -1799,6 +1803,15 @@ export function PortfolioView({
       setMessage("Please enter a title for the payment link.");
       return;
     }
+    let maxPaymentsPayload: number | null = null;
+    if (prMaxPaymentsMode === "LIMITED") {
+      const parsed = Number.parseInt(prMaxPayments.trim(), 10);
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10000) {
+        setMessage("Please enter a valid payer limit between 1 and 10,000.");
+        return;
+      }
+      maxPaymentsPayload = parsed;
+    }
     setPrCreating(true);
     setMessage("");
     setPrSuccessUrl(null);
@@ -1813,6 +1826,7 @@ export function PortfolioView({
           amountMode: prAmountMode,
           requestedAmount: prAmountMode === "FIXED" ? prAmount : null,
           expiresInHours: 168,
+          maxPayments: maxPaymentsPayload,
         },
         "POST",
       );
@@ -1842,6 +1856,8 @@ export function PortfolioView({
     prDestinationDeployment,
     prAmountMode,
     prAmount,
+    prMaxPaymentsMode,
+    prMaxPayments,
     pushToast,
   ]);
 
@@ -4544,10 +4560,31 @@ export function PortfolioView({
                                         : "Expired"}
                                 </span>
                               </div>
-                              <div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                                {req.amountMode === "FIXED"
-                                  ? `${req.displayAmount} ${req.destinationAssetSymbol} • ${req.destinationNetwork}`
-                                  : `Open amount • ${req.destinationNetwork}`}
+                              <div className="mt-0.5 flex items-center gap-2 flex-wrap text-xs text-neutral-500 dark:text-neutral-400">
+                                <span>
+                                  {req.amountMode === "FIXED"
+                                    ? `${req.displayAmount} ${req.destinationAssetSymbol} • ${req.destinationNetwork}`
+                                    : `Open amount • ${req.destinationNetwork}`}
+                                </span>
+                                <span aria-hidden="true">•</span>
+                                {req.maxPayments !== null ? (
+                                  <span
+                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${
+                                      (req.remainingPayments ?? 0) === 0
+                                        ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                                        : "bg-neutral-100 dark:bg-white/[0.06] text-neutral-700 dark:text-neutral-200"
+                                    }`}
+                                  >
+                                    {req.paidCount}/{req.maxPayments} paid ·{" "}
+                                    {(req.remainingPayments ?? 0) === 0
+                                      ? "Full"
+                                      : `${req.remainingPayments} left`}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium tabular-nums bg-neutral-100 dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300">
+                                    {req.paidCount} paid · Unlimited
+                                  </span>
+                                )}
                               </div>
                             </div>
 
@@ -4678,17 +4715,55 @@ export function PortfolioView({
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
-                      Description (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={prDescription}
-                      onChange={(e) => setPrDescription(e.target.value)}
-                      placeholder="Add details for the payer (e.g., scope, timeline, invoice #)"
-                      className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                    <div className="sm:col-span-7">
+                      <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
+                        Description (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={prDescription}
+                        onChange={(e) => setPrDescription(e.target.value)}
+                        placeholder="Add details for the payer (e.g., scope, timeline, invoice #)"
+                        className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-5">
+                      <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
+                        Max payers
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="10000"
+                          disabled={prMaxPaymentsMode === "UNLIMITED"}
+                          value={prMaxPaymentsMode === "UNLIMITED" ? "" : prMaxPayments}
+                          onKeyDown={blockNegativeKey}
+                          onChange={(e) =>
+                            setPrMaxPayments(e.target.value.replace(/[^0-9]/g, ""))
+                          }
+                          placeholder={
+                            prMaxPaymentsMode === "UNLIMITED" ? "∞" : "e.g. 5"
+                          }
+                          className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono font-bold bg-neutral-50/50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden disabled:opacity-40"
+                        />
+                        <select
+                          value={prMaxPaymentsMode}
+                          onChange={(e) =>
+                            setPrMaxPaymentsMode(
+                              e.target.value as "UNLIMITED" | "LIMITED",
+                            )
+                          }
+                          className="px-3 py-2 rounded-2xl text-xs font-semibold bg-neutral-100 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-900 dark:text-white focus:outline-hidden cursor-pointer shrink-0"
+                        >
+                          <option value="UNLIMITED">Unlimited</option>
+                          <option value="LIMITED">Limit</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Recipient Receives: Unified Picker */}
