@@ -371,8 +371,7 @@ export function SecurityPanel({
               Settings
             </h1>
             <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
-              Manage your profile ({email}), security, notifications, and
-              preferences.
+              Manage your profile, security, notifications, and preferences.
             </p>
             <p className="mt-2 inline-flex items-center gap-2 text-xs font-medium text-neutral-700 dark:text-neutral-300">
               <span
@@ -409,31 +408,37 @@ export function SecurityPanel({
                   </div>
                 )}
 
-                {/* Profile Picture Card */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
-                  <div className="flex items-center gap-4">
+                {/* Profile Avatar with Pencil Edit Overlay */}
+                <div className="flex items-center">
+                  <div className="relative inline-block">
                     <UserAvatar
                       profileId={profileId}
                       fallbackImage={image}
                       email={email}
                       name={savedDisplayName || name}
                       alt={savedDisplayName || email}
-                      size={64}
+                      size={72}
                       className="rounded-full border-2 border-white dark:border-neutral-700 shadow-sm object-cover"
                     />
-                    <div>
-                      <p className="font-display font-bold text-sm text-neutral-950 dark:text-white">
-                        Profile Picture
-                      </p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                        PNG or JPEG up to 2 MB. Saved in this browser.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <label className="whitespace-nowrap shrink-0 px-4 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 shadow-xs hover:opacity-90 transition-opacity cursor-pointer">
-                      <span>Change photo</span>
+                    <label
+                      aria-label="Change profile photo"
+                      title="Change profile photo"
+                      className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 border-2 border-white dark:border-[#141414] shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
                       <input
                         type="file"
                         accept="image/png,image/jpeg"

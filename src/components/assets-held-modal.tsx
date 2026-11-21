@@ -186,55 +186,33 @@ export function AssetsHeldModal({
                       </div>
                     </div>
 
-                    {/* Action Buttons (Matches ChatGPT Image Nov 12, 2026, 05_23_23 AM-2.png) */}
-                    {isExpanded && (() => {
-                      const isNativeNear =
-                        item.deployment.networkKey === "near-mainnet" &&
-                        item.deployment.symbol === "NEAR";
-                      return (
-                        <div
-                          className={`mt-4 pt-3 border-t border-neutral-200/60 dark:border-neutral-800 grid ${
-                            isNativeNear ? "grid-cols-2" : "grid-cols-3"
-                          } gap-2`}
+                    {/* Action Buttons */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-3 border-t border-neutral-200/60 dark:border-neutral-800 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectAction("receive", item.deployment);
+                            onClose();
+                          }}
+                          className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
                         >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSelectAction("receive", item.deployment);
-                              onClose();
-                            }}
-                            className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
-                          >
-                            <span>↓</span>
-                            <span>Receive</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSelectAction("send", item.deployment);
-                              onClose();
-                            }}
-                            className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
-                          >
-                            <span>↗</span>
-                            <span>Send</span>
-                          </button>
-                          {!isNativeNear && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onSelectAction("swap_near", item.deployment);
-                                onClose();
-                              }}
-                              className="flow-liquid-btn-primary flex items-center justify-center gap-1.5 py-2 px-2 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer"
-                            >
-                              <span>⇄</span>
-                              <span>Swap to NEAR</span>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
+                          <span>↓</span>
+                          <span>Receive</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectAction("send", item.deployment);
+                            onClose();
+                          }}
+                          className="flow-liquid-btn flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs font-semibold text-neutral-900 dark:text-white cursor-pointer"
+                        >
+                          <span>↗</span>
+                          <span>Send</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })
