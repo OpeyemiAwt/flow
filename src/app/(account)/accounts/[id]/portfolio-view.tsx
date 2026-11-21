@@ -958,6 +958,11 @@ export function PortfolioView({
   const [togglingPaymentRequestId, setTogglingPaymentRequestId] = useState<
     string | null
   >(null);
+  const [deletingPaymentRequestId, setDeletingPaymentRequestId] = useState<
+    string | null
+  >(null);
+  const [deleteLinkConfirmTarget, setDeleteLinkConfirmTarget] =
+    useState<SerializedPaymentRequest | null>(null);
 
   // Add Money state (Matches media_1794490079680_0a50f095.jpg)
   const [depositMode, setDepositModeState] = useState<"DIRECT" | "DEPOSIT">(
@@ -1860,6 +1865,35 @@ export function PortfolioView({
     prMaxPayments,
     pushToast,
   ]);
+
+  const handleDeletePaymentRequest = useCallback(
+    async (req: SerializedPaymentRequest) => {
+      setDeletingPaymentRequestId(req.id);
+      try {
+        await send<{ deleted: boolean; id: string }>(
+          `/api/accounts/${accountId}/payment-requests/${req.id}`,
+          undefined,
+          "DELETE",
+        );
+        setPaymentRequests((prev) => prev.filter((item) => item.id !== req.id));
+        setDeleteLinkConfirmTarget(null);
+        pushToast({
+          title: "Payment link deleted",
+          description: `"${req.title}" has been deleted.`,
+          variant: "success",
+        });
+      } catch (err) {
+        pushToast({
+          title: "Could not delete payment link",
+          description: describe(err),
+          variant: "error",
+        });
+      } finally {
+        setDeletingPaymentRequestId(null);
+      }
+    },
+    [accountId, pushToast],
+  );
 
   const handleReviewCrossChainQuote = () => {
     if (!addMoneyBody || !crossChainSourceToken || !crossChainAmountAtomic) return;
@@ -4637,6 +4671,16 @@ export function PortfolioView({
                                     : "Resume"}
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                disabled={deletingPaymentRequestId === req.id}
+                                onClick={() => setDeleteLinkConfirmTarget(req)}
+                                className="px-3 py-1.5 rounded-full border border-red-200 dark:border-red-900/50 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-40 transition-colors cursor-pointer"
+                              >
+                                {deletingPaymentRequestId === req.id
+                                  ? "Deleting…"
+                                  : "Delete"}
+                              </button>
                             </div>
                           </div>
                         );
@@ -5022,6 +5066,61 @@ export function PortfolioView({
           </>
         )}
       </main>
+
+      {/* Delete Payment Link Confirmation Modal */}
+      {deleteLinkConfirmTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-link-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          onClick={() => {
+            if (!deletingPaymentRequestId) setDeleteLinkConfirmTarget(null);
+          }}
+        >
+          <div
+            className="flow-anim-fade-up w-full max-w-md rounded-[28px] border border-neutral-200/90 dark:border-white/[0.1] bg-white dark:bg-[#161618] p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3
+                id="delete-link-modal-title"
+                className="font-serif text-xl text-neutral-950 dark:text-white"
+              >
+                Delete payment link?
+              </h3>
+              <p className="mt-1.5 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+                Are you sure you want to delete{" "}
+                <strong className="text-neutral-900 dark:text-white">
+                  &ldquo;{deleteLinkConfirmTarget.title}&rdquo;
+                </strong>
+                ? Anyone who opens this link will see that it has been deleted
+                and can no longer pay with it.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={Boolean(deletingPaymentRequestId)}
+                onClick={() => setDeleteLinkConfirmTarget(null)}
+                className="flow-liquid-btn px-4 py-2.5 rounded-full text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(deletingPaymentRequestId)}
+                onClick={() =>
+                  void handleDeletePaymentRequest(deleteLinkConfirmTarget)
+                }
+                className="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
+              >
+                {deletingPaymentRequestId ? "Deleting…" : "Delete link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Held Assets Modal */}
       <AssetsHeldModal

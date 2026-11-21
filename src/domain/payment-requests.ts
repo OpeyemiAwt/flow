@@ -89,6 +89,7 @@ export interface PublicPaymentRequest {
   readonly expiresAt: string | null;
   readonly payerMemoRequired: boolean;
   readonly isExpired: boolean;
+  readonly isDeleted?: boolean;
   readonly maxPayments: number | null;
   readonly paidCount: number;
   readonly remainingPayments: number | null;
@@ -193,21 +194,24 @@ export function serializePublicPaymentRequest(
   row: PublicPaymentRequestDbRow,
   origin: string,
   recipientAddress?: string | null,
-  usage?: { maxPayments: number | null; paidCount: number },
+  usage?: { maxPayments: number | null; paidCount: number; isDeleted?: boolean },
 ): PublicPaymentRequest {
   const expiresAtDate = row.expires_at ? new Date(row.expires_at) : null;
   const isExpired = expiresAtDate !== null && expiresAtDate <= new Date();
+  const isDeleted = Boolean(usage?.isDeleted);
   const maxPayments = usage?.maxPayments ?? null;
   const paidCount = Math.max(0, Math.floor(usage?.paidCount ?? 0));
   const remainingPayments =
     maxPayments !== null ? Math.max(0, maxPayments - paidCount) : null;
   const isLimitReached =
     maxPayments !== null && paidCount >= maxPayments;
-  const effectiveStatus: PaymentRequestStatus = isExpired
-    ? "EXPIRED"
-    : row.status === "ACTIVE" && isLimitReached
-      ? "COMPLETED"
-      : row.status;
+  const effectiveStatus: PaymentRequestStatus = isDeleted
+    ? "DISABLED"
+    : isExpired
+      ? "EXPIRED"
+      : row.status === "ACTIVE" && isLimitReached
+        ? "COMPLETED"
+        : row.status;
 
   const displayAmount =
     row.requested_atomic_amount !== null
@@ -240,11 +244,15 @@ export function serializePublicPaymentRequest(
     expiresAt: expiresAtDate ? expiresAtDate.toISOString() : null,
     payerMemoRequired: row.payer_memo_required,
     isExpired,
+    isDeleted,
     maxPayments,
     paidCount,
     remainingPayments,
     eligibleSourceRoutes,
-    recipientAddress: effectiveStatus === "COMPLETED" ? null : (recipientAddress ?? null),
+    recipientAddress:
+      isDeleted || effectiveStatus === "COMPLETED"
+        ? null
+        : (recipientAddress ?? null),
   };
 }
 

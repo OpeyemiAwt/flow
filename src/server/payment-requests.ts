@@ -74,6 +74,19 @@ export function readPaymentWalletAddresses(publicId: string) {
       FROM flow.get_payment_request_wallet_addresses(${publicId})`;
 }
 
+export async function readPaymentRequestDeleted(
+  publicId: string,
+): Promise<boolean> {
+  try {
+    const rows = await runtime().db.$queryRaw<Array<{ deleted: boolean }>>`
+      SELECT flow.is_payment_request_deleted(${publicId}) AS deleted
+    `;
+    return Boolean(rows[0]?.deleted);
+  } catch {
+    return false;
+  }
+}
+
 export async function readPaymentRequestUsage(
   publicId: string,
 ): Promise<{ maxPayments: number | null; paidCount: number }> {
@@ -336,6 +349,7 @@ export async function listPaymentRequests(
       SELECT COUNT(*)::bigint AS count
       FROM flow.payment_requests pr
       WHERE pr.account_id = ${accountId}::uuid
+        AND COALESCE((pr.metadata->>'deleted')::boolean, false) = false
         AND (${statusParam}::text IS NULL OR pr.status::text = ${statusParam})
     `;
     const total = Number(countRows[0]?.count ?? 0n);
@@ -375,6 +389,7 @@ export async function listPaymentRequests(
         ) AS paid_count
       FROM flow.payment_requests pr
       WHERE pr.account_id = ${accountId}::uuid
+        AND COALESCE((pr.metadata->>'deleted')::boolean, false) = false
         AND (${statusParam}::text IS NULL OR pr.status::text = ${statusParam})
       ORDER BY pr.created_at DESC
       LIMIT ${limit}
@@ -606,6 +621,51 @@ export async function updatePaymentRequest(
   return reply(200, result);
 }
 
+export async function deletePaymentRequest(
+  request: Request,
+  accountId: string,
+  requestId: string,
+): Promise<Response> {
+  const { db } = runtime();
+  const actor = await principal(db, request.headers);
+  await access(db, actor, accountId);
+
+  if (!actor.session.token) {
+    throw new ApiFailure(401, "AUTH_REQUIRED");
+  }
+
+  const result = await db.$transaction(async (tx: FlowDb) => {
+    await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${actor.session.token}, true)`;
+
+    const existingRows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id
+      FROM flow.payment_requests pr
+      WHERE pr.account_id = ${accountId}::uuid
+        AND (pr.id::text = ${requestId} OR pr.public_id = ${requestId})
+      LIMIT 1
+    `;
+
+    if (existingRows.length === 0) {
+      throw new ApiFailure(404, "PAYMENT_REQUEST_NOT_FOUND");
+    }
+
+    const targetId = existingRows[0]!.id;
+    const deletedAt = new Date().toISOString();
+    await tx.$executeRaw`
+      UPDATE flow.payment_requests
+      SET
+        status = 'DISABLED'::flow.payment_request_status,
+        metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('deleted', true, 'deletedAt', ${deletedAt}::text),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${targetId}::uuid
+    `;
+
+    return { deleted: true, id: targetId };
+  });
+
+  return reply(200, result);
+}
+
 export async function readPaymentAttempt(
   publicId: string,
   requestedAttemptId: string | null,
@@ -759,15 +819,18 @@ export async function readPublicPaymentRequest(
   }
 
   const row = rows[0]!;
-  const usage = await readPaymentRequestUsage(publicId);
+  const [usage, isDeleted] = await Promise.all([
+    readPaymentRequestUsage(publicId),
+    readPaymentRequestDeleted(publicId),
+  ]);
   const isLimitReached =
     usage.maxPayments !== null && usage.paidCount >= usage.maxPayments;
 
   // Resolve verified permanent recipient wallet address for destination network
-  // unless the link is paused (DISABLED) or has reached its max payer limit.
+  // unless the link is deleted, paused (DISABLED), or has reached its max payer limit.
   let recipientAddress: string | null = null;
   let activeAttempt: PaymentDepositInstructions | null = null;
-  if (row.status !== "DISABLED" && !isLimitReached) {
+  if (!isDeleted && row.status !== "DISABLED" && !isLimitReached) {
     try {
       const recipientWalletRows = await readPaymentWalletAddresses(publicId);
       recipientAddress =
@@ -790,7 +853,7 @@ export async function readPublicPaymentRequest(
     row,
     origin,
     recipientAddress,
-    usage,
+    { ...usage, isDeleted },
   );
 
   return reply(200, {

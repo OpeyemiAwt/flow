@@ -697,6 +697,8 @@ export function CheckoutView({
           <h1 className="mt-1 font-serif text-3xl sm:text-[44px] font-normal tracking-[-0.02em] text-neutral-950 dark:text-white leading-[1.08]">
             {isCompletedReceipt ? (
               "Payment Successful"
+            ) : request.isDeleted ? (
+              "Link deleted"
             ) : isReadOnly ? (
               request.title
             ) : (
@@ -723,11 +725,15 @@ export function CheckoutView({
           <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
             {isCompletedReceipt
               ? "Your payment has been verified on-chain and settled to the recipient."
-              : isReadOnly
-                ? "Review the payment request and any existing settlement."
-                : "Choose a source asset to check the available payment route."}
+              : request.isDeleted
+                ? "This payment link has been deleted by its creator."
+                : isReadOnly
+                  ? "Review the payment request and any existing settlement."
+                  : "Choose a source asset to check the available payment route."}
           </p>
-          {request.maxPayments !== null && !isCompletedReceipt && (
+          {request.maxPayments !== null &&
+            !isCompletedReceipt &&
+            !request.isDeleted && (
             <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-neutral-200/80 dark:border-white/[0.1] bg-white dark:bg-[#141414] px-3.5 py-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-200 shadow-2xs tabular-nums">
               <span
                 className={`h-2 w-2 rounded-full ${
@@ -952,33 +958,39 @@ export function CheckoutView({
               <IconAlertTriangle size={26} />
             </div>
             <h2 className="font-serif text-2xl text-neutral-950 dark:text-white">
-              {request.status === "DISABLED"
-                ? "This payment link is paused"
-                : request.status === "COMPLETED"
-                  ? "Payment settled & link dormant"
-                  : isExpired
-                    ? "This payment link has expired"
-                    : "Payment link unavailable"}
+              {request.isDeleted
+                ? "Link deleted"
+                : request.status === "DISABLED"
+                  ? "This payment link is paused"
+                  : request.status === "COMPLETED"
+                    ? "Payment settled & link dormant"
+                    : isExpired
+                      ? "This payment link has expired"
+                      : "Payment link unavailable"}
             </h2>
             <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              {request.status === "DISABLED"
-                ? "The recipient has temporarily paused this payment link. New quotes and deposits are disabled until it is resumed."
-                : request.status === "COMPLETED"
-                  ? request.maxPayments !== null
-                    ? `All ${request.maxPayments} payment ${request.maxPayments === 1 ? "spot has" : "spots have"} been filled and settled on-chain. This link is now closed.`
-                    : "This payment request has already been paid and settled on-chain. The link is now expired and dormant."
-                  : isExpired
-                    ? "The payment window for this invoice has closed and it can no longer accept payments."
-                    : "Quote unavailable. This payment request cannot accept payments."}
+              {request.isDeleted
+                ? "This payment link has been deleted by its creator and can no longer accept payments."
+                : request.status === "DISABLED"
+                  ? "The recipient has temporarily paused this payment link. New quotes and deposits are disabled until it is resumed."
+                  : request.status === "COMPLETED"
+                    ? request.maxPayments !== null
+                      ? `All ${request.maxPayments} payment ${request.maxPayments === 1 ? "spot has" : "spots have"} been filled and settled on-chain. This link is now closed.`
+                      : "This payment request has already been paid and settled on-chain. The link is now expired and dormant."
+                    : isExpired
+                      ? "The payment window for this invoice has closed and it can no longer accept payments."
+                      : "Quote unavailable. This payment request cannot accept payments."}
             </p>
-            {request.displayAmount && (
+            {!request.isDeleted && request.displayAmount && (
               <p className="pt-1 font-semibold text-neutral-950 dark:text-white">
                 {request.displayAmount} {request.destinationAssetSymbol}
               </p>
             )}
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {formatNetworkDisplay(request.destinationNetwork)}
-            </p>
+            {!request.isDeleted && (
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                {formatNetworkDisplay(request.destinationNetwork)}
+              </p>
+            )}
             <div className="pt-2">
               <Link
                 href="/"

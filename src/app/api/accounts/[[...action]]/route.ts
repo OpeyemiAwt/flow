@@ -12,6 +12,7 @@ import {
 import { api, reply } from "../../../../server/http.ts";
 import {
   createPaymentRequest,
+  deletePaymentRequest,
   getPaymentRequest,
   listPaymentRequests,
   updatePaymentRequest,
@@ -79,6 +80,8 @@ export async function GET(
           return getPaymentRequest(request, accountId(id), child);
         if (request.method === "PATCH")
           return updatePaymentRequest(request, accountId(id), child);
+        if (request.method === "DELETE")
+          return deletePaymentRequest(request, accountId(id), child);
       }
       if (
         section === "portfolio" &&
