@@ -7,7 +7,6 @@ import {
   FloatingNav,
   type NavTabId,
 } from "../../../../components/floating-nav.tsx";
-import { NotificationsDrawer } from "../../../../components/notifications-drawer.tsx";
 import { FlowIdClaimModal } from "../../../../components/flow-id-claim-modal.tsx";
 import { isFlowIdInput } from "../../../../domain/flow-id.ts";
 import { useToast } from "../../../../components/toast-provider.tsx";
@@ -773,7 +772,6 @@ export function PortfolioView({
   // Modals and Drawers
   const router = useRouter();
   const [isHeldAssetsOpen, setIsHeldAssetsOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const { pushToast } = useToast();
   const setMessage = useCallback(
@@ -2260,7 +2258,9 @@ export function PortfolioView({
           changeTab(tab);
         }}
         unreadCount={unreadNotifications}
-        onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenNotifications={() =>
+          router.push(`/notifications?account=${accountId}`)
+        }
         onOpenAssistant={() => router.push(`/assistant?account=${accountId}`)}
         userName={initialDisplayName?.trim() || userEmail || account?.name || "Personal"}
         userAvatarUrl={userAvatarUrl}
@@ -5147,16 +5147,6 @@ export function PortfolioView({
             changeTab("convert");
           }
         }}
-      />
-
-      {/* Notifications Drawer */}
-      <NotificationsDrawer
-        profileId={profileId}
-        isOpen={isNotificationsOpen}
-        onClose={() => setIsNotificationsOpen(false)}
-        accountId={accountId}
-        onUnreadCountChange={setUnreadNotifications}
-        onClaimFlowId={() => setIsFlowIdModalOpen(true)}
       />
 
       <FlowIdClaimModal
