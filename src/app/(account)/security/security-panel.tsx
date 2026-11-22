@@ -943,6 +943,70 @@ export function SecurityPanel({
                     </div>
                   </div>
 
+                  {/* Help & Legal */}
+                  <div className="pt-4 border-t border-neutral-100 dark:border-neutral-800">
+                    <div className="mb-3">
+                      <h3 className="font-display text-xs font-bold text-neutral-950 dark:text-white">
+                        Help &amp; Legal
+                      </h3>
+                      <p className="text-[11px] text-neutral-500">
+                        Learn how FLOW works and review our policies.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {[
+                        {
+                          href: "/docs#how-flow-works",
+                          title: "How FLOW works",
+                          description:
+                            "Guide to private balances, multi-chain routes, and payment links.",
+                        },
+                        {
+                          href: "/privacy",
+                          title: "Privacy Policy",
+                          description:
+                            "What data FLOW stores, what stays private, and your controls.",
+                        },
+                        {
+                          href: "/terms",
+                          title: "Terms of Service",
+                          description:
+                            "Rules for using the FLOW interface and self-custodial accounts.",
+                        },
+                      ].map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className="group flex items-center justify-between gap-3 p-3.5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/40 dark:bg-neutral-900/20 hover:bg-neutral-100/70 dark:hover:bg-neutral-900/60 hover:border-neutral-200 dark:hover:border-neutral-700 transition-colors"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-neutral-950 dark:text-white">
+                              {item.title}
+                            </p>
+                            <p className="text-[11px] text-neutral-500">
+                              {item.description}
+                            </p>
+                          </div>
+                          <svg
+                            className="w-4 h-4 shrink-0 text-neutral-400 group-hover:text-neutral-950 dark:group-hover:text-white group-hover:translate-x-0.5 transition-all"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Active Sessions */}
                   <div className="pt-4 border-t border-neutral-100 dark:border-neutral-800">
                     <div className="flex items-center justify-between mb-3">
