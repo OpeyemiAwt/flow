@@ -482,11 +482,14 @@ function useOutgoingPreview(input: {
       )
     : undefined;
   const gasCheck =
-    sourceDeployment && amountAtomic && !insufficientBalance
+    sourceDeployment &&
+    balance &&
+    BigInt(balance.atomicBalance) > 0n &&
+    !insufficientBalance
       ? checkNetworkGasBalance({
           networkKey: sourceDeployment.networkKey,
           sourceStandard: sourceDeployment.standard,
-          requestedAmountAtomic: BigInt(amountAtomic),
+          requestedAmountAtomic: amountAtomic ? BigInt(amountAtomic) : 1n,
           nativeBalanceAtomic: nativeGasRecord
             ? BigInt(nativeGasRecord.atomicBalance)
             : 0n,
@@ -496,16 +499,32 @@ function useOutgoingPreview(input: {
   const samePair = Boolean(
     sourceDeployment && sourceDeployment.id === destination.id,
   );
+  const directTransfer =
+    operation === "SEND" &&
+    samePair &&
+    !insufficientBalance &&
+    !insufficientGas &&
+    Boolean(amountAtomic) &&
+    Boolean(recipient)
+      ? {
+          displayAmount,
+          networkName: destination.networkName,
+        }
+      : null;
   const unavailableReason = !sourceDeployment
     ? "Select an asset held in your wallet."
-    : !amountAtomic
-      ? "Enter an amount greater than 0."
-      : insufficientBalance
-        ? `Insufficient ${sourceDeployment.symbol} balance (available: ${balance ? formatApproxDisplay(balance.displayBalance) : "0"} ${sourceDeployment.symbol}).`
-        : !gasCheck.ok
-          ? gasCheck.reason
+    : !gasCheck.ok
+      ? gasCheck.reason
+      : !amountAtomic
+        ? "Enter an amount greater than 0."
+        : insufficientBalance
+          ? `Insufficient ${sourceDeployment.symbol} balance (available: ${balance ? formatApproxDisplay(balance.displayBalance) : "0"} ${sourceDeployment.symbol}).`
           : samePair
-            ? "Source and destination assets are the same — select a different destination asset."
+            ? operation === "SEND"
+              ? !recipient
+                ? "Enter a valid recipient address to continue."
+                : null
+              : "Source and destination assets are the same — select a different destination asset."
             : !recipient
               ? operation === "SEND"
                 ? "Enter a valid recipient address to fetch a quote."
@@ -589,6 +608,7 @@ function useOutgoingPreview(input: {
     insufficientBalance,
     insufficientGas,
     samePair,
+    directTransfer,
     unavailableReason,
   };
 }
@@ -600,7 +620,15 @@ function OutgoingQuoteDetails({
   preview: ReturnType<typeof useOutgoingPreview>;
   symbol: string;
 }) {
-  const { quote, loading, error, unavailableReason, canReview, review } = preview;
+  const {
+    quote,
+    directTransfer,
+    loading,
+    error,
+    unavailableReason,
+    canReview,
+    review,
+  } = preview;
   return (
     <div
       className="rounded-2xl border border-neutral-200/60 dark:border-white/[0.08] bg-neutral-50/60 dark:bg-white/[0.03] px-4 py-3 text-left"
@@ -636,6 +664,23 @@ function OutgoingQuoteDetails({
                   (included)
                 </span>
               )}
+            </div>
+          </div>
+        ) : directTransfer ? (
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex items-baseline justify-between gap-2 flex-wrap">
+              <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+                Recipient receives
+              </span>
+              <span className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
+                {formatApproxDisplay(directTransfer.displayAmount)} {symbol}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+              <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                Direct 1:1 transfer on {directTransfer.networkName}
+              </span>
+              <span>No swap fee</span>
             </div>
           </div>
         ) : (
@@ -1364,23 +1409,50 @@ export function PortfolioView({
   const sendSourceBalance = sendSource?.displayBalance;
   const convertSourceBalance = convertSource?.displayBalance;
 
+  const getMaxAtomicForSource = (source: typeof sendSource): bigint => {
+    if (!source) return 0n;
+    try {
+      const atomic = source.balanceRecord
+        ? BigInt(source.balanceRecord.atomicBalance)
+        : parseDisplayToAtomic(
+            source.displayBalance,
+            source.deployment.decimals,
+          );
+      return computeMaxSendableAtomic({
+        networkKey: source.deployment.networkKey,
+        sourceStandard: source.deployment.standard,
+        balanceAtomic: atomic,
+      });
+    } catch {
+      return 0n;
+    }
+  };
+
   const getMaxAmountForSource = (
     source: typeof sendSource,
   ): string => {
     if (!source?.displayBalance) return "";
     try {
-      const atomic = parseDisplayToAtomic(
-        source.displayBalance,
-        source.deployment.decimals,
-      );
-      const maxAtomic = computeMaxSendableAtomic({
-        networkKey: source.deployment.networkKey,
-        sourceStandard: source.deployment.standard,
-        balanceAtomic: atomic,
-      });
+      const maxAtomic = getMaxAtomicForSource(source);
       return formatAtomicToDisplay(maxAtomic, source.deployment.decimals);
     } catch {
       return source.displayBalance;
+    }
+  };
+
+  const getPercentageAmountForSource = (
+    source: typeof sendSource,
+    percent: number,
+  ): string => {
+    if (!source) return "";
+    try {
+      const maxAtomic = getMaxAtomicForSource(source);
+      if (maxAtomic <= 0n) return "0";
+      const pctAtomic =
+        percent >= 100 ? maxAtomic : (maxAtomic * BigInt(percent)) / 100n;
+      return formatAtomicToDisplay(pctAtomic, source.deployment.decimals);
+    } catch {
+      return "";
     }
   };
 
@@ -2789,36 +2861,11 @@ export function PortfolioView({
                               ? "••••••"
                               : `${act.direction === "OUTGOING" ? "−" : "+"}${formatCompactActivityAmount(act.displayAmount, 3)} ${act.assetSymbol}`}
                           </span>
-                          {(() => {
-                            const execStatus =
-                              typeof act.metadata?.executionStatus === "string"
-                                ? act.metadata.executionStatus
-                                : null;
-                            const isFailed =
-                              execStatus === "FAILED" ||
-                              execStatus === "REFUNDED" ||
-                              execStatus === "EXPIRED";
-                            const isCompleted =
-                              !isFailed && act.finality === "FINALIZED";
-                            const label = isFailed
-                              ? execStatus!.charAt(0) +
-                                execStatus!.slice(1).toLowerCase()
-                              : isCompleted
-                                ? "Completed"
-                                : "Pending";
-                            const colorClass = isFailed
-                              ? "text-red-600 dark:text-red-400"
-                              : isCompleted
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-amber-600 dark:text-amber-400";
-                            return (
-                              <div
-                                className={`text-[10px] font-semibold uppercase tracking-wide mt-0.5 whitespace-nowrap ${colorClass}`}
-                              >
-                                {label}
-                              </div>
-                            );
-                          })()}
+                          <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold uppercase tracking-wide mt-0.5 whitespace-nowrap">
+                            {act.reorgStatus === "CANONICAL"
+                              ? act.finality
+                              : act.reorgStatus}
+                          </div>
                         </div>
                       </button>
                     ))
@@ -3384,24 +3431,22 @@ export function PortfolioView({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {[0.25, 0.5, 0.75, 1].map((pct) => (
+                          {[25, 50, 75, 100].map((pct) => (
                             <button
                               key={pct}
                               type="button"
                               disabled={!sendSourceBalance}
                               onClick={() => {
-                                const maxNum =
-                                  parseFloat(getMaxAmountForSource(sendSource)) || 0;
-                                if (maxNum <= 0) return;
-                                setSendAmount(
-                                  pct === 1
-                                    ? maxNum.toString()
-                                    : (Math.floor(maxNum * pct * 1e6) / 1e6).toString(),
+                                const next = getPercentageAmountForSource(
+                                  sendSource,
+                                  pct,
                                 );
+                                if (!next) return;
+                                setSendAmount(next);
                               }}
                               className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-neutral-200/70 hover:bg-neutral-300/70 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer disabled:opacity-40"
                             >
-                              {pct === 1 ? "Max" : `${pct * 100}%`}
+                              {pct === 100 ? "Max" : `${pct}%`}
                             </button>
                           ))}
                         </div>
@@ -5283,24 +5328,11 @@ export function PortfolioView({
                               View tx ↗
                             </a>
                           ) : (
-                            <span
-                              className={`text-[10px] font-semibold ${
-                                act.metadata?.executionStatus === "FAILED" ||
-                                act.metadata?.executionStatus === "REFUNDED" ||
-                                act.metadata?.executionStatus === "EXPIRED"
-                                  ? "text-red-600 dark:text-red-400"
-                                  : "text-amber-600 dark:text-amber-400"
-                              }`}
-                            >
+                            <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
                               {act.metadata?.executionStatus === "FAILED" ||
                               act.metadata?.executionStatus === "REFUNDED" ||
                               act.metadata?.executionStatus === "EXPIRED"
-                                ? String(act.metadata.executionStatus)
-                                    .charAt(0)
-                                    .toUpperCase() +
-                                  String(act.metadata.executionStatus)
-                                    .slice(1)
-                                    .toLowerCase()
+                                ? "No tx hash"
                                 : "Pending"}
                             </span>
                           )}
