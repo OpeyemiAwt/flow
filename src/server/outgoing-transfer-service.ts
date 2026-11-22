@@ -368,9 +368,7 @@ export async function executeSendTransfer(
       destinationNetwork: destDeployment.networkKey,
     });
     trimmedRecipient = resolved.recipientAddress;
-    recipientLabel = resolved.accountName
-      ? `${resolved.accountName} (${resolved.flowId})`
-      : resolved.flowId;
+    recipientLabel = resolved.flowId;
   }
   const userMemo = body.memo?.trim() || null;
   const addressValidation = validateAddressForNetwork(

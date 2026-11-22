@@ -64,10 +64,12 @@ function resolveReceiptFields(activity: SerializedWalletActivityRecord) {
     (typeof meta.title === "string" && meta.title.trim()) ||
     (typeof meta.description === "string" && meta.description.trim()) ||
     null;
-  const recipientLabel =
+  const rawRecipientLabel =
     typeof meta.recipientLabel === "string" && meta.recipientLabel.trim()
       ? meta.recipientLabel.trim()
       : null;
+  const flowIdMatch = rawRecipientLabel?.match(/\b([a-z0-9][a-z0-9._-]*@flow)\b/i);
+  const recipientLabel = flowIdMatch ? flowIdMatch[1] : rawRecipientLabel;
 
   let typeLabel =
     activity.direction === "OUTGOING" ? "Transfer" : "Received";

@@ -348,6 +348,39 @@ function formatApproxDisplay(
   return `<${sign}0.${"0".repeat(Math.max(0, maxDecimals - 1))}1`;
 }
 
+function formatCompactActivityAmount(
+  raw: string | null | undefined,
+  maxDecimals = 3,
+): string {
+  if (!raw) return "0";
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "0" || /^[-+]?0(\.0+)?$/.test(trimmed)) {
+    return "0";
+  }
+  const num = Number.parseFloat(trimmed);
+  if (Number.isFinite(num)) {
+    const abs = Math.abs(num);
+    const minThreshold = 10 ** -maxDecimals;
+    if (abs > 0 && abs < minThreshold) {
+      return `${num < 0 ? "-" : ""}<0.${"0".repeat(Math.max(0, maxDecimals - 1))}1`;
+    }
+    return num.toLocaleString("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: maxDecimals,
+    });
+  }
+  const sign = trimmed.startsWith("-") ? "-" : "";
+  const unsigned = trimmed.replace(/^[-+]/, "");
+  const dotIdx = unsigned.indexOf(".");
+  if (dotIdx === -1) return `${sign}${unsigned}`;
+  const intPart = unsigned.slice(0, dotIdx) || "0";
+  const fracRaw = unsigned.slice(dotIdx + 1, dotIdx + 1 + maxDecimals).replace(/0+$/, "");
+  if (!fracRaw && intPart === "0") {
+    return `${sign}<0.${"0".repeat(Math.max(0, maxDecimals - 1))}1`;
+  }
+  return fracRaw ? `${sign}${intPart}.${fracRaw}` : `${sign}${intPart}`;
+}
+
 function sanitizeNonNegativeDecimal(raw: string): string {
   const cleaned = raw.replace(/[-+eE]/g, "");
   const numeric = Number(cleaned);
@@ -2680,7 +2713,7 @@ export function PortfolioView({
               {/* Left: Recent Activity Card */}
               <section
                 aria-label="Recent activity"
-                className="md:col-span-7 rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4"
+                className="md:col-span-7 rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4 sm:p-6 shadow-xs space-y-3 sm:space-y-4"
               >
                 <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
                   <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
@@ -2695,21 +2728,27 @@ export function PortfolioView({
                   </button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-1.5 sm:space-y-2">
                   {displayActivities.length > 0 ? (
                     displayActivities.slice(0, 3).map((act) => (
                       <button
                         key={act.id}
                         type="button"
                         onClick={() => setReceiptActivity(act)}
-                        className="w-full text-left flex items-center justify-between p-2 rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
+                        className="w-full text-left flex items-center justify-between gap-3 px-2 py-2.5 rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                          <div
+                            className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center font-bold text-xs ${
+                              act.direction === "INCOMING"
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
+                                : "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400"
+                            }`}
+                          >
                             {act.direction === "OUTGOING" ? "↑" : "↓"}
                           </div>
-                          <div>
-                            <div className="text-xs font-bold text-neutral-950 dark:text-white">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-neutral-950 dark:text-white truncate">
                               {act.activityType ===
                                 "FLOW_CROSS_CHAIN_SETTLEMENT" &&
                               act.finality === "FINALIZED"
@@ -2726,7 +2765,7 @@ export function PortfolioView({
                                     ? "Transfer sent"
                                     : "Transfer received"}
                             </div>
-                            <div className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                            <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
                               {typeof act.metadata?.memo === "string" &&
                               act.metadata.memo.trim()
                                 ? `${act.metadata.memo.trim()} • `
@@ -2738,13 +2777,19 @@ export function PortfolioView({
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                        <div className="text-right shrink-0">
+                          <span
+                            className={`block text-xs font-bold tabular-nums whitespace-nowrap ${
+                              act.direction === "INCOMING"
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-neutral-950 dark:text-white"
+                            }`}
+                          >
                             {hideBalance
                               ? "••••••"
-                              : `${act.direction === "OUTGOING" ? "−" : "+"}${formatApproxDisplay(act.displayAmount)} ${act.assetSymbol}`}
+                              : `${act.direction === "OUTGOING" ? "−" : "+"}${formatCompactActivityAmount(act.displayAmount, 3)} ${act.assetSymbol}`}
                           </span>
-                          <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                          <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold uppercase tracking-wide mt-0.5 whitespace-nowrap">
                             {act.reorgStatus === "CANONICAL"
                               ? act.finality
                               : act.reorgStatus}
@@ -3198,19 +3243,13 @@ export function PortfolioView({
                           flowIdResolution.recipientAddress ? (
                             <div className="mt-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs">
                               <div className="flex items-center justify-between gap-2 text-emerald-700 dark:text-emerald-300 font-semibold">
-                                <span>
+                                <span className="truncate">
                                   Active Flow ID: {flowIdResolution.flowId}
-                                  {flowIdResolution.accountName
-                                    ? ` (${flowIdResolution.accountName})`
-                                    : ""}
                                 </span>
-                                <span className="text-[10px] uppercase tracking-wider">
+                                <span className="text-[10px] uppercase tracking-wider shrink-0">
                                   {sendDestDeployment.symbol} · {sendDestDeployment.networkName}
                                 </span>
                               </div>
-                              <p className="mt-0.5 font-mono text-[11px] text-emerald-700/80 dark:text-emerald-300/80 truncate">
-                                → {flowIdResolution.recipientAddress}
-                              </p>
                             </div>
                           ) : (
                             <p
@@ -3435,9 +3474,13 @@ export function PortfolioView({
                           <span className="text-neutral-500 dark:text-neutral-400">
                             Recipient
                           </span>
-                          <span className="font-mono font-semibold text-neutral-900 dark:text-neutral-200 truncate max-w-[65%]">
+                          <span
+                            className={`font-semibold text-neutral-900 dark:text-neutral-200 truncate max-w-[65%] ${
+                              sendIsFlowId && flowIdResolution.flowId ? "" : "font-mono"
+                            }`}
+                          >
                             {sendIsFlowId && flowIdResolution.flowId
-                              ? `${flowIdResolution.flowId} (${truncateMiddle(flowIdResolution.recipientAddress ?? "", 6, 4)})`
+                              ? flowIdResolution.flowId
                               : truncateMiddle(sendRecipientAddress, 10, 8)}
                           </span>
                         </div>
@@ -5110,7 +5153,7 @@ export function PortfolioView({
             />
 
             {/* Activity List */}
-            <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-3">
+            <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-3.5 sm:p-6 shadow-xs space-y-2.5 sm:space-y-3">
               {displayActivities.length > 0 ? (
                 displayActivities
                   .filter((act) => {
@@ -5132,9 +5175,9 @@ export function PortfolioView({
                           setReceiptActivity(act);
                         }
                       }}
-                      className="p-3 rounded-2xl border border-neutral-100 dark:border-white/[0.06] hover:bg-neutral-50/60 dark:hover:bg-white/[0.03] transition-colors flex items-center justify-between gap-4 cursor-pointer"
+                      className="p-3 sm:p-3.5 rounded-2xl border border-neutral-100 dark:border-white/[0.06] hover:bg-neutral-50/60 dark:hover:bg-white/[0.03] transition-colors flex items-center justify-between gap-2.5 sm:gap-4 cursor-pointer"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                         <div
                           className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center font-bold text-xs ${
                             act.direction === "INCOMING"
@@ -5144,7 +5187,7 @@ export function PortfolioView({
                         >
                           {act.direction === "INCOMING" ? "↓" : "↑"}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="text-xs font-bold text-neutral-950 dark:text-white truncate">
                             {act.activityType === "FLOW_PAYMENT"
                               ? act.metadata?.executionStatus === "FAILED" ||
@@ -5167,22 +5210,26 @@ export function PortfolioView({
                           </div>
                           {typeof act.metadata?.memo === "string" &&
                             act.metadata.memo.trim() && (
-                              <div className="text-[11px] text-neutral-600 dark:text-neutral-300 truncate">
+                              <div className="text-[11px] text-neutral-600 dark:text-neutral-300 truncate mt-0.5">
                                 {act.metadata.memo.trim()}
                               </div>
                             )}
-                          <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
-                            {truncateMiddle(act.txHash, 10, 8)} •{" "}
-                            {formatTimestamp(
-                              act.blockTimestamp || act.observedAt,
-                            )}
+                          <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                            <span>
+                              {formatTimestamp(
+                                act.blockTimestamp || act.observedAt,
+                              )}
+                            </span>
+                            <span className="hidden sm:inline font-mono">
+                              {" "}• {truncateMiddle(act.txHash, 8, 6)}
+                            </span>
                           </div>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
                         <div
-                          className={`text-xs font-bold tabular-nums ${
+                          className={`text-xs font-bold tabular-nums whitespace-nowrap ${
                             act.direction === "INCOMING"
                               ? "text-emerald-600 dark:text-emerald-400"
                               : "text-neutral-950 dark:text-white"
@@ -5190,10 +5237,10 @@ export function PortfolioView({
                         >
                           {hideBalance
                             ? "••••••"
-                            : `${act.direction === "INCOMING" ? "+" : "-"}${formatApproxDisplay(act.displayAmount)}`}{" "}
+                            : `${act.direction === "INCOMING" ? "+" : "−"}${formatCompactActivityAmount(act.displayAmount, 3)}`}{" "}
                           {act.assetSymbol}
                         </div>
-                        <div className="flex items-center justify-end gap-2 mt-0.5">
+                        <div className="flex items-center justify-end gap-2 mt-0.5 whitespace-nowrap">
                           <span className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400">
                             Receipt
                           </span>

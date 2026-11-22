@@ -242,6 +242,7 @@ export function NotificationsView({
                 const isIncoming =
                   n.type === "DEPOSIT_DETECTED" ||
                   n.type === "PAYMENT_RECEIVED";
+                const isOutgoing = n.type === "PAYMENT_COMPLETED";
                 const formattedDate = new Date(n.createdAt).toLocaleString(
                   undefined,
                   {
@@ -249,6 +250,18 @@ export function NotificationsView({
                     day: "numeric",
                     hour: "numeric",
                     minute: "2-digit",
+                  },
+                );
+                const formattedDescription = n.description.replace(
+                  /(?<![\w.])(\d+\.\d{4,})(?![\w.])/g,
+                  (match) => {
+                    const num = Number.parseFloat(match);
+                    if (!Number.isFinite(num)) return match;
+                    if (num > 0 && num < 0.001) return "<0.001";
+                    return num.toLocaleString("en-US", {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 3,
+                    });
                   },
                 );
 
@@ -268,25 +281,27 @@ export function NotificationsView({
                         router.push(n.link);
                       }
                     }}
-                    className={`w-full text-left p-4 sm:px-6 sm:py-4 flex items-start gap-4 transition-colors cursor-pointer ${
+                    className={`w-full text-left p-3.5 sm:px-6 sm:py-4 flex items-start gap-3 sm:gap-4 transition-colors cursor-pointer ${
                       !n.isRead
                         ? "bg-blue-50/40 dark:bg-blue-950/15 hover:bg-blue-50/70 dark:hover:bg-blue-950/25"
                         : "hover:bg-neutral-50/80 dark:hover:bg-white/[0.02]"
                     }`}
                   >
                     <div
-                      className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                      className={`mt-0.5 flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full ${
                         isClaim
                           ? "bg-red-50 dark:bg-red-950/40 text-[#FF1A1A]"
                           : isIncoming
                             ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
-                            : "bg-neutral-100 dark:bg-white/[0.07] text-neutral-700 dark:text-neutral-200"
+                            : isOutgoing
+                              ? "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400"
+                              : "bg-neutral-100 dark:bg-white/[0.07] text-neutral-700 dark:text-neutral-200"
                       }`}
                     >
                       {isIncoming ? (
                         <svg
-                          width="18"
-                          height="18"
+                          width="16"
+                          height="16"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -298,10 +313,25 @@ export function NotificationsView({
                           <path d="M12 5v14" />
                           <path d="m19 12-7 7-7-7" />
                         </svg>
+                      ) : isOutgoing ? (
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 19V5" />
+                          <path d="m5 12 7-7 7 7" />
+                        </svg>
                       ) : (
                         <svg
-                          width="18"
-                          height="18"
+                          width="16"
+                          height="16"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -317,9 +347,9 @@ export function NotificationsView({
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm font-bold text-neutral-950 dark:text-white truncate">
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white truncate">
                             {n.title}
                           </span>
                           {!n.isRead && (
@@ -329,12 +359,12 @@ export function NotificationsView({
                             />
                           )}
                         </div>
-                        <span className="text-[11px] text-neutral-400 dark:text-neutral-500 shrink-0 tabular-nums">
+                        <span className="text-[11px] text-neutral-400 dark:text-neutral-500 shrink-0 whitespace-nowrap tabular-nums">
                           {formattedDate}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">
-                        {n.description}
+                      <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400 break-words tabular-nums">
+                        {formattedDescription}
                       </p>
                       {isClaim && (
                         <span className="mt-2 inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-[#FF1A1A] text-white">

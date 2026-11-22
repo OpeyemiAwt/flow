@@ -26,6 +26,47 @@ export interface AccountNotification {
   readonly createdAt: string;
 }
 
+function formatCompactNotificationAmount(
+  raw: string,
+  maxDecimals = 3,
+): string {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "0" || /^[-+]?0(\.0+)?$/.test(trimmed)) {
+    return "0";
+  }
+  const num = Number.parseFloat(trimmed);
+  if (Number.isFinite(num)) {
+    const abs = Math.abs(num);
+    const minThreshold = 10 ** -maxDecimals;
+    if (abs > 0 && abs < minThreshold) {
+      return `${num < 0 ? "-" : ""}<0.${"0".repeat(Math.max(0, maxDecimals - 1))}1`;
+    }
+    return num.toLocaleString("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: maxDecimals,
+    });
+  }
+  const dotIdx = trimmed.indexOf(".");
+  if (dotIdx === -1) return trimmed;
+  const intPart = trimmed.slice(0, dotIdx) || "0";
+  const frac = trimmed
+    .slice(dotIdx + 1, dotIdx + 1 + maxDecimals)
+    .replace(/0+$/, "");
+  if (!frac && intPart === "0") {
+    return `<0.${"0".repeat(Math.max(0, maxDecimals - 1))}1`;
+  }
+  return frac ? `${intPart}.${frac}` : intPart;
+}
+
+function formatNetworkLabel(network: string): string {
+  const normalized = network.toLowerCase().replace("-mainnet", "");
+  if (normalized === "near") return "NEAR";
+  if (normalized === "base") return "Base";
+  if (normalized === "solana") return "Solana";
+  if (normalized === "ethereum" || normalized === "eth") return "Ethereum";
+  return normalized;
+}
+
 export async function getAccountNotifications(
   db: FlowDb,
   accountId: string,
@@ -79,9 +120,9 @@ export async function getAccountNotifications(
 
   for (const a of completedAttempts) {
     const notifId = `notif_settled_${a.attempt_id}`;
-    const amount = formatAtomicToDisplay(
-      a.settled_atomic_amount,
-      a.destination_decimals,
+    const amount = formatCompactNotificationAmount(
+      formatAtomicToDisplay(a.settled_atomic_amount, a.destination_decimals),
+      3,
     );
     notifications.push({
       id: notifId,
@@ -89,7 +130,7 @@ export async function getAccountNotifications(
       category: "payments",
       type: "PAYMENT_RECEIVED",
       title: "Payment received",
-      description: `+${amount} ${a.destination_asset_symbol} on ${a.destination_network.replace("-mainnet", "")}`,
+      description: `+${amount} ${a.destination_asset_symbol} on ${formatNetworkLabel(a.destination_network)}`,
       link: `/app/activity`,
       isRead: false,
       createdAt: (a.settled_at ?? a.created_at).toISOString(),
@@ -169,8 +210,11 @@ export async function getAccountNotifications(
   `;
 
   for (const ev of walletEvents) {
-    const amount = formatAtomicToDisplay(ev.atomic_amount, ev.decimals);
-    const networkLabel = ev.chain_id.replace("-mainnet", "");
+    const amount = formatCompactNotificationAmount(
+      formatAtomicToDisplay(ev.atomic_amount, ev.decimals),
+      3,
+    );
+    const networkLabel = formatNetworkLabel(ev.chain_id);
     const isOutgoing = ev.direction === "OUTGOING";
     notifications.push({
       id: `notif_wallet_${ev.direction.toLowerCase()}_${ev.tx_hash}`,
@@ -224,9 +268,9 @@ export async function getAccountNotifications(
   `;
 
   for (const job of settledOutgoing) {
-    const amount = formatAtomicToDisplay(
-      job.source_atomic_amount,
-      job.source_decimals,
+    const amount = formatCompactNotificationAmount(
+      formatAtomicToDisplay(job.source_atomic_amount, job.source_decimals),
+      3,
     );
     const isConvert = job.job_kind === "CONVERT";
     notifications.push({
@@ -237,7 +281,7 @@ export async function getAccountNotifications(
       title: isConvert ? "Conversion completed" : "Transfer sent",
       description: isConvert
         ? `${amount} ${job.source_asset_symbol} → ${job.destination_asset_symbol}`
-        : `-${amount} ${job.source_asset_symbol} on ${job.source_network.replace("-mainnet", "")}`,
+        : `-${amount} ${job.source_asset_symbol} on ${formatNetworkLabel(job.source_network)}`,
       link: `/app/activity`,
       isRead: false,
       createdAt: (job.settled_at ?? job.created_at).toISOString(),
@@ -277,9 +321,12 @@ export async function getAccountNotifications(
   `;
 
   for (const am of settledAddMoney) {
-    const amount = formatAtomicToDisplay(
-      am.quoted_destination_atomic_amount,
-      am.destination_decimals,
+    const amount = formatCompactNotificationAmount(
+      formatAtomicToDisplay(
+        am.quoted_destination_atomic_amount,
+        am.destination_decimals,
+      ),
+      3,
     );
     notifications.push({
       id: `notif_add_money_${am.id}`,
@@ -287,7 +334,7 @@ export async function getAccountNotifications(
       category: "payments",
       type: "DEPOSIT_DETECTED",
       title: "Add Money settled",
-      description: `+${amount} ${am.destination_asset_symbol} on near`,
+      description: `+${amount} ${am.destination_asset_symbol} on NEAR`,
       link: `/app/activity`,
       isRead: false,
       createdAt: (am.settled_at ?? am.created_at).toISOString(),

@@ -140,13 +140,13 @@ export function NotificationsDrawer({
       />
 
       {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10">
         <aside
           aria-label="Account notifications drawer"
           className="flow-anim-drawer-right w-screen max-w-md bg-white dark:bg-[#141414] border-l border-neutral-200 dark:border-neutral-800 shadow-2xl flex flex-col"
         >
           {/* Header */}
-          <div className="p-6 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
+          <div className="p-4 sm:p-6 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <h2 className="text-lg font-bold text-neutral-950 dark:text-white">
                 Notifications
@@ -237,8 +237,8 @@ export function NotificationsDrawer({
                       : "bg-blue-50/40 dark:bg-blue-950/20 border-blue-200/80 dark:border-blue-800/60 text-neutral-900 dark:text-white shadow-xs"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
                       <div className="mt-0.5 shrink-0">
                         {item.type === "PAYMENT_RECEIVED" ? (
                           <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -272,21 +272,32 @@ export function NotificationsDrawer({
                           </div>
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-bold text-neutral-950 dark:text-white">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="text-xs font-bold text-neutral-950 dark:text-white truncate">
                             {item.title}
                           </p>
                           {!item.isRead && (
-                            <span className="h-2 w-2 rounded-full bg-[#FF1A1A]" />
+                            <span className="h-2 w-2 rounded-full bg-[#FF1A1A] shrink-0" />
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                          {item.description}
+                        <p className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed break-words tabular-nums">
+                          {item.description.replace(
+                            /(?<![\w.])(\d+\.\d{4,})(?![\w.])/g,
+                            (match) => {
+                              const num = Number.parseFloat(match);
+                              if (!Number.isFinite(num)) return match;
+                              if (num > 0 && num < 0.001) return "<0.001";
+                              return num.toLocaleString("en-US", {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 3,
+                              });
+                            },
+                          )}
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] text-neutral-400 shrink-0">
+                    <span className="text-[10px] text-neutral-400 shrink-0 whitespace-nowrap tabular-nums">
                       {new Date(item.createdAt).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
