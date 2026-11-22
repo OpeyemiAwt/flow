@@ -38,18 +38,13 @@ function formatReceiptDate(iso: string): string {
 }
 
 function formatAmountDisplay(displayAmount: string): string {
-  const num = Number.parseFloat(displayAmount);
-  if (!Number.isFinite(num)) return displayAmount;
+  const num = Math.abs(Number.parseFloat(displayAmount));
+  if (!Number.isFinite(num)) return displayAmount.replace(/^[-+]/, "");
   if (num === 0) return "0";
-  if (Math.abs(num) >= 1) {
-    return num.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 4,
-    });
-  }
+  if (num < 0.001) return "<0.001";
   return num.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 6,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
   });
 }
 
@@ -126,7 +121,12 @@ function resolveReceiptFields(activity: SerializedWalletActivityRecord) {
     !activity.txHash.startsWith("am_") &&
     !activity.txHash.startsWith("ern_");
 
+  const isIncoming = activity.direction === "INCOMING";
+  const directionSign = isIncoming ? "+" : "-";
+  const formattedAmount = `${directionSign}${formatAmountDisplay(activity.displayAmount)} ${activity.assetSymbol}`;
+
   return {
+    isIncoming,
     typeLabel,
     counterpartyLabel,
     counterpartyValue,
@@ -134,7 +134,7 @@ function resolveReceiptFields(activity: SerializedWalletActivityRecord) {
     memo: memoRaw,
     statusLabel,
     networkName: formatNetworkName(activity.network),
-    formattedAmount: `${formatAmountDisplay(activity.displayAmount)} ${activity.assetSymbol}`,
+    formattedAmount,
     formattedDate: formatReceiptDate(
       activity.blockTimestamp || activity.observedAt,
     ),
@@ -249,7 +249,7 @@ async function renderReceiptPngBlob(
   ctx.fillText("FLOW", px + 88, paperTop + 69);
 
   // Centered Hero Amount
-  ctx.fillStyle = "#0B0C0E";
+  ctx.fillStyle = fields.isIncoming ? "#059669" : "#0B0C0E";
   ctx.font = '700 54px -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
   ctx.textAlign = "center";
   ctx.fillText(fields.formattedAmount, W / 2, paperTop + 178);
@@ -400,7 +400,7 @@ export function TransactionReceiptModal({
     .paper { margin: -4px 12px 0; background:#EBEDF0; padding:24px 24px 28px; border-radius:0 0 12px 12px; }
     .brand { font-size:16px; font-weight:700; color:#0b0c0e; letter-spacing:-0.02em; }
     .hero { text-align:center; margin:20px 0 22px; }
-    .amt { font-size:30px; font-weight:700; color:#0b0c0e; letter-spacing:-0.02em; }
+    .amt { font-size:30px; font-weight:700; color:${fields.isIncoming ? "#059669" : "#0b0c0e"}; letter-spacing:-0.02em; }
     .date { font-size:12px; color:#5f636a; margin-top:4px; }
     .foot { text-align:center; font-size:11px; color:#8c9099; margin-top:18px; }
   </style>
@@ -481,7 +481,13 @@ export function TransactionReceiptModal({
 
               {/* Hero Amount & Date */}
               <div className="mt-6 mb-7 text-center">
-                <p className="text-[28px] sm:text-[30px] font-bold tracking-tight text-neutral-950 dark:text-white tabular-nums leading-tight">
+                <p
+                  className={`text-[28px] sm:text-[30px] font-bold tracking-tight tabular-nums leading-tight ${
+                    fields.isIncoming
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-neutral-950 dark:text-white"
+                  }`}
+                >
                   {fields.formattedAmount}
                 </p>
                 <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
