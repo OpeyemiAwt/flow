@@ -97,7 +97,7 @@ export function DocsShell({
   toc,
   children,
 }: {
-  activeRoute: "docs" | "whitepaper";
+  activeRoute: "docs" | "whitepaper" | "privacy" | "terms";
   eyebrow: string;
   toc: readonly DocsTocItem[];
   children: ReactNode;
@@ -197,6 +197,7 @@ export function DocsShell({
 
   const isTopTabActive = (match: string) => {
     if (activeRoute === "whitepaper") return match === "whitepaper";
+    if (activeRoute !== "docs") return false;
     if (match === "whitepaper") return false;
     if (match === "docs-overview") {
       return (
@@ -211,6 +212,15 @@ export function DocsShell({
     }
     return activeId === match;
   };
+
+  const headerSectionLabel =
+    activeRoute === "whitepaper"
+      ? "Whitepaper"
+      : activeRoute === "privacy"
+        ? "Privacy"
+        : activeRoute === "terms"
+          ? "Terms"
+          : "Docs";
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0b0c0e] text-[#0b0c0e] dark:text-[#f5f6f8] transition-colors duration-200">
@@ -243,10 +253,18 @@ export function DocsShell({
                 </Link>
                 <span className="h-4 w-px bg-[#e4e6e9] dark:bg-white/[0.12]" aria-hidden="true" />
                 <Link
-                  href="/docs"
+                  href={
+                    activeRoute === "whitepaper"
+                      ? "/whitepaper"
+                      : activeRoute === "privacy"
+                        ? "/privacy"
+                        : activeRoute === "terms"
+                          ? "/terms"
+                          : "/docs"
+                  }
                   className="text-[17px] leading-none tracking-[-0.015em] text-[#5f636a] dark:text-neutral-400 hover:text-[#0b0c0e] dark:hover:text-white transition-colors"
                 >
-                  {activeRoute === "whitepaper" ? "Whitepaper" : "Docs"}
+                  {headerSectionLabel}
                 </Link>
               </div>
             </div>
@@ -364,6 +382,8 @@ export function DocsShell({
                       {group.items.map((item) => {
                         const active =
                           (item.route === "whitepaper" && activeRoute === "whitepaper") ||
+                          (item.route === "privacy" && activeRoute === "privacy") ||
+                          (item.route === "terms" && activeRoute === "terms") ||
                           (item.route === "docs" &&
                             activeRoute === "docs" &&
                             item.sectionId === activeId);
@@ -498,7 +518,7 @@ export function DocsShell({
             <div className="grid gap-12 lg:grid-cols-[1.25fr_2fr]">
               <div>
                 <Link href="/" className="inline-flex items-center">
-                  <FlowLogo className="h-6 w-auto text-white" />
+                  <FlowLogo variant="inverse" className="h-6 w-auto" />
                 </Link>
                 <p className="mt-5 max-w-[22ch] text-[24px] font-light leading-[1.18] tracking-[-0.02em] text-white/75">
                   Multi-chain money that feels instant.
