@@ -127,6 +127,10 @@ export function SecurityPanel({
   const primaryAccount = accounts[0];
   const [flowId, setFlowId] = useState<string | null>(initialFlowId ?? null);
   const [isFlowIdModalOpen, setIsFlowIdModalOpen] = useState(false);
+  const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
   const [flowIdCopied, setFlowIdCopied] = useState(false);
   const walletStatusInfo = (() => {
     switch (primaryAccount?.walletStatus) {
@@ -1013,8 +1017,138 @@ export function SecurityPanel({
                   </div>
                 </div>
               </div>
+
+              {/* Danger Zone: Delete Account */}
+              <div className="rounded-3xl border border-red-200/80 dark:border-red-900/50 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-display text-base font-bold text-red-600 dark:text-red-400">
+                    Delete account
+                  </h2>
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1 max-w-xl">
+                    Permanently delete your FLOW account, sign out all active
+                    sessions, disable your payment links, and release your @flow
+                    ID. Make sure you have moved any remaining funds first.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirmText("");
+                    setDeleteAccountError("");
+                    setDeleteAccountModalOpen(true);
+                  }}
+                  className="shrink-0 px-4 py-2.5 rounded-full border border-red-200 dark:border-red-900/60 bg-red-50/70 dark:bg-red-950/30 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/60 transition-colors cursor-pointer"
+                >
+                  Delete account
+                </button>
+              </div>
         </div>
       </main>
+
+      {/* Delete Account Confirmation Modal */}
+      {deleteAccountModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs p-4"
+          onClick={() => {
+            if (!deletingAccount) setDeleteAccountModalOpen(false);
+          }}
+        >
+          <div
+            className="flow-anim-fade-up w-full max-w-md rounded-[28px] border border-neutral-200/90 dark:border-white/[0.1] bg-white dark:bg-[#161618] p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3
+                id="delete-account-modal-title"
+                className="font-serif text-2xl text-neutral-950 dark:text-white"
+              >
+                Delete your FLOW account?
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+                This action is permanent and cannot be undone. All active
+                sessions will be revoked, your payment links will be deleted,
+                and your @flow ID will be released. Please withdraw any
+                remaining wallet balances before proceeding.
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="delete-account-confirm-input"
+                className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5"
+              >
+                Type <span className="font-mono text-red-600">DELETE</span> to
+                confirm
+              </label>
+              <input
+                id="delete-account-confirm-input"
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                disabled={deletingAccount}
+                className="w-full px-4 py-2.5 rounded-2xl text-xs font-mono bg-neutral-50 dark:bg-[#1E1E20] border border-neutral-200 dark:border-white/[0.1] text-neutral-950 dark:text-white focus:outline-hidden focus:border-red-500"
+              />
+            </div>
+
+            {deleteAccountError && (
+              <p
+                role="alert"
+                className="text-xs font-medium text-red-600 dark:text-red-400"
+              >
+                {deleteAccountError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={() => setDeleteAccountModalOpen(false)}
+                className="flow-liquid-btn px-4 py-2.5 rounded-full text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText !== "DELETE" || deletingAccount}
+                onClick={async () => {
+                  setDeletingAccount(true);
+                  setDeleteAccountError("");
+                  try {
+                    const res = await fetch("/api/auth/delete-account", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: "{}",
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      setDeleteAccountError(
+                        data?.error ||
+                          "Could not delete account. Please try again.",
+                      );
+                      setDeletingAccount(false);
+                      return;
+                    }
+                    window.location.replace("/sign-in");
+                  } catch {
+                    setDeleteAccountError(
+                      "Network error while deleting account. Please try again.",
+                    );
+                    setDeletingAccount(false);
+                  }
+                }}
+                className="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deletingAccount ? "Deleting…" : "Delete my account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {primaryAccount && (
         <FlowIdClaimModal
           isOpen={isFlowIdModalOpen}

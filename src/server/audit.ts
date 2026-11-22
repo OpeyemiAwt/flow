@@ -11,6 +11,7 @@ type AuditKind =
   | "disable-email"
   | "transfer-authorize"
   | "sign-out"
+  | "delete-account"
   | "revoke-all"
   | "revoke-session"
   | "personal-created"

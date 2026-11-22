@@ -955,6 +955,85 @@ async function revokeSession(request: Request): Promise<Response> {
   return reply(204, undefined, headers);
 }
 
+async function deleteAccount(request: Request): Promise<Response> {
+  const { auth } = runtime();
+  await transaction(async (tx) => {
+    const session = await readSession(tx, request.headers);
+    if (!session) {
+      throw new ApiFailure(401, "AUTH_REQUIRED");
+    }
+    await lockAuthUser(tx, session.userId);
+    await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${session.token}, true)`;
+
+    const flowUser = await tx.flowUser.findUnique({
+      where: { authUserId: session.userId },
+      select: { id: true, personalAccount: { select: { id: true } } },
+    });
+
+    if (flowUser) {
+      // Soft-delete any active payment links on the personal account
+      if (flowUser.personalAccount?.id) {
+        const deletedAt = new Date().toISOString();
+        await tx.$executeRaw`
+          UPDATE flow.payment_requests
+          SET
+            status = 'DISABLED'::flow.payment_request_status,
+            metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('deleted', true, 'deletedAt', ${deletedAt}::text),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE account_id = ${flowUser.personalAccount.id}::uuid
+        `;
+        // Release claimed @flow ID
+        await tx.$executeRaw`
+          UPDATE flow.accounts
+          SET flow_id = NULL
+          WHERE id = ${flowUser.personalAccount.id}::uuid
+        `;
+      }
+
+      // Remove user profile preferences & deactivate FlowUser
+      await tx.userProfilePreference
+        .deleteMany({ where: { userId: flowUser.id } })
+        .catch(() => {});
+      await tx.flowUser.update({
+        where: { id: flowUser.id },
+        data: { active: false },
+      });
+    }
+
+    // Revoke all OAuth bindings, identities, and active sessions
+    await tx.googleSubjectBinding.deleteMany({
+      where: { userId: session.userId },
+    });
+    await tx.authIdentity.deleteMany({
+      where: { userId: session.userId },
+    });
+    await tx.authSession.deleteMany({
+      where: { userId: session.userId },
+    });
+
+    // Anonymize AuthUser so email & Google identity are completely freed
+    await tx.authUser.update({
+      where: { id: session.userId },
+      data: {
+        email: `deleted-${session.userId}@deleted.flow.invalid`,
+        name: "Deleted Account",
+        image: null,
+        emailVerified: false,
+        emailEnrolled: false,
+        mailboxPaused: true,
+      },
+    });
+
+    await audit(tx, "delete-account", session.userId, undefined, session.id);
+  });
+
+  const headers = privateHeaders();
+  for (const key of Object.values(auth.cookies))
+    headers.append("set-cookie", cookie(auth, key, "", 0));
+
+  return reply(200, { deleted: true }, headers);
+}
+
 export function authRoute(request: Request, path: string): Promise<Response> {
   return api(async () => {
     switch (`${request.method} ${path}`) {
@@ -968,6 +1047,8 @@ export function authRoute(request: Request, path: string): Promise<Response> {
         return verifyCode(request, false);
       case "POST sign-out":
         return signOut(request);
+      case "POST delete-account":
+        return deleteAccount(request);
       default:
         return reply(404, { error: "NOT_FOUND" });
     }
