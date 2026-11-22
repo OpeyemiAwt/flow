@@ -35,11 +35,17 @@ function appFeesMatch(
   const exp = expected ?? [];
   const act = actual ?? [];
   if (exp.length !== act.length) return false;
-  return exp.every(
-    (item, idx) =>
-      act[idx]?.recipient?.toLowerCase() === item.recipient.toLowerCase() &&
-      act[idx]?.fee === item.fee,
-  );
+  return exp.every((item, idx) => {
+    const actualRecipient = act[idx]?.recipient?.toLowerCase();
+    const actualFee = act[idx]?.fee;
+    return (
+      actualRecipient === item.recipient.toLowerCase() &&
+      typeof actualFee === "number" &&
+      Number.isFinite(actualFee) &&
+      actualFee > 0 &&
+      actualFee <= item.fee
+    );
+  });
 }
 
 export interface OneClickRawResponse {
@@ -308,9 +314,12 @@ export async function fetchOneClickDryQuote(params: {
           ? quote.timeEstimate
           : null,
       fees: {
-        appFeeBps: normalizedAppFees
-          ? normalizedAppFees.reduce((sum, item) => sum + item.fee, 0)
-          : 0,
+        appFeeBps:
+          echo.appFees && echo.appFees.length > 0
+            ? echo.appFees.reduce((sum, item) => sum + item.fee, 0)
+            : normalizedAppFees
+              ? normalizedAppFees.reduce((sum, item) => sum + item.fee, 0)
+              : 0,
         refundFeeAtomic: atomicFee(quote.refundFee),
         withdrawFeeAtomic: atomicFee(quote.withdrawFee),
         isEstimate: true,
