@@ -5,6 +5,7 @@ import {
 } from "../domain/atomic-amounts.ts";
 import {
   type PaymentAmountMode,
+  type PaymentFeePayer,
   type PaymentRequestRecord,
   type PaymentRequestStatus,
   type PublicPaymentRequest,
@@ -87,6 +88,19 @@ export async function readPaymentRequestDeleted(
   }
 }
 
+export async function readPaymentRequestFeePayer(
+  publicId: string,
+): Promise<PaymentFeePayer> {
+  try {
+    const rows = await runtime().db.$queryRaw<Array<{ fee_payer: string }>>`
+      SELECT flow.get_payment_request_fee_payer(${publicId}) AS fee_payer
+    `;
+    return rows[0]?.fee_payer === "MERCHANT" ? "MERCHANT" : "PAYER";
+  } catch {
+    return "PAYER";
+  }
+}
+
 export async function readPaymentRequestUsage(
   publicId: string,
 ): Promise<{ maxPayments: number | null; paidCount: number }> {
@@ -124,6 +138,7 @@ export interface CreatePaymentRequestInput {
   expiresInHours?: number | null;
   payerMemoRequired?: boolean;
   maxPayments?: number | null;
+  feePayer?: PaymentFeePayer;
 }
 
 export interface UpdatePaymentRequestInput {
@@ -229,9 +244,17 @@ export async function createPaymentRequest(
 
   const publicId = generatePublicPaymentId();
   const payerMemoRequired = Boolean(body.payerMemoRequired);
-  const metadataJson = JSON.stringify(
-    maxPayments !== null ? { maxPayments } : {},
-  );
+  const feePayer: PaymentFeePayer =
+    amountMode === "FIXED" &&
+    typeof body.feePayer === "string" &&
+    body.feePayer.trim().toUpperCase() === "MERCHANT"
+      ? "MERCHANT"
+      : "PAYER";
+  const metadataPayload: Record<string, unknown> = {
+    feePayer,
+    ...(maxPayments !== null ? { maxPayments } : {}),
+  };
+  const metadataJson = JSON.stringify(metadataPayload);
   const origin = resolvePublicOrigin(request);
 
   const result = await db.$transaction(async (tx: FlowDb) => {
@@ -819,9 +842,10 @@ export async function readPublicPaymentRequest(
   }
 
   const row = rows[0]!;
-  const [usage, isDeleted] = await Promise.all([
+  const [usage, isDeleted, feePayer] = await Promise.all([
     readPaymentRequestUsage(publicId),
     readPaymentRequestDeleted(publicId),
+    readPaymentRequestFeePayer(publicId),
   ]);
   const isLimitReached =
     usage.maxPayments !== null && usage.paidCount >= usage.maxPayments;
@@ -853,7 +877,7 @@ export async function readPublicPaymentRequest(
     row,
     origin,
     recipientAddress,
-    { ...usage, isDeleted },
+    { ...usage, isDeleted, feePayer },
   );
 
   return reply(200, {

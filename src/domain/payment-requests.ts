@@ -9,6 +9,7 @@ import {
 } from "./supported-assets-catalog.ts";
 
 export type PaymentAmountMode = "FIXED" | "OPTIONAL";
+export type PaymentFeePayer = "PAYER" | "MERCHANT";
 export type PaymentRequestStatus =
   "ACTIVE" | "DISABLED" | "EXPIRED" | "COMPLETED";
 
@@ -49,6 +50,7 @@ export interface SerializedPaymentRequest {
   readonly status: PaymentRequestStatus;
   readonly expiresAt: string | null;
   readonly payerMemoRequired: boolean;
+  readonly feePayer: PaymentFeePayer;
   readonly maxPayments: number | null;
   readonly paidCount: number;
   readonly remainingPayments: number | null;
@@ -88,6 +90,7 @@ export interface PublicPaymentRequest {
   readonly status: PaymentRequestStatus;
   readonly expiresAt: string | null;
   readonly payerMemoRequired: boolean;
+  readonly feePayer: PaymentFeePayer;
   readonly isExpired: boolean;
   readonly isDeleted?: boolean;
   readonly maxPayments: number | null;
@@ -96,6 +99,16 @@ export interface PublicPaymentRequest {
   readonly eligibleSourceRoutes: readonly EligibleSourceRoute[];
   readonly recipientAddress?: string | null;
   readonly activeAttempt?: PaymentDepositInstructions | null;
+}
+
+export function parseFeePayer(
+  metadata: Record<string, unknown> | null | undefined,
+): PaymentFeePayer {
+  const raw = metadata?.feePayer;
+  if (typeof raw === "string" && raw.trim().toUpperCase() === "MERCHANT") {
+    return "MERCHANT";
+  }
+  return "PAYER";
 }
 
 export function parseMaxPayments(
@@ -165,6 +178,7 @@ export function serializePaymentRequest(
     status: effectiveStatus,
     expiresAt: record.expiresAt ? record.expiresAt.toISOString() : null,
     payerMemoRequired: record.payerMemoRequired,
+    feePayer: parseFeePayer(record.metadata),
     maxPayments,
     paidCount: safePaidCount,
     remainingPayments,
@@ -194,7 +208,12 @@ export function serializePublicPaymentRequest(
   row: PublicPaymentRequestDbRow,
   origin: string,
   recipientAddress?: string | null,
-  usage?: { maxPayments: number | null; paidCount: number; isDeleted?: boolean },
+  usage?: {
+    maxPayments: number | null;
+    paidCount: number;
+    isDeleted?: boolean;
+    feePayer?: PaymentFeePayer;
+  },
 ): PublicPaymentRequest {
   const expiresAtDate = row.expires_at ? new Date(row.expires_at) : null;
   const isExpired = expiresAtDate !== null && expiresAtDate <= new Date();
@@ -243,6 +262,7 @@ export function serializePublicPaymentRequest(
     status: effectiveStatus,
     expiresAt: expiresAtDate ? expiresAtDate.toISOString() : null,
     payerMemoRequired: row.payer_memo_required,
+    feePayer: usage?.feePayer === "MERCHANT" ? "MERCHANT" : "PAYER",
     isExpired,
     isDeleted,
     maxPayments,

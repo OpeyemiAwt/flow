@@ -479,6 +479,12 @@ export function CheckoutView({
               "The selected route could not be quoted.",
           );
         }
+        const isMerchantFeeAbsorbed =
+          request.amountMode === "FIXED" &&
+          request.feePayer === "MERCHANT" &&
+          data.identity?.swapType === "EXACT_INPUT";
+        const expectedSwapType =
+          request.amountMode === "FIXED" ? "EXACT_OUTPUT" : "EXACT_INPUT";
         if (
           data.requestVersion !== requestVersion ||
           data.payerMode !== payerMode ||
@@ -486,14 +492,15 @@ export function CheckoutView({
           data.identity?.operationId !== request.publicId ||
           data.identity.sourceNetwork !== selectedSource?.networkKey ||
           data.identity.destinationNetwork !== request.destinationNetwork ||
-          data.identity.swapType !==
-            (request.amountMode === "FIXED" ? "EXACT_OUTPUT" : "EXACT_INPUT") ||
+          (!isMerchantFeeAbsorbed &&
+            data.identity.swapType !== expectedSwapType) ||
           (selectedSource &&
             "assetId" in selectedSource &&
             data.identity.originAsset !== selectedSource.assetId) ||
           data.identity.recipient !== request.recipientAddress ||
           data.identity.refundTo !== trimmedRefund ||
-          data.identity.amountAtomic !== amountAtomic ||
+          (!isMerchantFeeAbsorbed &&
+            data.identity.amountAtomic !== amountAtomic) ||
           data.destinationAssetId !== request.destinationAssetId ||
           data.sourceAssetId !== selectedSource?.id
         )
@@ -511,6 +518,7 @@ export function CheckoutView({
     request.amountMode,
     request.destinationAssetId,
     request.destinationNetwork,
+    request.feePayer,
     request.publicId,
     request.recipientAddress,
     selectedSource,
@@ -1750,10 +1758,12 @@ export function CheckoutView({
                           Network &amp; route fee
                         </dt>
                         <dd className="text-right font-semibold text-neutral-950 dark:text-white">
-                          {quote?.fees.description ??
-                            (directDisplay
-                              ? "Network fee unavailable until broadcast."
-                              : "Unavailable")}
+                          {request.feePayer === "MERCHANT"
+                            ? "Routing fee covered by recipient (deducted from settlement)."
+                            : (quote?.fees.description ??
+                              (directDisplay
+                                ? "Network fee unavailable until broadcast."
+                                : "Unavailable"))}
                         </dd>
                       </div>
                       <div className="flex justify-between gap-3 border-t border-neutral-200 dark:border-white/[0.08] pt-2">

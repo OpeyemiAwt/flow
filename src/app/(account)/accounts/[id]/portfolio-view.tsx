@@ -1111,6 +1111,7 @@ export function PortfolioView({
     "UNLIMITED" | "LIMITED"
   >("UNLIMITED");
   const [prMaxPayments, setPrMaxPayments] = useState<string>("1");
+  const [prFeePayer, setPrFeePayer] = useState<"PAYER" | "MERCHANT">("PAYER");
   const [prDestinationDeployment, setPrDestinationDeployment] =
     useState<CatalogTokenDeployment>(
       MAINNET_SUPPORTED_DEPLOYMENTS.find((d) => d.id === "base-mainnet:USDC") ??
@@ -1837,6 +1838,7 @@ export function PortfolioView({
           requestedAmount: prAmountMode === "FIXED" ? prAmount : null,
           expiresInHours: 168,
           maxPayments: maxPaymentsPayload,
+          feePayer: prAmountMode === "FIXED" ? prFeePayer : "PAYER",
         },
         "POST",
       );
@@ -1868,6 +1870,7 @@ export function PortfolioView({
     prAmount,
     prMaxPaymentsMode,
     prMaxPayments,
+    prFeePayer,
     pushToast,
   ]);
 
@@ -4626,6 +4629,12 @@ export function PortfolioView({
                                     {req.paidCount} paid · Unlimited
                                   </span>
                                 )}
+                                {req.amountMode === "FIXED" &&
+                                  req.feePayer === "MERCHANT" && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">
+                                      You pay fees
+                                    </span>
+                                  )}
                               </div>
                             </div>
 
@@ -4834,6 +4843,98 @@ export function PortfolioView({
                       </span>
                     </p>
                   </div>
+
+                  {/* Who pays gas / routing fees (Fixed-amount links) */}
+                  {prAmountMode === "FIXED" && (
+                    <div className="space-y-2.5">
+                      <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                        Who pays for gas &amp; routing fees?
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <label
+                          className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-colors ${
+                            prFeePayer === "PAYER"
+                              ? "border-neutral-950 dark:border-white bg-neutral-50 dark:bg-white/[0.06]"
+                              : "border-neutral-200 dark:border-white/[0.08] bg-neutral-50/40 dark:bg-[#1A1A1A]/60 hover:border-neutral-300 dark:hover:border-white/20"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="pr-fee-payer"
+                            value="PAYER"
+                            checked={prFeePayer === "PAYER"}
+                            onChange={() => setPrFeePayer("PAYER")}
+                            className="mt-0.5 accent-neutral-950 dark:accent-white cursor-pointer"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-neutral-950 dark:text-white">
+                              Your payer
+                            </p>
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug mt-0.5">
+                              You receive the exact requested amount. Payer covers routing fees.
+                            </p>
+                          </div>
+                        </label>
+
+                        <label
+                          className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-colors ${
+                            prFeePayer === "MERCHANT"
+                              ? "border-neutral-950 dark:border-white bg-neutral-50 dark:bg-white/[0.06]"
+                              : "border-neutral-200 dark:border-white/[0.08] bg-neutral-50/40 dark:bg-[#1A1A1A]/60 hover:border-neutral-300 dark:hover:border-white/20"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="pr-fee-payer"
+                            value="MERCHANT"
+                            checked={prFeePayer === "MERCHANT"}
+                            onChange={() => setPrFeePayer("MERCHANT")}
+                            className="mt-0.5 accent-neutral-950 dark:accent-white cursor-pointer"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-neutral-950 dark:text-white">
+                              You
+                            </p>
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug mt-0.5">
+                              Routing fees are deducted from the amount you receive.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+
+                      {prFeePayer === "MERCHANT" && (() => {
+                        const parsed = Number.parseFloat(prAmount);
+                        const valid = Number.isFinite(parsed) && parsed > 0;
+                        const estFeePct = 0.005; // ~0.5% typical cross-chain routing & gas estimate
+                        const estFee = valid ? parsed * estFeePct : 0;
+                        const estNet = valid ? Math.max(0, parsed - estFee) : 0;
+                        const dp =
+                          prDestinationDeployment.symbol === "USDC" ||
+                          prDestinationDeployment.symbol === "USDT"
+                            ? 2
+                            : 4;
+                        return (
+                          <div className="rounded-2xl bg-neutral-50 dark:bg-white/[0.03] border border-neutral-200/80 dark:border-white/[0.08] px-3.5 py-2.5 text-[11px] space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-neutral-500 dark:text-neutral-400">
+                                Est. you receive (after routing fee)
+                              </span>
+                              <span className="font-mono font-bold text-neutral-950 dark:text-white">
+                                {valid
+                                  ? `~${estNet.toFixed(dp)} ${prDestinationDeployment.symbol}`
+                                  : `— ${prDestinationDeployment.symbol}`}
+                              </span>
+                            </div>
+                            <p className="text-[10.5px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                              {valid
+                                ? `Estimated ~${estFee.toFixed(dp)} ${prDestinationDeployment.symbol} (~0.5%) for typical cross-chain routes. Exact deduction depends on the network your payer chooses (~0 on direct same-chain transfers).`
+                                : "Enter an amount above to see your estimated net receive after routing fees."}
+                            </p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
                     <p className="text-[11px] text-neutral-500 dark:text-neutral-400">

@@ -16,11 +16,14 @@ import {
 } from "../domain/supported-assets-catalog.ts";
 import { isFinancialExecutionDisabled } from "../domain/custody.ts";
 import { supportsQuoteAddress } from "../domain/quote-addresses.ts";
-import { readPaymentRequestUsage } from "./payment-requests.ts";
+import {
+  readPaymentRequestFeePayer,
+  readPaymentRequestUsage,
+  readPaymentWalletAddresses,
+} from "./payment-requests.ts";
 import { clientBudget } from "./auth/limits.ts";
 import { ApiFailure, reply } from "./http.ts";
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
-import { readPaymentWalletAddresses } from "./payment-requests.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import {
   quoteOneClickPreview,
@@ -87,7 +90,10 @@ export async function requestPaymentQuote(
   if (invoice.status !== "ACTIVE")
     throw new ApiFailure(409, "PAYMENT_REQUEST_CLOSED");
 
-  const usage = await readPaymentRequestUsage(publicId);
+  const [usage, feePayer] = await Promise.all([
+    readPaymentRequestUsage(publicId),
+    readPaymentRequestFeePayer(publicId),
+  ]);
   if (usage.maxPayments !== null && usage.paidCount >= usage.maxPayments) {
     throw new ApiFailure(409, "PAYMENT_REQUEST_COMPLETED");
   }
@@ -119,10 +125,10 @@ export async function requestPaymentQuote(
   if (isDirect && payerMode === "EXCHANGE") {
     throw new ApiFailure(400, "EXCHANGE_MODE_NOT_SUPPORTED_FOR_ROUTE");
   }
-  const swapType =
+  let swapType: "EXACT_OUTPUT" | "EXACT_INPUT" =
     invoice.amount_mode === "FIXED" ? "EXACT_OUTPUT" : "EXACT_INPUT";
   let amount = invoice.requested_atomic_amount;
-  if (swapType === "EXACT_INPUT") {
+  if (invoice.amount_mode === "OPTIONAL") {
     const payerAmount =
       input.data.customSourceDisplayAmount ?? input.data.payerAmount;
     if (!payerAmount) throw new ApiFailure(400, "PAYER_AMOUNT_REQUIRED");
@@ -132,6 +138,50 @@ export async function requestPaymentQuote(
       amount = parsed.toString();
     } catch {
       throw new ApiFailure(400, "INVALID_PAYER_AMOUNT");
+    }
+  } else if (
+    !isDirect &&
+    feePayer === "MERCHANT" &&
+    invoice.requested_atomic_amount
+  ) {
+    // Merchant covers cross-chain routing fees: payer sends face value of the invoice
+    // in the chosen source asset (EXACT_INPUT), and routing fees are deducted from output.
+    const requestedDestAtomic = BigInt(invoice.requested_atomic_amount);
+    let faceValueSourceAtomic: bigint | null = null;
+    if (source.symbol.toUpperCase() === destination.symbol.toUpperCase()) {
+      const decDiff = source.decimals - destination.decimals;
+      if (decDiff >= 0) {
+        faceValueSourceAtomic = requestedDestAtomic * 10n ** BigInt(decDiff);
+      } else {
+        faceValueSourceAtomic = requestedDestAtomic / 10n ** BigInt(-decDiff);
+      }
+    } else if (
+      source.priceUsd &&
+      source.priceUsd > 0 &&
+      destination.priceUsd &&
+      destination.priceUsd > 0
+    ) {
+      const destDisplayNum = Number(
+        formatAtomicToDisplay(requestedDestAtomic, destination.decimals),
+      );
+      if (Number.isFinite(destDisplayNum) && destDisplayNum > 0) {
+        const srcDisplayNum =
+          (destDisplayNum * destination.priceUsd) / source.priceUsd;
+        const precision = Math.min(source.decimals, 8);
+        try {
+          const parsed = parseDisplayToAtomic(
+            srcDisplayNum.toFixed(precision),
+            source.decimals,
+          );
+          if (parsed > 0n) faceValueSourceAtomic = parsed;
+        } catch {
+          faceValueSourceAtomic = null;
+        }
+      }
+    }
+    if (faceValueSourceAtomic && faceValueSourceAtomic > 0n) {
+      swapType = "EXACT_INPUT";
+      amount = faceValueSourceAtomic.toString();
     }
   }
   if (!amount || !validateProviderAtomicAmount(amount)) {

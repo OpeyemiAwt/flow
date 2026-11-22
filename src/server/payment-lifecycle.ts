@@ -104,6 +104,7 @@ export async function commitPaymentAttempt(
       source_decimals: number;
       quoted_source_atomic_amount: string | null;
       quoted_destination_atomic_amount: string | null;
+      swap_type: string | null;
       status: string;
       quote_expires_at: Date | null;
       destination_network: string;
@@ -124,6 +125,7 @@ export async function commitPaymentAttempt(
       source_decimals,
       quoted_source_atomic_amount::text,
       quoted_destination_atomic_amount::text,
+      swap_type::text,
       status,
       quote_expires_at,
       destination_network,
@@ -411,15 +413,22 @@ export async function commitPaymentAttempt(
       depositAddress = recipientAddress;
     } else {
       // Task 3: Remote commit timeout & persistence safety
+      const commitSwapType =
+        attempt.swap_type === "EXACT_INPUT" ? "EXACT_INPUT" : "EXACT_OUTPUT";
+      const commitAmountAtomic =
+        commitSwapType === "EXACT_INPUT"
+          ? (attempt.quoted_source_atomic_amount ??
+            attempt.quoted_destination_atomic_amount ??
+            "0")
+          : (attempt.quoted_destination_atomic_amount ??
+            attempt.quoted_source_atomic_amount ??
+            "0");
       try {
         committedRes = await fetchOneClickCommittedQuote({
           originAsset: sourceDeployment.assetId,
           destinationAsset: destinationDeployment.assetId,
-          swapType: "EXACT_OUTPUT",
-          amountAtomic:
-            attempt.quoted_destination_atomic_amount ??
-            attempt.quoted_source_atomic_amount ??
-            "0",
+          swapType: commitSwapType,
+          amountAtomic: commitAmountAtomic,
           refundTo: payerRefund!,
           recipient: recipientAddress,
         });
