@@ -60,6 +60,7 @@ const NAV_GROUPS = [
       { id: "convert", label: "Convert & bridge" },
       { id: "payment-links", label: "Request & payment links" },
       { id: "earn", label: "Earn (LiNEAR & Burrow)" },
+      { id: "fees", label: "Fees" },
       { id: "assistant", label: "Flow AI Assistant" },
     ],
   },
@@ -372,8 +373,11 @@ export default function DocsPage() {
               <p>
                 Use <strong>Convert &amp; Bridge</strong> to swap between assets
                 across your own FLOW wallets (for example, SOL on Solana into
-                USDC on Base or NEAR on NEAR Mainnet). Review the live rate and
-                drag <strong>Slide to Convert</strong> to execute.
+                USDC on Base or NEAR on NEAR Mainnet). Convert &amp; Bridge
+                quotes include a <strong>1% FLOW platform fee</strong> settled
+                via NEAR Intents alongside network and solver rates. Review the
+                live output and drag <strong>Slide to Convert</strong> to
+                execute.
               </p>
             </section>
 
@@ -427,6 +431,39 @@ export default function DocsPage() {
                   <strong>Burrow Finance:</strong> Supply USDC on NEAR Mainnet
                   to earn variable lending yield. First-time deposits require a
                   small NEAR storage and gas reserve on-chain.
+                </li>
+              </ul>
+              <p>
+                Deposits into any Earn protocol include a one-time{" "}
+                <strong>0.15% FLOW platform fee</strong> deducted automatically
+                before staking or supplying. Withdrawing or claiming from Earn
+                carries a <strong>0% FLOW fee</strong>.
+              </p>
+            </section>
+
+            {/* Fees */}
+            <section id="fees" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Fees
+              </h2>
+              <p>
+                FLOW displays all estimated amounts and platform fees up front
+                before you confirm:
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>Send &amp; Payment Link checkouts:</strong> 0% FLOW
+                  platform fee (standard network gas and any cross-chain solver
+                  spread still apply).
+                </li>
+                <li>
+                  <strong>Earn deposits:</strong> 0.15% one-time FLOW platform
+                  fee taken on deposit in the deposited asset.{" "}
+                  <strong>Earn withdrawals &amp; claims:</strong> 0% FLOW fee.
+                </li>
+                <li>
+                  <strong>Convert &amp; Bridge:</strong> 1% FLOW platform fee
+                  included directly in the live NEAR Intents quote.
                 </li>
               </ul>
             </section>

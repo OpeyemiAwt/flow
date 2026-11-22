@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseDisplayToAtomic } from "../../../../../../domain/atomic-amounts.ts";
+import { getConvertBridgeAppFees } from "../../../../../../domain/platform-fees.ts";
 import {
   getMainnetWalletAddress,
   isBalanceMatchingDeployment,
@@ -151,6 +152,9 @@ export async function POST(
       swapType: "EXACT_INPUT",
       recipient,
       refundTo,
+      ...(body.operation === "CONVERT"
+        ? { appFees: getConvertBridgeAppFees() }
+        : {}),
       signal: request.signal,
     });
     if (!result.ok) {

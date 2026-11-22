@@ -1093,12 +1093,48 @@ export function EarnView({
                       );
                     })}
                   </div>
-                  {modalAction === "DEPOSIT" && (
-                    <p className="mt-2 text-[11px] text-neutral-500 dark:text-neutral-400">
-                      {activeModalProtocol.protocolKey === "burrow"
-                        ? `Uses USDC on NEAR Mainnet · Requires ${BURROW_FIRST_DEPOSIT_RESERVE_NEAR.toFixed(2)} NEAR minimum for first-time storage + gas (wallet: ${availableNearNum.toFixed(2)} NEAR).`
-                        : `Minimum ${EARN_GAS_RESERVE_NEAR.toFixed(2)} NEAR is reserved for gas and storage (wallet: ${availableNearNum.toFixed(4)} NEAR).`}
-                    </p>
+                  {modalAction === "DEPOSIT" ? (
+                    <div className="mt-3 space-y-2">
+                      {(() => {
+                        const parsed = Number.parseFloat(amountInput);
+                        const hasAmt = Number.isFinite(parsed) && parsed > 0;
+                        const feeVal = hasAmt ? parsed * 0.0015 : 0;
+                        const netVal = hasAmt ? parsed - feeVal : 0;
+                        const dp = activeModalProtocol.assetSymbol === "USDC" ? 4 : 4;
+                        return (
+                          <div className="rounded-xl bg-neutral-50 dark:bg-white/[0.03] border border-neutral-200/70 dark:border-white/[0.06] px-3 py-2 text-[11px] space-y-1">
+                            <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                              <span>FLOW platform fee (0.15%)</span>
+                              <span className="font-mono font-medium text-neutral-700 dark:text-neutral-300">
+                                {hasAmt
+                                  ? `${feeVal.toFixed(dp)} ${activeModalProtocol.assetSymbol}`
+                                  : "0.15%"}
+                              </span>
+                            </div>
+                            {hasAmt && (
+                              <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-300 font-medium">
+                                <span>Net deposited</span>
+                                <span className="font-mono font-semibold text-neutral-950 dark:text-white">
+                                  {netVal.toFixed(dp)} {activeModalProtocol.assetSymbol}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                        {activeModalProtocol.protocolKey === "burrow"
+                          ? `Uses USDC on NEAR Mainnet · Requires ${BURROW_FIRST_DEPOSIT_RESERVE_NEAR.toFixed(2)} NEAR minimum for first-time storage + gas (wallet: ${availableNearNum.toFixed(2)} NEAR).`
+                          : `Minimum ${EARN_GAS_RESERVE_NEAR.toFixed(2)} NEAR is reserved for gas and storage (wallet: ${availableNearNum.toFixed(4)} NEAR).`}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-xl bg-neutral-50 dark:bg-white/[0.03] border border-neutral-200/70 dark:border-white/[0.06] px-3 py-2 text-[11px] flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                      <span>FLOW withdrawal fee</span>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                        0% (Free)
+                      </span>
+                    </div>
                   )}
                 </div>
 

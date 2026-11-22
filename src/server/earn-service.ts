@@ -15,6 +15,10 @@ import {
   NEAR_GAS_RESERVE_YOCTO,
   type EarnMemo,
 } from "../domain/earn.ts";
+import {
+  EARN_DEPOSIT_FEE_BPS,
+  splitPlatformFee,
+} from "../domain/platform-fees.ts";
 import { getMainnetWalletAddress, serializePortfolio } from "../domain/portfolio.ts";
 import { runtime, transaction } from "../foundation/prisma.ts";
 import { access, accountId, principal } from "./accounts.ts";
@@ -505,6 +509,10 @@ export async function executeEarnAction(
     if (nearAtomic <= 0n) {
       throw new ApiFailure(400, "INVALID_AMOUNT");
     }
+    const { netAtomic } = splitPlatformFee(nearAtomic, EARN_DEPOSIT_FEE_BPS);
+    if (netAtomic <= 0n) {
+      throw new ApiFailure(400, "INVALID_AMOUNT");
+    }
     const reservedNear = await getReservedAtomic(id, token, "native");
     const spendableNear = liveNearAtomic - reservedNear;
     if (nearAtomic + NEAR_GAS_RESERVE_YOCTO > spendableNear) {
@@ -516,6 +524,7 @@ export async function executeEarnAction(
     sourceDecimals = 24;
     sourceAtomicAmount = nearAtomic;
     recipientAddress = LINEAR_CONTRACT;
+    expectedDestAtomic = netAtomic;
   } else if (body.protocol === "linear" && body.action === "CLAIM") {
     if (liveNearAtomic < NEAR_WITHDRAW_GAS_RESERVE_YOCTO) {
       throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
@@ -594,6 +603,10 @@ export async function executeEarnAction(
     if (usdcAtomic <= 0n) {
       throw new ApiFailure(400, "INVALID_AMOUNT");
     }
+    const { netAtomic } = splitPlatformFee(usdcAtomic, EARN_DEPOSIT_FEE_BPS);
+    if (netAtomic <= 0n) {
+      throw new ApiFailure(400, "INVALID_AMOUNT");
+    }
     const [liveUsdcObs, burrowPos, reservedUsdc] = await Promise.all([
       fetchLiveMainnetBalance({
         networkKey: "near",
@@ -626,6 +639,7 @@ export async function executeEarnAction(
     sourceDecimals = 6;
     sourceAtomicAmount = usdcAtomic;
     recipientAddress = BURROW_CONTRACT;
+    expectedDestAtomic = netAtomic;
   } else {
     // burrow WITHDRAW
     if (liveNearAtomic < NEAR_WITHDRAW_GAS_RESERVE_YOCTO) {

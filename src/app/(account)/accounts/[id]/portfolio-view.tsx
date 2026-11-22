@@ -595,6 +595,13 @@ function OutgoingQuoteDetails({
               {quote.estimatedTimeSeconds !== null && (
                 <span>~{quote.estimatedTimeSeconds}s</span>
               )}
+              {(quote.fees?.appFeeBps ?? 0) > 0 && (
+                <span>
+                  FLOW fee{" "}
+                  {Number(((quote.fees?.appFeeBps ?? 0) / 100).toFixed(2))}%
+                  (included)
+                </span>
+              )}
             </div>
           </div>
         ) : (

@@ -28,6 +28,11 @@ import {
   LINEAR_CONTRACT,
   type EarnMemo,
 } from "../../domain/earn.ts";
+import {
+  EARN_DEPOSIT_FEE_BPS,
+  resolveFeeTreasuryAccount,
+  splitPlatformFee,
+} from "../../domain/platform-fees.ts";
 import type { NetworkId } from "../../domain/providers.ts";
 import {
   decryptSecret,
@@ -664,13 +669,41 @@ async function executeNearEarnJob(
   );
 
   if (memo === EARN_MEMO.LINEAR_DEPOSIT && targetAddress === LINEAR_CONTRACT) {
+    const grossAtomic = BigInt(job.source_atomic_amount);
+    const { feeAtomic, netAtomic } = splitPlatformFee(
+      grossAtomic,
+      EARN_DEPOSIT_FEE_BPS,
+    );
+    const treasuryAccount = resolveFeeTreasuryAccount();
+    const shouldCollectFee = Boolean(
+      treasuryAccount &&
+        feeAtomic > 0n &&
+        treasuryAccount.toLowerCase() !== job.source_address.toLowerCase(),
+    );
+    const depositAtomic = shouldCollectFee ? netAtomic : grossAtomic;
+
     await markSigningStarted();
+
+    if (shouldCollectFee) {
+      const feeRes = await outlayer.transferNearNative(apiKey, {
+        chain: "near",
+        to: treasuryAccount,
+        amountYocto: feeAtomic.toString(),
+      });
+      await pollOutLayerRequestForTxHash(
+        outlayer,
+        apiKey,
+        feeRes.request_id,
+        feeRes.tx_hash,
+      );
+    }
+
     const res = await outlayer.callNearContract(apiKey, {
       receiverId: LINEAR_CONTRACT,
       methodName: "deposit_and_stake",
       args: {},
       gas: "50000000000000",
-      deposit: job.source_atomic_amount,
+      deposit: depositAtomic.toString(),
     });
     const polled = await pollOutLayerRequestForTxHash(
       outlayer,
@@ -678,7 +711,10 @@ async function executeNearEarnJob(
       res.request_id,
       res.tx_hash,
     );
-    return { ...polled, feeAtomic: "0" };
+    return {
+      ...polled,
+      feeAtomic: shouldCollectFee ? feeAtomic.toString() : "0",
+    };
   }
 
   if (
@@ -761,14 +797,85 @@ async function executeNearEarnJob(
   }
 
   if (memo === EARN_MEMO.BURROW_DEPOSIT && targetAddress === BURROW_CONTRACT) {
-    const storageBalance = await queryNearViewJson<{
-      total: string;
-      available: string;
-    } | null>(primary, fallback, BURROW_CONTRACT, "storage_balance_of", {
-      account_id: job.source_address,
-    });
+    const tokenContract =
+      job.source_asset_id && job.source_asset_id !== "native"
+        ? job.source_asset_id
+        : BURROW_USDC_CONTRACT;
+    const grossAtomic = BigInt(job.source_atomic_amount);
+    const { feeAtomic, netAtomic } = splitPlatformFee(
+      grossAtomic,
+      EARN_DEPOSIT_FEE_BPS,
+    );
+    const treasuryAccount = resolveFeeTreasuryAccount();
+    const shouldCollectFee = Boolean(
+      treasuryAccount &&
+        feeAtomic > 0n &&
+        treasuryAccount.toLowerCase() !== job.source_address.toLowerCase(),
+    );
+    const depositAtomic = shouldCollectFee ? netAtomic : grossAtomic;
+
+    const [storageBalance, treasuryTokenStorage] = await Promise.all([
+      queryNearViewJson<{
+        total: string;
+        available: string;
+      } | null>(primary, fallback, BURROW_CONTRACT, "storage_balance_of", {
+        account_id: job.source_address,
+      }),
+      shouldCollectFee
+        ? queryNearViewJson<{
+            total: string;
+            available: string;
+          } | null>(primary, fallback, tokenContract, "storage_balance_of", {
+            account_id: treasuryAccount,
+          })
+        : Promise.resolve({ total: "1", available: "1" }),
+    ]);
 
     await markSigningStarted();
+
+    if (shouldCollectFee) {
+      if (treasuryTokenStorage === null) {
+        const bounds = await queryNearViewJson<{ min?: string }>(
+          primary,
+          fallback,
+          tokenContract,
+          "storage_balance_bounds",
+          {},
+        );
+        const storageDepositAmount = bounds?.min ?? "1250000000000000000000";
+        const regRes = await outlayer.callNearContract(apiKey, {
+          receiverId: tokenContract,
+          methodName: "storage_deposit",
+          args: { account_id: treasuryAccount, registration_only: true },
+          gas: "30000000000000",
+          deposit: storageDepositAmount,
+        });
+        await pollOutLayerRequestForTxHash(
+          outlayer,
+          apiKey,
+          regRes.request_id,
+          regRes.tx_hash,
+        );
+      }
+
+      const feeRes = await outlayer.callNearContract(apiKey, {
+        receiverId: tokenContract,
+        methodName: "ft_transfer",
+        args: {
+          receiver_id: treasuryAccount,
+          amount: feeAtomic.toString(),
+          memo: "FLOW Earn deposit fee (0.15%)",
+        },
+        gas: "50000000000000",
+        deposit: "1",
+      });
+      await pollOutLayerRequestForTxHash(
+        outlayer,
+        apiKey,
+        feeRes.request_id,
+        feeRes.tx_hash,
+      );
+    }
 
     if (storageBalance === null) {
       const depRes = await outlayer.callNearContract(apiKey, {
@@ -787,11 +894,11 @@ async function executeNearEarnJob(
     }
 
     const res = await outlayer.callNearContract(apiKey, {
-      receiverId: BURROW_USDC_CONTRACT,
+      receiverId: tokenContract,
       methodName: "ft_transfer_call",
       args: {
         receiver_id: BURROW_CONTRACT,
-        amount: job.source_atomic_amount,
+        amount: depositAtomic.toString(),
         msg: "",
       },
       gas: "100000000000000",
@@ -803,7 +910,10 @@ async function executeNearEarnJob(
       res.request_id,
       res.tx_hash,
     );
-    return { ...polled, feeAtomic: "0" };
+    return {
+      ...polled,
+      feeAtomic: shouldCollectFee ? feeAtomic.toString() : "0",
+    };
   }
 
   if (memo === EARN_MEMO.BURROW_WITHDRAW && targetAddress === BURROW_CONTRACT) {

@@ -435,12 +435,30 @@ export default function WhitepaperPage() {
                 Economics &amp; fees
               </h2>
               <p>
-                FLOW keeps pricing transparent by showing the exact quote before
-                confirmation. Direct on-chain transfers only incur underlying
-                network gas fees (with a small NEAR gas buffer reserved on
-                staking deposits and withdrawals). Cross-chain routes reflect
-                live NEAR Intents solver rates and network settlement costs
-                directly in the preview.
+                FLOW keeps pricing simple and transparent by showing the exact
+                quote and fee breakdown before confirmation:
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>Direct sends &amp; Payment Link checkouts:</strong> 0%
+                  FLOW platform fee. Users only pay underlying network gas fees
+                  and, on cross-chain checkouts, live solver spreads.
+                </li>
+                <li>
+                  <strong>Earn deposits:</strong> 0.15% one-time FLOW platform
+                  fee deducted on deposit into an Earn protocol. Withdrawals and
+                  claims from Earn carry a 0% FLOW fee.
+                </li>
+                <li>
+                  <strong>Convert &amp; Bridge:</strong> 1% FLOW platform fee
+                  included natively inside the NEAR Intents / 1Click quote
+                  across all supported chains.
+                </li>
+              </ul>
+              <p>
+                Collected platform fees are routed to the FLOW treasury and
+                settled in NEAR to fund ongoing infrastructure and new-account
+                policy sponsorship.
               </p>
             </section>
 

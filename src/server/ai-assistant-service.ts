@@ -9,6 +9,7 @@ import {
 } from "../domain/supported-assets-catalog.ts";
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
+import { getConvertBridgeAppFees } from "../domain/platform-fees.ts";
 import { quoteOneClickPreview } from "./providers/one-click-preview.ts";
 
 export interface AssistantActionCard {
@@ -736,6 +737,7 @@ export async function processAssistantQuery(params: {
               swapType: "EXACT_INPUT",
               recipient,
               refundTo,
+              appFees: getConvertBridgeAppFees(),
             });
             if (preview.ok) {
               routeText = `${requestedAmount} ${srcDep.symbol} → ~${preview.quote.recipientDisplayAmount} ${dstDep.symbol}`;

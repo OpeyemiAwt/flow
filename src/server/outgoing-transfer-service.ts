@@ -29,6 +29,7 @@ import { fetchLiveMainnetBalance } from "./assets/connectors/multi-chain-reconci
 import { resolveFlowIdForSend } from "./flow-id-service.ts";
 import { ApiFailure, input, reply } from "./http.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
+import { getConvertBridgeAppFees } from "../domain/platform-fees.ts";
 import { fetchOneClickCommittedQuote } from "./providers/one-click-adapter.ts";
 
 const sendExecuteSchema = z.strictObject({
@@ -608,6 +609,7 @@ export async function executeConvertTransfer(
     swapType: "EXACT_INPUT",
     recipient: ownDestinationAddress,
     refundTo: ownSourceAddress,
+    appFees: getConvertBridgeAppFees(),
   });
 
   if (

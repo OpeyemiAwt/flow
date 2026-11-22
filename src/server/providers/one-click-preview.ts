@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { formatAtomicToDisplay } from "../../domain/atomic-amounts.ts";
 import { decodeBase58 } from "../../domain/custody.ts";
+import type { OneClickAppFee } from "../../domain/platform-fees.ts";
 import {
   validateQuoteAddress,
   type QuoteNetwork,
@@ -64,6 +65,7 @@ export async function quoteOneClickPreview(input: {
   swapType: QuoteSwapType;
   refundTo: string;
   recipient: string;
+  appFees?: readonly OneClickAppFee[];
   signal?: AbortSignal;
 }): Promise<
   | {
@@ -107,6 +109,7 @@ export async function quoteOneClickPreview(input: {
     swapType,
     refundTo,
     recipient,
+    appFees: input.appFees,
     signal,
   });
   if (
@@ -133,14 +136,18 @@ export async function quoteOneClickPreview(input: {
     result.fees?.withdrawFeeAtomic,
     destination.decimals,
   );
+  const appFeeBps = result.fees?.appFeeBps ?? 0;
+  const appFeePercent =
+    appFeeBps > 0 ? `${Number((appFeeBps / 100).toFixed(2))}%` : null;
   const feeDescription = [
+    appFeePercent ? `Includes ${appFeePercent} FLOW platform fee` : null,
     withdrawFeeDisplay === null
       ? null
       : `Withdrawal fee ${withdrawFeeDisplay} ${destination.symbol}`,
     refundFeeDisplay === null
       ? null
       : `Refund fee if refunded ${refundFeeDisplay} ${source.symbol}`,
-    "Source network and solver fee breakdown unavailable.",
+    "Network and solver fees are included in the quoted output.",
   ]
     .filter(Boolean)
     .join(". ");
@@ -190,6 +197,7 @@ export async function quoteOneClickPreview(input: {
       ),
       estimatedTimeSeconds: result.timeEstimateSeconds ?? null,
       fees: {
+        appFeeBps,
         refundFeeAtomic: result.fees?.refundFeeAtomic ?? null,
         refundFeeDisplay,
         refundFeeAssetSymbol: refundFeeDisplay === null ? null : source.symbol,

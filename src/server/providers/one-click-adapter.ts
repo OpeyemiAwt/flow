@@ -10,6 +10,7 @@ import {
 } from "../../domain/quote-discovery.ts";
 
 import { MAX_SUPPORTED_ATOMIC_INT } from "../../domain/atomic-amounts.ts";
+import type { OneClickAppFee } from "../../domain/platform-fees.ts";
 
 export interface OneClickQuoteRequest {
   dry: boolean;
@@ -24,6 +25,21 @@ export interface OneClickQuoteRequest {
   recipient: string;
   recipientType: "DESTINATION_CHAIN";
   deadline: string;
+  appFees?: Array<{ recipient: string; fee: number }>;
+}
+
+function appFeesMatch(
+  expected: readonly OneClickAppFee[] | undefined,
+  actual: readonly { recipient?: string; fee?: number }[] | undefined,
+): boolean {
+  const exp = expected ?? [];
+  const act = actual ?? [];
+  if (exp.length !== act.length) return false;
+  return exp.every(
+    (item, idx) =>
+      act[idx]?.recipient?.toLowerCase() === item.recipient.toLowerCase() &&
+      act[idx]?.fee === item.fee,
+  );
 }
 
 export interface OneClickRawResponse {
@@ -112,6 +128,7 @@ export async function fetchOneClickDryQuote(params: {
   amountAtomic: string;
   refundTo: string;
   recipient: string;
+  appFees?: readonly OneClickAppFee[];
   deadlineSeconds?: number;
   apiBase?: string;
   managerPublicKey?: string;
@@ -121,6 +138,13 @@ export async function fetchOneClickDryQuote(params: {
   const apiBase = params.apiBase ?? DEFAULT_ONE_CLICK_API_BASE;
   const requestedAt = Date.now();
   const deadline = requestedAt + (params.deadlineSeconds ?? 600) * 1000;
+  const normalizedAppFees =
+    params.appFees && params.appFees.length > 0
+      ? params.appFees.map((item) => ({
+          recipient: item.recipient,
+          fee: item.fee,
+        }))
+      : undefined;
   const payload: OneClickQuoteRequest = {
     dry: true,
     swapType: params.swapType,
@@ -134,6 +158,7 @@ export async function fetchOneClickDryQuote(params: {
     recipient: params.recipient,
     recipientType: "DESTINATION_CHAIN",
     deadline: new Date(deadline).toISOString(),
+    ...(normalizedAppFees ? { appFees: normalizedAppFees } : {}),
   };
   if (!validateProviderAtomicAmount(payload.amount)) {
     return dryQuoteError("Invalid requested atomic amount.");
@@ -192,8 +217,10 @@ export async function fetchOneClickDryQuote(params: {
     }
     if (
       !echo ||
-      (Object.keys(payload) as (keyof OneClickQuoteRequest)[]).some(
-        (key) => echo[key] !== payload[key],
+      (Object.keys(payload) as (keyof OneClickQuoteRequest)[]).some((key) =>
+        key === "appFees"
+          ? !appFeesMatch(payload.appFees, echo.appFees)
+          : echo[key] !== payload[key],
       )
     ) {
       return dryQuoteError(
@@ -281,6 +308,9 @@ export async function fetchOneClickDryQuote(params: {
           ? quote.timeEstimate
           : null,
       fees: {
+        appFeeBps: normalizedAppFees
+          ? normalizedAppFees.reduce((sum, item) => sum + item.fee, 0)
+          : 0,
         refundFeeAtomic: atomicFee(quote.refundFee),
         withdrawFeeAtomic: atomicFee(quote.withdrawFee),
         isEstimate: true,
@@ -333,6 +363,7 @@ export async function fetchOneClickCommittedQuote(params: {
   amountAtomic: string;
   refundTo: string;
   recipient: string;
+  appFees?: readonly OneClickAppFee[];
   deadlineSeconds?: number;
   apiBase?: string;
   managerPublicKey?: string;
@@ -342,6 +373,13 @@ export async function fetchOneClickCommittedQuote(params: {
   const deadlineDate = new Date(
     Date.now() + (params.deadlineSeconds ?? 900) * 1000,
   );
+  const normalizedAppFees =
+    params.appFees && params.appFees.length > 0
+      ? params.appFees.map((item) => ({
+          recipient: item.recipient,
+          fee: item.fee,
+        }))
+      : undefined;
 
   const payload: OneClickQuoteRequest = {
     dry: false,
@@ -356,6 +394,7 @@ export async function fetchOneClickCommittedQuote(params: {
     recipient: params.recipient,
     recipientType: "DESTINATION_CHAIN",
     deadline: deadlineDate.toISOString(),
+    ...(normalizedAppFees ? { appFees: normalizedAppFees } : {}),
   };
 
   try {
@@ -462,6 +501,16 @@ export async function fetchOneClickCommittedQuote(params: {
         return {
           ok: false,
           errorMessage: `PROVIDER_SCHEMA_MISMATCH: Recipient address mismatch (expected ${params.recipient}, received ${data.quoteRequest.recipient}).`,
+        };
+      }
+      if (
+        normalizedAppFees &&
+        !appFeesMatch(normalizedAppFees, data.quoteRequest.appFees)
+      ) {
+        return {
+          ok: false,
+          errorMessage:
+            "PROVIDER_SCHEMA_MISMATCH: Platform fee configuration mismatch on provider quote.",
         };
       }
     }
