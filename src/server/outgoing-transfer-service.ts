@@ -37,6 +37,7 @@ const sendExecuteSchema = z.strictObject({
   destinationDeploymentId: z.string().trim().min(1).max(128).optional(),
   recipientAddress: z.string().trim().min(2).max(128),
   sourceDisplayAmount: z.string().trim().min(1).max(64),
+  memo: z.string().trim().max(140).optional(),
   idempotencyKey: z.string().uuid().optional(),
 });
 
@@ -360,13 +361,18 @@ export async function executeSendTransfer(
   }
 
   let trimmedRecipient = body.recipientAddress.trim();
+  let recipientLabel: string | null = null;
   if (isFlowIdInput(trimmedRecipient)) {
     const resolved = await resolveFlowIdForSend(runtime().db, {
       rawFlowId: trimmedRecipient,
       destinationNetwork: destDeployment.networkKey,
     });
     trimmedRecipient = resolved.recipientAddress;
+    recipientLabel = resolved.accountName
+      ? `${resolved.accountName} (${resolved.flowId})`
+      : resolved.flowId;
   }
+  const userMemo = body.memo?.trim() || null;
   const addressValidation = validateAddressForNetwork(
     destDeployment.networkKey as NetworkId,
     trimmedRecipient,
@@ -447,6 +453,11 @@ export async function executeSendTransfer(
       : destDeployment.contractIdentifier;
   const publicId = `snd_${randomBytes(10).toString("hex")}`;
 
+  const quotePayloadJson = JSON.stringify({
+    ...(userMemo ? { userMemo } : {}),
+    ...(recipientLabel ? { recipientLabel } : {}),
+  });
+
   const created = await transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true),
       set_config('flow.current_account_id', ${id}, true)`;
@@ -472,6 +483,7 @@ export async function executeSendTransfer(
         provider_deposit_address,
         provider_deposit_memo,
         provider_correlation_id,
+        provider_quote_payload,
         status,
         created_by_user_id
       )
@@ -495,6 +507,7 @@ export async function executeSendTransfer(
         ${committedQuote?.depositAddress ?? null}::text,
         ${committedQuote?.depositMemo ?? null}::text,
         ${committedQuote?.correlationId ?? null}::text,
+        ${quotePayloadJson}::jsonb,
         'PENDING_CUSTODY',
         ${actor.userId}::uuid
       )

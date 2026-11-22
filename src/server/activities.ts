@@ -70,8 +70,26 @@ function accountActivityRows(accountId: string) {
           wa.direction, wa.tx_hash, wa.event_index, wa.from_address, wa.to_address, wa.asset_id::text AS asset_id,
           wa.network_asset_id, wa.asset_symbol, wa.atomic_amount, wa.decimals, wa.block_height,
           wa.block_hash, wa.block_timestamp, wa.finality, wa.reorg_status, wa.fee_atomic_amount,
-          wa.metadata, wa.observed_at, wa.created_at, wa.updated_at
+          CASE
+            WHEN ot_meta.id IS NOT NULL THEN
+              COALESCE(wa.metadata, '{}'::jsonb) || jsonb_strip_nulls(jsonb_build_object(
+                'memo', ot_meta.provider_quote_payload->>'userMemo',
+                'recipientLabel', ot_meta.provider_quote_payload->>'recipientLabel',
+                'jobKind', ot_meta.job_kind,
+                'publicId', ot_meta.public_id
+              ))
+            ELSE wa.metadata
+          END AS metadata,
+          wa.observed_at, wa.created_at, wa.updated_at
         FROM flow.wallet_activities wa
+        LEFT JOIN LATERAL (
+          SELECT otj.id, otj.provider_quote_payload, otj.job_kind, otj.public_id
+          FROM flow.outgoing_transfer_jobs otj
+          WHERE otj.account_id = wa.account_id
+            AND otj.source_tx_hash = wa.tx_hash
+          ORDER BY otj.created_at DESC
+          LIMIT 1
+        ) ot_meta ON wa.direction = 'OUTGOING'
         WHERE wa.account_id = ${accountId}::uuid
         ORDER BY
           wa.network,
@@ -136,6 +154,8 @@ function accountActivityRows(accountId: string) {
           'destinationNetwork', ot.destination_network,
           'destinationAssetSymbol', ot.destination_asset_symbol,
           'destinationTxHash', ot.destination_tx_hash,
+          'memo', ot.provider_quote_payload->>'userMemo',
+          'recipientLabel', ot.provider_quote_payload->>'recipientLabel',
           'errorCode', ot.error_code,
           'errorMessage', ot.error_message
         ) AS metadata,

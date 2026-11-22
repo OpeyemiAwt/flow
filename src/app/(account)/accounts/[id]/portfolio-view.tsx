@@ -18,6 +18,7 @@ import {
   AssetsHeldModal,
   type HeldAssetItem,
 } from "../../../../components/assets-held-modal.tsx";
+import { TransactionReceiptModal } from "../../../../components/transaction-receipt-modal.tsx";
 import {
   BALANCE_VISIBILITY_EVENT,
   readBalanceHidden,
@@ -929,6 +930,9 @@ export function PortfolioView({
     useState<string>("solana-mainnet:SOL");
   const [sendAmount, setSendAmount] = useState<string>("");
   const [sendRecipientAddress, setSendRecipientAddress] = useState<string>("");
+  const [sendMemo, setSendMemo] = useState<string>("");
+  const [receiptActivity, setReceiptActivity] =
+    useState<SerializedWalletActivityRecord | null>(null);
   const [isFlowIdModalOpen, setIsFlowIdModalOpen] = useState(false);
   const [flowIdResolution, setFlowIdResolution] = useState<{
     status: "idle" | "loading" | "resolved" | "error";
@@ -2160,6 +2164,7 @@ export function PortfolioView({
               destinationDeploymentId: sendDestDeployment.id,
               recipientAddress: sendRecipientAddress.trim(),
               sourceDisplayAmount: sendAmount,
+              ...(sendMemo.trim() ? { memo: sendMemo.trim() } : {}),
               idempotencyKey,
             }
           : {
@@ -2693,9 +2698,11 @@ export function PortfolioView({
                 <div className="space-y-3">
                   {displayActivities.length > 0 ? (
                     displayActivities.slice(0, 3).map((act) => (
-                      <div
+                      <button
                         key={act.id}
-                        className="flex items-center justify-between p-2 rounded-xl"
+                        type="button"
+                        onClick={() => setReceiptActivity(act)}
+                        className="w-full text-left flex items-center justify-between p-2 rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-3">
                           <div className="h-9 w-9 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
@@ -2720,6 +2727,10 @@ export function PortfolioView({
                                     : "Transfer received"}
                             </div>
                             <div className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                              {typeof act.metadata?.memo === "string" &&
+                              act.metadata.memo.trim()
+                                ? `${act.metadata.memo.trim()} • `
+                                : ""}
                               {formatTimestamp(
                                 act.blockTimestamp || act.observedAt,
                               )}
@@ -2739,7 +2750,7 @@ export function PortfolioView({
                               : act.reorgStatus}
                           </div>
                         </div>
-                      </div>
+                      </button>
                     ))
                   ) : (
                     <p className="text-xs text-neutral-600 dark:text-neutral-400">
@@ -3332,6 +3343,24 @@ export function PortfolioView({
                         </div>
                       </div>
 
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor="send-memo-input"
+                          className="block text-[11px] font-semibold text-neutral-600 dark:text-neutral-400"
+                        >
+                          Memo / What is this payment for? (Optional)
+                        </label>
+                        <input
+                          id="send-memo-input"
+                          type="text"
+                          maxLength={140}
+                          value={sendMemo}
+                          onChange={(e) => setSendMemo(e.target.value)}
+                          placeholder="e.g., Dinner split, Design invoice, Rent"
+                          className="w-full px-4 py-2.5 rounded-2xl text-xs bg-neutral-50/70 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden focus:border-neutral-900 dark:focus:border-white/30"
+                        />
+                      </div>
+
                       <OutgoingQuoteDetails
                         preview={sendPreview}
                         symbol={sendDestDeployment.symbol}
@@ -3412,6 +3441,16 @@ export function PortfolioView({
                               : truncateMiddle(sendRecipientAddress, 10, 8)}
                           </span>
                         </div>
+                        {sendMemo.trim().length > 0 && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-neutral-500 dark:text-neutral-400">
+                              Memo
+                            </span>
+                            <span className="font-medium text-neutral-900 dark:text-neutral-200 truncate max-w-[65%]">
+                              {sendMemo.trim()}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <OutgoingQuoteDetails
@@ -5084,11 +5123,20 @@ export function PortfolioView({
                   .map((act) => (
                     <div
                       key={act.id}
-                      className="p-3 rounded-2xl border border-neutral-100 dark:border-white/[0.06] hover:bg-neutral-50/60 dark:hover:bg-white/[0.03] transition-colors flex items-center justify-between gap-4"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setReceiptActivity(act)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setReceiptActivity(act);
+                        }
+                      }}
+                      className="p-3 rounded-2xl border border-neutral-100 dark:border-white/[0.06] hover:bg-neutral-50/60 dark:hover:bg-white/[0.03] transition-colors flex items-center justify-between gap-4 cursor-pointer"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs ${
+                          className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center font-bold text-xs ${
                             act.direction === "INCOMING"
                               ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
                               : "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400"
@@ -5096,8 +5144,8 @@ export function PortfolioView({
                         >
                           {act.direction === "INCOMING" ? "↓" : "↑"}
                         </div>
-                        <div>
-                          <div className="text-xs font-bold text-neutral-950 dark:text-white">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-neutral-950 dark:text-white truncate">
                             {act.activityType === "FLOW_PAYMENT"
                               ? act.metadata?.executionStatus === "FAILED" ||
                                 act.metadata?.executionStatus === "REFUNDED" ||
@@ -5117,6 +5165,12 @@ export function PortfolioView({
                                     ? "Transfer Sent"
                                     : "Transfer Received"}
                           </div>
+                          {typeof act.metadata?.memo === "string" &&
+                            act.metadata.memo.trim() && (
+                              <div className="text-[11px] text-neutral-600 dark:text-neutral-300 truncate">
+                                {act.metadata.memo.trim()}
+                              </div>
+                            )}
                           <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
                             {truncateMiddle(act.txHash, 10, 8)} •{" "}
                             {formatTimestamp(
@@ -5126,7 +5180,7 @@ export function PortfolioView({
                         </div>
                       </div>
 
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <div
                           className={`text-xs font-bold tabular-nums ${
                             act.direction === "INCOMING"
@@ -5139,27 +5193,33 @@ export function PortfolioView({
                             : `${act.direction === "INCOMING" ? "+" : "-"}${formatApproxDisplay(act.displayAmount)}`}{" "}
                           {act.assetSymbol}
                         </div>
-                        {act.finality === "FINALIZED" &&
-                        !act.txHash.startsWith("snd_") &&
-                        !act.txHash.startsWith("cnv_") &&
-                        !act.txHash.startsWith("am_") ? (
-                          <a
-                            href={act.explorerUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-neutral-400 dark:text-neutral-500 hover:text-neutral-950 dark:hover:text-white"
-                          >
-                            View tx ↗
-                          </a>
-                        ) : (
-                          <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
-                            {act.metadata?.executionStatus === "FAILED" ||
-                            act.metadata?.executionStatus === "REFUNDED" ||
-                            act.metadata?.executionStatus === "EXPIRED"
-                              ? "No tx hash"
-                              : "Pending"}
+                        <div className="flex items-center justify-end gap-2 mt-0.5">
+                          <span className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400">
+                            Receipt
                           </span>
-                        )}
+                          {act.finality === "FINALIZED" &&
+                          !act.txHash.startsWith("snd_") &&
+                          !act.txHash.startsWith("cnv_") &&
+                          !act.txHash.startsWith("am_") ? (
+                            <a
+                              href={act.explorerUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] text-neutral-400 dark:text-neutral-500 hover:text-neutral-950 dark:hover:text-white"
+                            >
+                              View tx ↗
+                            </a>
+                          ) : (
+                            <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+                              {act.metadata?.executionStatus === "FAILED" ||
+                              act.metadata?.executionStatus === "REFUNDED" ||
+                              act.metadata?.executionStatus === "EXPIRED"
+                                ? "No tx hash"
+                                : "Pending"}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))
@@ -5229,6 +5289,12 @@ export function PortfolioView({
           </div>
         </div>
       )}
+
+      {/* Transaction Receipt Modal */}
+      <TransactionReceiptModal
+        activity={receiptActivity}
+        onClose={() => setReceiptActivity(null)}
+      />
 
       {/* Held Assets Modal */}
       <AssetsHeldModal
