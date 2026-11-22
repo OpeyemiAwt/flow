@@ -37,8 +37,10 @@ import { FlowError } from "../../foundation/errors.ts";
 import { log } from "../../foundation/logger.ts";
 import type { FlowDb } from "../../foundation/prisma.ts";
 import type { WalletConfig } from "../../foundation/wallet-environment.ts";
+import { reconcileWalletBalances } from "../assets/connectors/multi-chain-reconciler.ts";
 import { callJsonRpc } from "../assets/connectors/rpc-client.ts";
 import { SOLANA_PROGRAMS } from "../assets/connectors/solana-connector.ts";
+import { ingestWalletActivities } from "../assets/indexers/multi-chain-activity-ingester.ts";
 import { verifyOnChainTransfer } from "../payments/on-chain-verifier.ts";
 import { fetchOneClickExecutionStatus } from "../providers/one-click-adapter.ts";
 import { DEFAULT_RPC_ENDPOINTS } from "./blockchain-connectivity.ts";
@@ -1178,11 +1180,18 @@ async function confirmSingleOutgoingJob(
       `;
       const senderAccountId = nearAddressRow?.address ?? job.recipient_address;
       const txRes = await callJsonRpc<{
-        status?: { SuccessValue?: string; Failure?: unknown };
+        status?: {
+          SuccessValue?: string;
+          SuccessReceiptId?: string;
+          Failure?: unknown;
+        };
       }>(primary, "tx", [job.source_tx_hash, senderAccountId], {
         fallbackEndpoint: fallback,
       });
-      if (txRes.response.result?.status?.SuccessValue !== undefined) {
+      if (
+        txRes.response.result?.status?.SuccessValue !== undefined ||
+        txRes.response.result?.status?.SuccessReceiptId !== undefined
+      ) {
         settledStatus = "SETTLED";
       } else if (txRes.response.result?.status?.Failure !== undefined) {
         settledStatus = "FAILED";
@@ -1201,6 +1210,18 @@ async function confirmSingleOutgoingJob(
         ${errorMessage}::text
       )
     `;
+
+    if (settledStatus === "SETTLED") {
+      await Promise.allSettled([
+        reconcileWalletBalances(db, job.wallet_id),
+        ingestWalletActivities(db, job.wallet_id, {
+          nearTxHashes:
+            job.source_network.startsWith("near-") && job.source_tx_hash
+              ? [job.source_tx_hash]
+              : undefined,
+        }),
+      ]);
+    }
     return;
   }
 
@@ -1265,6 +1286,15 @@ async function confirmSingleOutgoingJob(
         NULL
       )
     `;
+    await Promise.allSettled([
+      reconcileWalletBalances(db, job.wallet_id),
+      ingestWalletActivities(db, job.wallet_id, {
+        nearTxHashes:
+          job.destination_network.startsWith("near-") && destTx
+            ? [destTx]
+            : undefined,
+      }),
+    ]);
     return;
   }
 

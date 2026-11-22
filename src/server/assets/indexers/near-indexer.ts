@@ -197,7 +197,10 @@ export async function indexNearAddressActivities(
           let receiptIncoming = 0n;
           let receiptFrom = signer;
           for (const r of tx.receipts) {
-            if (r.receiver_id?.toLowerCase() === normAccount) {
+            if (
+              r.receiver_id?.toLowerCase() === normAccount &&
+              r.predecessor_id?.toLowerCase() !== "system"
+            ) {
               for (const act of r.receipt?.Action?.actions ?? []) {
                 if (act.Transfer?.deposit) {
                   receiptIncoming += BigInt(act.Transfer.deposit);

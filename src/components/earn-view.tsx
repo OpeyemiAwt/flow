@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { triggerHaptic } from "./haptics.ts";
 import {
@@ -331,6 +331,24 @@ export function EarnView({
     trackedJob?.status === "FAILED" ||
     trackedJob?.status === "REFUNDED" ||
     trackedJob?.status === "UNKNOWN_AMBIGUOUS";
+
+  const lastSettledTrackedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      trackedJob?.publicId &&
+      trackedJob.status === "SETTLED" &&
+      lastSettledTrackedIdRef.current !== trackedJob.publicId
+    ) {
+      lastSettledTrackedIdRef.current = trackedJob.publicId;
+      void fetchEarnPositions();
+      onSyncPortfolio?.();
+      const followUp = setTimeout(() => {
+        void fetchEarnPositions();
+        onSyncPortfolio?.();
+      }, 2500);
+      return () => clearTimeout(followUp);
+    }
+  }, [trackedJob?.publicId, trackedJob?.status, fetchEarnPositions, onSyncPortfolio]);
 
   useEffect(() => {
     if (activeEarnJobs.length === 0 && (!trackedJobId || trackedJobIsTerminal)) {
