@@ -2789,11 +2789,36 @@ export function PortfolioView({
                               ? "••••••"
                               : `${act.direction === "OUTGOING" ? "−" : "+"}${formatCompactActivityAmount(act.displayAmount, 3)} ${act.assetSymbol}`}
                           </span>
-                          <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold uppercase tracking-wide mt-0.5 whitespace-nowrap">
-                            {act.reorgStatus === "CANONICAL"
-                              ? act.finality
-                              : act.reorgStatus}
-                          </div>
+                          {(() => {
+                            const execStatus =
+                              typeof act.metadata?.executionStatus === "string"
+                                ? act.metadata.executionStatus
+                                : null;
+                            const isFailed =
+                              execStatus === "FAILED" ||
+                              execStatus === "REFUNDED" ||
+                              execStatus === "EXPIRED";
+                            const isCompleted =
+                              !isFailed && act.finality === "FINALIZED";
+                            const label = isFailed
+                              ? execStatus!.charAt(0) +
+                                execStatus!.slice(1).toLowerCase()
+                              : isCompleted
+                                ? "Completed"
+                                : "Pending";
+                            const colorClass = isFailed
+                              ? "text-red-600 dark:text-red-400"
+                              : isCompleted
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-amber-600 dark:text-amber-400";
+                            return (
+                              <div
+                                className={`text-[10px] font-semibold uppercase tracking-wide mt-0.5 whitespace-nowrap ${colorClass}`}
+                              >
+                                {label}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </button>
                     ))
@@ -5258,11 +5283,24 @@ export function PortfolioView({
                               View tx ↗
                             </a>
                           ) : (
-                            <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+                            <span
+                              className={`text-[10px] font-semibold ${
+                                act.metadata?.executionStatus === "FAILED" ||
+                                act.metadata?.executionStatus === "REFUNDED" ||
+                                act.metadata?.executionStatus === "EXPIRED"
+                                  ? "text-red-600 dark:text-red-400"
+                                  : "text-amber-600 dark:text-amber-400"
+                              }`}
+                            >
                               {act.metadata?.executionStatus === "FAILED" ||
                               act.metadata?.executionStatus === "REFUNDED" ||
                               act.metadata?.executionStatus === "EXPIRED"
-                                ? "No tx hash"
+                                ? String(act.metadata.executionStatus)
+                                    .charAt(0)
+                                    .toUpperCase() +
+                                  String(act.metadata.executionStatus)
+                                    .slice(1)
+                                    .toLowerCase()
                                 : "Pending"}
                             </span>
                           )}

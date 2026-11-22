@@ -102,16 +102,44 @@ function resolveReceiptFields(activity: SerializedWalletActivityRecord) {
     recipientLabel ||
     (rawCounterparty ? truncateMiddle(rawCounterparty, 10, 8) : "FLOW Wallet");
 
-  const statusLabel =
+  const isFailed =
     executionStatus === "FAILED" ||
     executionStatus === "REFUNDED" ||
-    executionStatus === "EXPIRED"
-      ? executionStatus.charAt(0) + executionStatus.slice(1).toLowerCase()
-      : activity.finality === "FINALIZED"
-        ? "Completed"
-        : activity.finality === "CONFIRMED"
-          ? "Confirming"
-          : "Pending";
+    executionStatus === "EXPIRED";
+  const statusTone: "completed" | "failed" | "pending" = isFailed
+    ? "failed"
+    : activity.finality === "FINALIZED"
+      ? "completed"
+      : "pending";
+  const statusLabel = isFailed
+    ? executionStatus!.charAt(0) + executionStatus!.slice(1).toLowerCase()
+    : activity.finality === "FINALIZED"
+      ? "Completed"
+      : activity.finality === "CONFIRMED"
+        ? "Confirming"
+        : "Pending";
+
+  const statusColors =
+    statusTone === "completed"
+      ? {
+          pillClass:
+            "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+          bgHex: "rgba(16, 185, 129, 0.14)",
+          textHex: "#047857",
+        }
+      : statusTone === "failed"
+        ? {
+            pillClass:
+              "bg-red-500/15 text-red-700 dark:bg-red-500/20 dark:text-red-400",
+            bgHex: "rgba(239, 68, 68, 0.14)",
+            textHex: "#B91C1C",
+          }
+        : {
+            pillClass:
+              "bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+            bgHex: "rgba(245, 158, 11, 0.16)",
+            textHex: "#B45309",
+          };
 
   const hasExplorerLink =
     activity.finality === "FINALIZED" &&
@@ -133,6 +161,8 @@ function resolveReceiptFields(activity: SerializedWalletActivityRecord) {
     rawCounterparty,
     memo: memoRaw,
     statusLabel,
+    statusTone,
+    statusColors,
     networkName: formatNetworkName(activity.network),
     formattedAmount,
     formattedDate: formatReceiptDate(
@@ -248,6 +278,22 @@ async function renderReceiptPngBlob(
   ctx.textAlign = "left";
   ctx.fillText("FLOW", px + 88, paperTop + 69);
 
+  // Top-right colored status pill
+  const pillText = fields.statusLabel.toUpperCase();
+  ctx.font = '700 18px -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
+  const pillTextW = ctx.measureText(pillText).width;
+  const pillW = pillTextW + 32;
+  const pillH = 34;
+  const pillX = px + pw - 44 - pillW;
+  const pillY = paperTop + 42;
+  ctx.fillStyle = fields.statusColors.bgHex;
+  ctx.beginPath();
+  ctx.roundRect(pillX, pillY, pillW, pillH, 17);
+  ctx.fill();
+  ctx.fillStyle = fields.statusColors.textHex;
+  ctx.textAlign = "center";
+  ctx.fillText(pillText, pillX + pillW / 2, pillY + 23);
+
   // Centered Hero Amount
   ctx.fillStyle = fields.isIncoming ? "#059669" : "#0B0C0E";
   ctx.font = '700 54px -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
@@ -268,7 +314,8 @@ async function renderReceiptPngBlob(
     ctx.font = '500 23px -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
     ctx.fillText(row.label, px + 44, y);
 
-    ctx.fillStyle = "#111214";
+    ctx.fillStyle =
+      row.label === "Status" ? fields.statusColors.textHex : "#111214";
     ctx.font = '600 27px -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
     const val = row.value.length > 44 ? `${row.value.slice(0, 41)}...` : row.value;
     ctx.fillText(val, px + 44, y + 40);
@@ -398,7 +445,9 @@ export function TransactionReceiptModal({
     .wrap { width: 380px; }
     .slot { height: 14px; border-radius: 999px; background: linear-gradient(180deg,#FF1A1A,#C41212); }
     .paper { margin: -4px 12px 0; background:#EBEDF0; padding:24px 24px 28px; border-radius:0 0 12px 12px; }
+    .brand-row { display:flex; align-items:center; justify-content:space-between; }
     .brand { font-size:16px; font-weight:700; color:#0b0c0e; letter-spacing:-0.02em; }
+    .pill { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:3px 9px; border-radius:999px; background:${fields.statusColors.bgHex}; color:${fields.statusColors.textHex}; }
     .hero { text-align:center; margin:20px 0 22px; }
     .amt { font-size:30px; font-weight:700; color:${fields.isIncoming ? "#059669" : "#0b0c0e"}; letter-spacing:-0.02em; }
     .date { font-size:12px; color:#5f636a; margin-top:4px; }
@@ -409,7 +458,10 @@ export function TransactionReceiptModal({
   <div class="wrap">
     <div class="slot"></div>
     <div class="paper">
-      <div class="brand">FLOW</div>
+      <div class="brand-row">
+        <div class="brand">FLOW</div>
+        <span class="pill">${escapeHtml(fields.statusLabel)}</span>
+      </div>
       <div class="hero">
         <div class="amt">${escapeHtml(fields.formattedAmount)}</div>
         <div class="date">${escapeHtml(fields.formattedDate)}</div>
@@ -474,7 +526,9 @@ export function TransactionReceiptModal({
               {/* Brand */}
               <div className="flex items-center justify-between">
                 <FlowLogo className="h-5 w-auto" />
-                <span className="text-[10.5px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-300">
+                <span
+                  className={`text-[10.5px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${fields.statusColors.pillClass}`}
+                >
                   {fields.statusLabel}
                 </span>
               </div>
