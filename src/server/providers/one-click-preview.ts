@@ -119,10 +119,39 @@ export async function quoteOneClickPreview(input: {
     !result.quoteTimestamp ||
     !result.providerDeadline
   ) {
+    let error = result.errorMessage ?? "Provider quote unavailable.";
+    if (result.minRequiredAtomic) {
+      try {
+        const rawMin = formatAtomicToDisplay(
+          result.minRequiredAtomic,
+          source.decimals,
+        );
+        const dot = rawMin.indexOf(".");
+        let minDisplay = rawMin;
+        if (dot !== -1) {
+          const intPart = rawMin.slice(0, dot);
+          const fracPart = rawMin.slice(dot + 1);
+          if (intPart !== "0") {
+            const trimmed = fracPart.slice(0, 4).replace(/0+$/, "");
+            minDisplay = trimmed ? `${intPart}.${trimmed}` : intPart;
+          } else {
+            const firstNonZero = fracPart.search(/[1-9]/);
+            if (firstNonZero !== -1) {
+              const cut = Math.min(fracPart.length, firstNonZero + 2);
+              const trimmed = fracPart.slice(0, cut).replace(/0+$/, "");
+              minDisplay = `0.${trimmed}`;
+            }
+          }
+        }
+        error = `Amount is too small for cross-chain transfer. Minimum for this route is ~${minDisplay} ${source.symbol}.`;
+      } catch {
+        error = "Amount is too small for this cross-chain route.";
+      }
+    }
     return {
       ok: false,
       routeStatus: result.routeStatus,
-      error: result.errorMessage ?? "Provider quote unavailable.",
+      error,
     };
   }
 

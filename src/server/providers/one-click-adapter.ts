@@ -89,6 +89,7 @@ export interface OneClickDryQuoteResult {
   signature?: string;
   quoteTimestamp?: string | null;
   providerDeadline?: string | null;
+  minRequiredAtomic?: string;
   errorMessage?: string;
 }
 
@@ -184,7 +185,8 @@ export async function fetchOneClickDryQuote(params: {
     });
     const data = (await response.json()) as OneClickRawResponse;
     if (!response.ok) {
-      const message = String(data.message ?? data.error ?? "").toLowerCase();
+      const rawMessage = String(data.message ?? data.error ?? "");
+      const message = rawMessage.toLowerCase();
       if (/token(?:in|out) is not valid|unsupported/.test(message)) {
         return {
           ok: false,
@@ -193,11 +195,18 @@ export async function fetchOneClickDryQuote(params: {
             "The provider does not support the selected asset pair.",
         };
       }
+      if (/amount is too (?:small|low)/.test(message)) {
+        const minMatch = rawMessage.match(/at least\s+([0-9]{1,78})/i);
+        return {
+          ok: false,
+          routeStatus: "TEMPORARILY_UNAVAILABLE",
+          ...(minMatch?.[1] ? { minRequiredAtomic: minMatch[1] } : {}),
+          errorMessage: "Amount is too small for this cross-chain route.",
+        };
+      }
       if (
         response.status === 429 ||
-        /no liquidity|insufficient liquidity|amount is too (?:small|low)/.test(
-          message,
-        )
+        /no liquidity|insufficient liquidity/.test(message)
       ) {
         return {
           ok: false,
