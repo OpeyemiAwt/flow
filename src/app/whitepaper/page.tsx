@@ -3,16 +3,16 @@ import Link from "next/link";
 import { PublicSiteChrome } from "../../components/public-site-chrome.tsx";
 
 export const metadata: Metadata = {
-  title: "FLOW Whitepaper",
+  title: "Whitepaper · FLOW",
   description:
-    "Product & Technical Whitepaper (Version 1.0): Chain-abstracted personal payments, NEAR OutLayer MPC custody, NEAR Intents routing, and native NEAR yield.",
+    "FLOW Whitepaper (Version 1.0): Chain-abstracted payments across NEAR, Solana, Base, and Ethereum, powered by NEAR OutLayer MPC custody, NEAR Intents, and native NEAR yield.",
   alternates: {
     canonical: "https://flow.devhub.forum/whitepaper",
   },
   openGraph: {
     title: "FLOW Whitepaper (Version 1.0)",
     description:
-      "A simpler payment and yield experience across blockchain networks. Architecture, custody policies, cross-chain settlement, and risk disclosures.",
+      "Move money across chains without seed phrases or manual bridges. Architecture, custody, cross-chain settlement, and native yield.",
     url: "https://flow.devhub.forum/whitepaper",
     type: "article",
     images: [
@@ -33,556 +33,451 @@ export const metadata: Metadata = {
   },
 };
 
-const SECTIONS = [
-  { id: "abstract", label: "1. Abstract" },
-  { id: "problem", label: "2. Industry Background & Problem" },
-  { id: "solution", label: "3. Solution & Value Proposition" },
-  { id: "architecture", label: "4. Technical Architecture" },
-  { id: "economics", label: "5. Economic Model & Yield" },
-  { id: "gtm", label: "6. Go-To-Market Strategy" },
-  { id: "roadmap", label: "7. Roadmap" },
-  { id: "contributors", label: "8. Ecosystem & Contributors" },
-  { id: "risks", label: "9. Risks & Disclaimers" },
-  { id: "references", label: "10. References & Metadata" },
+const CHAPTERS = [
+  { num: "01", id: "thesis", title: "Thesis" },
+  { num: "02", id: "problem", title: "The problem" },
+  { num: "03", id: "product", title: "The product" },
+  { num: "04", id: "comparison", title: "How FLOW compares" },
+  { num: "05", id: "architecture", title: "Architecture & MPC custody" },
+  { num: "06", id: "settlement", title: "Cross-chain settlement" },
+  { num: "07", id: "links-and-ids", title: "Payment links & @flow ID" },
+  { num: "08", id: "earn", title: "Native yield (Earn)" },
+  { num: "09", id: "fees", title: "Economics & fees" },
+  { num: "10", id: "roadmap-risks", title: "Roadmap & risks" },
 ] as const;
 
 export default function WhitepaperPage() {
   return (
     <PublicSiteChrome activeRoute="whitepaper">
-      <div className="mx-auto max-w-4xl space-y-8">
-        {/* 1.1 Title Page & Document Metadata */}
-        <header className="rounded-[28px] border border-[#E6E2DA] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs sm:p-10">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#D51B24]">
-              Product &amp; Technical Whitepaper
+      <main className="mx-auto max-w-5xl px-5 sm:px-8 pt-10 pb-24 text-neutral-800 dark:text-neutral-200">
+        {/* Hero */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pb-12 border-b border-neutral-200/80 dark:border-white/[0.08]">
+          <div className="lg:col-span-7 space-y-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+              Whitepaper · Version 1.0 · Updated 22 November 2026
             </p>
-            <span className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3 py-1 font-mono text-[11px] font-semibold text-[#444] dark:text-neutral-300">
-              v1.0 | November 2026
-            </span>
-          </div>
-          <h1 className="mt-4 font-serif text-4xl tracking-tight text-[#0B0B0B] dark:text-white sm:text-5xl">
-            FLOW Whitepaper
-          </h1>
-          <p className="mt-3 text-lg text-[#555] dark:text-neutral-300">
-            Pay with what you hold. Receive what you want. Earn native yield on
-            NEAR.
-          </p>
-
-          {/* Official Links */}
-          <div className="mt-5 flex flex-wrap gap-3 text-xs">
-            <a
-              href="https://flow.devhub.forum"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3 py-1 font-mono text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
-            >
-              App: flow.devhub.forum
-            </a>
-            <Link
-              href="/docs"
-              className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3 py-1 font-mono text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
-            >
-              Docs: /docs
-            </Link>
-            <a
-              href="https://github.com/OpeyemiAwt/flow"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3 py-1 font-mono text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
-            >
-              GitHub: OpeyemiAwt/flow
-            </a>
-            <a
-              href="https://x.com/use_flowapp"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3 py-1 font-mono text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
-            >
-              X: @use_flowapp
-            </a>
-          </div>
-
-          {/* Section Jump Links */}
-          <nav
-            aria-label="Whitepaper sections"
-            className="mt-6 flex flex-wrap gap-2 border-t border-[#EFECE6] dark:border-white/[0.08] pt-5"
-          >
-            {SECTIONS.map((s) => (
-              <a
-                key={s.id}
-                href={`#${s.id}`}
-                className="rounded-full border border-[#E6E2DA] dark:border-white/[0.1] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3 py-1 text-xs font-medium text-[#3B3B3B] dark:text-neutral-300 hover:border-[#0B0B0B] dark:hover:border-white hover:text-[#0B0B0B] dark:hover:text-white focus-visible:outline-2 focus-visible:outline-[#FF1A1A]"
+            <h1 className="font-serif text-4xl sm:text-5xl font-normal tracking-tight text-neutral-950 dark:text-white leading-[1.08]">
+              Move money across chains, without the friction
+            </h1>
+            <p className="text-base text-neutral-600 dark:text-neutral-400 leading-relaxed max-w-xl">
+              FLOW turns multi-chain crypto into money people can actually use:
+              send to a human @flow ID, share payment links that settle from any
+              supported coin, and earn native yield on NEAR without seed phrases
+              or manual bridges.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <Link
+                href="/app"
+                className="flow-liquid-btn-primary px-6 py-3 rounded-full text-xs font-semibold"
               >
-                {s.label}
-              </a>
-            ))}
-          </nav>
-        </header>
-
-        {/* Whitepaper Body */}
-        <article className="space-y-10 rounded-[28px] border border-[#E6E2DA] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs sm:p-12">
-          {/* 1.2 Abstract */}
-          <section
-            id="abstract"
-            aria-labelledby="wp-abstract"
-            className="scroll-mt-24 max-w-[68ch] space-y-3"
-          >
-            <h2
-              id="wp-abstract"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              1. Abstract &amp; Executive Summary
-            </h2>
-            <p className="text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              FLOW is a chain-abstracted personal money application built on
-              NEAR Protocol. It unifies multi-chain custody, cross-chain
-              payments, and native NEAR DeFi yield into a single Web2-familiar
-              interface for individual users. With a Google login or email
-              verification code, FLOW provisions permanent mainnet addresses
-              across NEAR, Solana, Base, and Ethereum without requiring seed
-              phrases or browser wallet extensions.
-            </p>
-            <p className="text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              By combining <strong>NEAR OutLayer</strong> policy-governed MPC
-              custody with <strong>NEAR Intents (1Click)</strong> cross-chain
-              settlement and live <strong>LiNEAR</strong> and{" "}
-              <strong>Burrow Finance</strong> integrations, FLOW solves crypto&apos;s
-              coordination gap: senders pay with whatever asset and chain they
-              hold, recipients receive the exact asset and chain they want, and
-              idle balances earn verifiable on-chain yield.
-            </p>
-          </section>
-
-          {/* 1.3 Industry Background & Problem Statement */}
-          <section
-            id="problem"
-            aria-labelledby="wp-problem"
-            className="scroll-mt-24 max-w-[68ch] space-y-3 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="wp-problem"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              2. Industry Background &amp; Problem Statement
-            </h2>
-            <p className="text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              Multi-chain adoption has created liquidity across dozens of
-              networks, yet everyday payment UX remains broken for individual
-              users:
-            </p>
-            <ul className="list-disc space-y-2 pl-6 text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              <li>
-                <strong>Asset and Chain Mismatch:</strong> A payer holding USDC
-                on Base or SOL on Solana cannot settle a recipient&apos;s
-                request for NEAR without manually bridging, swapping, and
-                acquiring destination gas.
-              </li>
-              <li>
-                <strong>Seed-Phrase and Extension Friction:</strong> Traditional
-                self-custody forces consumers to manage 12-word or 24-word
-                recovery phrases and switch networks manually across multiple
-                wallet extensions.
-              </li>
-              <li>
-                <strong>Opaque Settlement &amp; Silent Failures:</strong> Many
-                apps leave users staring at raw RPC error codes, stalled bridges,
-                or unverified balance states when a route times out or runs
-                short on gas/storage.
-              </li>
-              <li>
-                <strong>Fragmented Yield Access:</strong> Moving idle tokens
-                into staking or lending requires navigating separate DeFi
-                frontends and tracking protocol-specific storage deposits and
-                cooldown rules.
-              </li>
-            </ul>
-          </section>
-
-          {/* 1.4 The Solution & Value Proposition */}
-          <section
-            id="solution"
-            aria-labelledby="wp-solution"
-            className="scroll-mt-24 max-w-[68ch] space-y-3 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="wp-solution"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              3. Solution &amp; Value Proposition
-            </h2>
-            <p className="text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              FLOW separates <strong>what the user wants</strong> (a personal
-              balance, a payment request, a swap, or a yield position) from{" "}
-              <strong>how blockchains execute it</strong>. FLOW is scoped
-              exclusively to <strong>personal accounts</strong> (no business or
-              multi-user team accounts), keeping every flow fast and
-              uncluttered.
-            </p>
-            <ul className="list-disc space-y-2 pl-6 text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              <li>
-                <strong>One Login, Four Mainnets:</strong> Google or email OTP
-                sign-in provisions NEAR, Solana, Base, and Ethereum addresses
-                via NEAR OutLayer MPC.
-              </li>
-              <li>
-                <strong>Cross-Chain Payment Links (/pay/[id]):</strong> Create
-                fixed or open-amount payment requests where external payers
-                settle from 230+ tokens across 39+ blockchains without needing a
-                FLOW account.
-              </li>
-              <li>
-                <strong>Live Send, Convert &amp; Flow IDs:</strong> Send to
-                external wallets or <span className="font-mono text-xs">@handle.flow</span>{" "}
-                Flow IDs, convert cross-chain with live 1Click quotes, and
-                monitor progress on a persistent timeline tracker.
-              </li>
-              <li>
-                <strong>FLOW Earn on NEAR:</strong> Stake NEAR in LiNEAR
-                (<span className="font-mono text-xs">linear-protocol.near</span>)
-                or supply NEAR-Mainnet USDC to Burrow Finance (
-                <span className="font-mono text-xs">contract.main.burrow.near</span>
-                ) with live on-chain APY/APR reads and built-in gas/storage
-                protection.
-              </li>
-              <li>
-                <strong>Cashflow Insights &amp; FLOW AI:</strong> Track monthly
-                external inflows and outflows (excluding internal Earn staking
-                round-trips) and query balances or live 1Click routes via FLOW
-                AI.
-              </li>
-            </ul>
-          </section>
-
-          {/* 1.5 Technical Architecture */}
-          <section
-            id="architecture"
-            aria-labelledby="wp-architecture"
-            className="scroll-mt-24 max-w-[68ch] space-y-4 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="wp-architecture"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              4. Technical Architecture &amp; Security Model
-            </h2>
-            <p className="text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              FLOW runs a production multi-service architecture backed by
-              PostgreSQL, Prisma, and live mainnet RPCs across four dedicated
-              worker processes:
-            </p>
-            <div className="overflow-x-auto rounded-2xl border border-[#EFECE6] dark:border-white/[0.08]">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead className="bg-[#F8F6F3] dark:bg-[#1A1A1C] text-[#222] dark:text-neutral-200">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Layer / Worker</th>
-                    <th className="px-4 py-3 font-semibold">Responsibility</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EFECE6] dark:divide-white/[0.06] text-[#444] dark:text-neutral-300">
-                  <tr>
-                    <td className="px-4 py-3 font-mono font-semibold">Web App (Next.js)</td>
-                    <td className="px-4 py-3">
-                      Auth sessions, API validation (Zod), live quoting, UI state persistence, and portfolio views.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3 font-mono font-semibold">worker:custody</td>
-                    <td className="px-4 py-3">
-                      OutLayer MPC wallet provisioning, sponsored NEAR policy setup, and signed contract execution.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3 font-mono font-semibold">worker:payments</td>
-                    <td className="px-4 py-3">
-                      Outgoing send, convert, and Earn job orchestration with idempotency keys and crash recovery.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3 font-mono font-semibold">worker:monitoring</td>
-                    <td className="px-4 py-3">
-                      Observes NEAR Intents 1Click deposit addresses and cross-chain settlement status.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3 font-mono font-semibold">worker:indexer</td>
-                    <td className="px-4 py-3">
-                      Multi-chain RPC balance reconciliation and canonical wallet activity indexing.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                Open FLOW
+              </Link>
+              <Link
+                href="/docs"
+                className="flow-liquid-btn px-6 py-3 rounded-full text-xs font-semibold text-neutral-900 dark:text-white"
+              >
+                Read the docs
+              </Link>
             </div>
-            <h3 className="font-serif text-xl text-[#0B0B0B] dark:text-white pt-2">
-              Security Model &amp; Threat Mitigation
-            </h3>
-            <ul className="list-disc space-y-2 pl-6 text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              <li>
-                <strong>No Raw Private Keys in FLOW:</strong> Wallet keys are
-                managed by NEAR OutLayer MPC enclaves. Stored provider API
-                credentials are encrypted at rest with AES-256-GCM envelopes.
-              </li>
-              <li>
-                <strong>Least-Privilege Database Roles:</strong> Web handlers
-                and workers connect under scoped PostgreSQL roles with
-                row-level session context (<span className="font-mono text-xs">set_config</span>).
-              </li>
-              <li>
-                <strong>On-Chain Verification:</strong> Inbound deposits and
-                outgoing settlements are verified independently against live
-                NEAR, Solana, Base, and Ethereum RPC nodes before crediting
-                balances or marking jobs settled.
-              </li>
-            </ul>
-          </section>
+          </div>
 
-          {/* 1.6 Economic Model & Yield */}
-          <section
-            id="economics"
-            aria-labelledby="wp-economics"
-            className="scroll-mt-24 max-w-[68ch] space-y-3 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="wp-economics"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
+          {/* Live Payment Visual Card (Talise-inspired editorial preview) */}
+          <div className="lg:col-span-5">
+            <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.1] bg-white dark:bg-[#141414] p-6 shadow-md space-y-5">
+              <div className="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
+                <span className="font-semibold text-neutral-950 dark:text-white">
+                  FLOW Settlement
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Finalized
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Sent
+                </p>
+                <p className="font-mono text-3xl font-bold tracking-tight text-neutral-950 dark:text-white mt-0.5">
+                  850.00 USDT
+                </p>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                  to <span className="font-mono font-semibold text-neutral-900 dark:text-white">tunde@flow</span>
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-neutral-100 dark:border-white/[0.08] text-xs">
+                <div>
+                  <p className="text-neutral-500 dark:text-neutral-400">Paid in</p>
+                  <p className="font-semibold text-neutral-950 dark:text-white mt-0.5">
+                    SOL on Solana
+                  </p>
+                </div>
+                <div>
+                  <p className="text-neutral-500 dark:text-neutral-400">Settled as</p>
+                  <p className="font-semibold text-neutral-950 dark:text-white mt-0.5">
+                    USDT on Ethereum
+                  </p>
+                </div>
+                <div>
+                  <p className="text-neutral-500 dark:text-neutral-400">Routing</p>
+                  <p className="font-semibold text-neutral-950 dark:text-white mt-0.5">
+                    NEAR Intents
+                  </p>
+                </div>
+                <div>
+                  <p className="text-neutral-500 dark:text-neutral-400">Custody</p>
+                  <p className="font-semibold text-neutral-950 dark:text-white mt-0.5">
+                    NEAR OutLayer MPC
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Key Numbers Strip */}
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-8 border-b border-neutral-200/80 dark:border-white/[0.08]">
+          {[
+            { value: "4", label: "Mainnet networks (NEAR, Solana, Base, ETH)" },
+            { value: "0", label: "Seed phrases to write down or manage" },
+            { value: "1Click", label: "Cross-chain routing via NEAR Intents" },
+            { value: "2", label: "Native NEAR Earn protocols (LiNEAR & Burrow)" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4"
             >
-              5. Economic Model &amp; DeFi Yield Mechanics
-            </h2>
-            <p className="text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              FLOW has <strong>no native token</strong> and does not issue
-              inflationary emissions or speculative tokenomics. Economic flows
-              are strictly transparent:
+              <p className="font-mono text-2xl sm:text-3xl font-bold text-neutral-950 dark:text-white">
+                {stat.value}
+              </p>
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-snug">
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </section>
+
+        {/* Abstract */}
+        <section className="mt-8 rounded-[24px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-8 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#FF1A1A] mb-2">
+            Abstract
+          </p>
+          <p className="text-sm sm:text-base leading-relaxed text-neutral-700 dark:text-neutral-300">
+            Global crypto payments are fragmented across incompatible networks.
+            A sender holds SOL on Solana, a recipient wants USDT on Ethereum or
+            native NEAR, and completing a simple transfer still requires seed
+            phrases, bridge interfaces, multiple gas tokens, and long hex
+            addresses. FLOW removes that friction. Built on NEAR OutLayer MPC
+            wallets and NEAR Intents (1Click) cross-chain settlement, FLOW gives
+            every user one unified account across NEAR, Solana, Base, and
+            Ethereum, human-readable @flow IDs, shareable payment links with
+            payer limits, and direct access to native NEAR yield through LiNEAR
+            and Burrow Finance.
+          </p>
+        </section>
+
+        {/* Main 2-Column Body: Sticky Contents + Chapters */}
+        <div className="mt-12 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          <aside className="lg:col-span-3 lg:sticky lg:top-24 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400 mb-3">
+              Contents
             </p>
-            <ul className="list-disc space-y-2 pl-6 text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              <li>
-                <strong>Network Gas &amp; Storage:</strong> Users pay standard
-                on-chain gas on the source network. For NEAR Earn deposits, FLOW
-                enforces a 0.12 NEAR gas and storage reserve on LiNEAR and a
-                0.37 NEAR reserve on first-time Burrow deposits (0.25 NEAR
-                contract storage plus 0.12 NEAR gas), while withdrawals require
-                a 0.05 NEAR gas floor.
-              </li>
-              <li>
-                <strong>Cross-Chain Routing:</strong> Swaps and cross-chain
-                payment links are quoted live by NEAR Intents (1Click) solvers,
-                with exact output amounts and deadlines shown before execution.
-              </li>
-              <li>
-                <strong>Live On-Chain Yield:</strong> LiNEAR APY is calculated
-                live from on-chain <span className="font-mono text-xs">ft_price</span>{" "}
-                appreciation on NEAR archival RPC, and Burrow USDC APR is read
-                live from <span className="font-mono text-xs">get_asset</span> on{" "}
-                <span className="font-mono text-xs">contract.main.burrow.near</span>.
-              </li>
-            </ul>
-          </section>
+            <nav className="space-y-1">
+              {CHAPTERS.map((c) => (
+                <a
+                  key={c.id}
+                  href={`#${c.id}`}
+                  className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100/80 dark:hover:bg-white/[0.05] transition-colors"
+                >
+                  <span className="font-mono text-[11px] text-neutral-400">
+                    {c.num}
+                  </span>
+                  <span>{c.title}</span>
+                </a>
+              ))}
+            </nav>
+          </aside>
 
-          {/* 1.7 Go-To-Market */}
-          <section
-            id="gtm"
-            aria-labelledby="wp-gtm"
-            className="scroll-mt-24 max-w-[68ch] space-y-3 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="gtm"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              6. Go-To-Market Strategy
-            </h2>
-            <ul className="list-disc space-y-2 pl-6 text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              <li>
-                <strong>Phase 1 (Bootstrapping):</strong> Live mainnet release
-                for personal cross-chain payments, guest checkout links, and
-                native NEAR Earn yield, eliminating onboarding friction via
-                sponsored NEAR policy setup.
-              </li>
-              <li>
-                <strong>Phase 2 (Viral Payment Links &amp; Flow IDs):</strong>{" "}
-                Every shared <span className="font-mono text-xs">/pay/[id]</span>{" "}
-                link and <span className="font-mono text-xs">@handle.flow</span>{" "}
-                request introduces external payers across 39+ chains to instant
-                NEAR Intents settlement without requiring sign-up first.
-              </li>
-              <li>
-                <strong>Phase 3 (Ecosystem Scale):</strong> Expanding supported
-                yield strategies, deeper NEAR AI / Shade Agent automation, and
-                on-chain NEAR subaccount resolution for Flow IDs.
-              </li>
-            </ul>
-          </section>
+          <article className="lg:col-span-9 space-y-12 text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+            <section id="thesis" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">01</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Thesis
+              </h2>
+              <p>
+                People do not want to think about blockchains when they pay
+                someone. They care about two things: what leaves their balance
+                and what arrives in the recipient&apos;s wallet.
+              </p>
+              <p>
+                Chain abstraction makes the network layer invisible. With MPC
+                key management and intent-based solver routing, a single account
+                can receive, send, convert, and earn across ecosystems while
+                feeling as straightforward as a modern payment app.
+              </p>
+            </section>
 
-          {/* 1.8 Roadmap */}
-          <section
-            id="roadmap"
-            aria-labelledby="wp-roadmap"
-            className="scroll-mt-24 max-w-[68ch] space-y-3 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="roadmap"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              7. Roadmap
-            </h2>
-            <ul className="list-disc space-y-2 pl-6 text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              <li>
-                <strong>Completed (Live on Mainnet):</strong> Multi-chain
-                OutLayer MPC provisioning, Google &amp; email OTP auth,
-                sponsored policy registration, 1Click Send/Convert/Add Money,
-                guest checkout <span className="font-mono text-xs">/pay/[id]</span>,
-                LiNEAR &amp; Burrow Earn with live on-chain APY/APR and claim
-                support, persistent live timeline trackers, Cashflow Insights,
-                and FLOW AI.
-              </li>
-              <li>
-                <strong>Near-Term:</strong> Automated end-to-end browser test
-                coverage, instant DEX swap-out route for LiNEAR positions, and
-                expanded notification preferences.
-              </li>
-              <li>
-                <strong>Long-Term:</strong> On-chain{" "}
-                <span className="font-mono text-xs">*.flow.near</span> subaccount
-                mapping for Flow IDs and decentralized inference integration
-                via NEAR AI.
-              </li>
-            </ul>
-          </section>
+            <section id="problem" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">02</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                The problem
+              </h2>
+              <p>
+                Everyday on-chain payments break down at four predictable
+                points:
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>Chain mismatch:</strong> A payer holds SOL or Base
+                  USDC, while the recipient expects NEAR or Ethereum USDT.
+                </li>
+                <li>
+                  <strong>Address anxiety:</strong> Copying 42 to 64 character
+                  addresses across multiple chains invites costly mistakes.
+                </li>
+                <li>
+                  <strong>Seed phrase drop-off:</strong> Asking new users to
+                  back up 12 or 24 words before receiving their first payment
+                  stops adoption cold.
+                </li>
+                <li>
+                  <strong>Idle capital:</strong> Balances sitting in standard
+                  payment wallets earn nothing unless users manually connect to
+                  external DeFi apps.
+                </li>
+              </ul>
+            </section>
 
-          {/* 1.9 Contributors */}
-          <section
-            id="contributors"
-            aria-labelledby="wp-contributors"
-            className="scroll-mt-24 max-w-[68ch] space-y-3 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="contributors"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              8. Core Contributors &amp; Ecosystem Alignment
-            </h2>
-            <p className="text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              FLOW is engineered as a consumer-first showcase of NEAR
-              Protocol&apos;s chain abstraction stack, integrating directly with{" "}
-              <span className="font-mono text-xs">outlayer.near</span>,{" "}
-              <span className="font-mono text-xs">intents.near</span> (Defuse
-              1Click), <span className="font-mono text-xs">linear-protocol.near</span>,
-              and <span className="font-mono text-xs">contract.main.burrow.near</span>.
-              Source code and migration history are maintained openly at{" "}
-              <a
-                href="https://github.com/OpeyemiAwt/flow"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-[#FF1A1A]"
-              >
-                github.com/OpeyemiAwt/flow
-              </a>
-              .
-            </p>
-          </section>
+            <section id="product" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">03</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                The product
+              </h2>
+              <p>
+                FLOW brings four core workflows into one clean interface:
+              </p>
+              <ol className="list-decimal pl-5 space-y-2">
+                <li>
+                  <strong>Unified multi-chain wallet:</strong> Sign in with
+                  Email OTP or Google SSO to provision verified mainnet
+                  addresses on NEAR, Solana, Base, and Ethereum automatically.
+                </li>
+                <li>
+                  <strong>Guided Send, Convert &amp; @flow ID:</strong> Send to
+                  any wallet address or human handle like{" "}
+                  <code className="font-mono text-xs bg-neutral-100 dark:bg-white/[0.08] px-1.5 py-0.5 rounded">
+                    amara@flow
+                  </code>{" "}
+                  with live quotes and Slide to Pay confirmation.
+                </li>
+                <li>
+                  <strong>Shareable Payment Links:</strong> Request fixed or
+                  open amounts, optionally cap how many people can pay, track
+                  settled vs. remaining spots live, and let guest payers settle
+                  from any supported coin.
+                </li>
+                <li>
+                  <strong>Native NEAR Earn:</strong> Put idle NEAR or NEAR USDC
+                  to work directly in LiNEAR liquid staking and Burrow Finance.
+                </li>
+              </ol>
+            </section>
 
-          {/* 1.10 Risk Factors & Disclaimers */}
-          <section
-            id="risks"
-            aria-labelledby="wp-risks"
-            className="scroll-mt-24 max-w-[68ch] space-y-3 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="risks"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              9. Risk Factors &amp; Legal Disclaimers
-            </h2>
-            <ul className="list-disc space-y-2 pl-6 text-[15px] leading-7 text-[#404040] dark:text-neutral-300">
-              <li>
-                <strong>Smart Contract &amp; Protocol Risk:</strong> DeFi
-                protocols (LiNEAR, Burrow), cross-chain solvers (1Click), and
-                MPC custody (OutLayer) carry smart contract, liquidity, and
-                operational risks outside FLOW&apos;s unilateral control.
-              </li>
-              <li>
-                <strong>Market &amp; Finality Risk:</strong> Digital asset
-                prices fluctuate, and confirmed blockchain transactions are
-                irreversible.
-              </li>
-              <li>
-                <strong>No Financial Advice:</strong> This whitepaper is
-                informational only. It does not constitute investment advice, a
-                solicitation, or an offer to sell any security or financial
-                instrument. See our{" "}
-                <Link href="/terms" className="underline hover:text-[#FF1A1A]">
+            <section id="comparison" className="scroll-mt-24 space-y-4">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">04</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                How FLOW compares
+              </h2>
+              <div className="overflow-x-auto rounded-2xl border border-neutral-200/80 dark:border-white/[0.08]">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-neutral-50 dark:bg-white/[0.04] text-neutral-600 dark:text-neutral-300">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Capability</th>
+                      <th className="px-4 py-3 font-semibold">Traditional Wallet</th>
+                      <th className="px-4 py-3 font-semibold">FLOW</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 dark:divide-white/[0.06] bg-white dark:bg-[#141414]">
+                    <tr>
+                      <td className="px-4 py-3 font-medium text-neutral-950 dark:text-white">Onboarding</td>
+                      <td className="px-4 py-3">12/24-word seed phrase</td>
+                      <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-400">Email OTP or Google SSO (MPC)</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 font-medium text-neutral-950 dark:text-white">Cross-chain pay</td>
+                      <td className="px-4 py-3">Manual bridge + swap + send</td>
+                      <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-400">Single flow via NEAR Intents</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 font-medium text-neutral-950 dark:text-white">Recipient identity</td>
+                      <td className="px-4 py-3">Long hex / base58 addresses</td>
+                      <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-400">Human @flow ID or address</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 font-medium text-neutral-950 dark:text-white">Payment links</td>
+                      <td className="px-4 py-3">Not built in</td>
+                      <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-400">Live guest checkout + payer limits</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 font-medium text-neutral-950 dark:text-white">Idle balance yield</td>
+                      <td className="px-4 py-3">External dApp connection</td>
+                      <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-400">Built-in LiNEAR &amp; Burrow Finance</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section id="architecture" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">05</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Architecture &amp; MPC custody
+              </h2>
+              <p>
+                FLOW separates user authentication, wallet custody, payment
+                monitoring, and blockchain indexing into dedicated services:
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>NEAR OutLayer MPC:</strong> Each user account
+                  provisions isolated multi-chain addresses across NEAR, Solana,
+                  Base, and Ethereum. Signing credentials are encrypted at rest
+                  and only invoked by the dedicated custody worker for
+                  authorized jobs.
+                </li>
+                <li>
+                  <strong>Direct RPC verification:</strong> Balances and
+                  settlements are verified directly against chain RPCs, and
+                  outgoing settlements immediately reconcile wallet balances and
+                  activity records.
+                </li>
+                <li>
+                  <strong>Live Payment Tracker:</strong> Every outgoing send,
+                  conversion, Earn action, and guest checkout payment tracks
+                  real on-chain milestones from initiation to finality.
+                </li>
+              </ul>
+            </section>
+
+            <section id="settlement" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">06</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Cross-chain settlement
+              </h2>
+              <p>
+                When the source asset and destination asset differ (for example,
+                paying in SOL on Solana to settle USDT on Ethereum or native
+                NEAR), FLOW requests a live quote from NEAR Intents (1Click).
+                Before you confirm, FLOW shows the estimated receive amount,
+                minimum guaranteed output, exchange rate, and estimated arrival
+                time.
+              </p>
+              <p>
+                Once committed, the solver network absorbs the cross-chain
+                execution and delivers the requested destination asset straight
+                to the recipient&apos;s verified address. If a cross-chain
+                deposit fails or expires, funds return to the specified refund
+                address.
+              </p>
+            </section>
+
+            <section id="links-and-ids" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">07</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Payment links &amp; @flow ID
+              </h2>
+              <p>
+                Every FLOW user can claim a unique{" "}
+                <code className="font-mono text-xs bg-neutral-100 dark:bg-white/[0.08] px-1.5 py-0.5 rounded">
+                  name@flow
+                </code>{" "}
+                handle that resolves automatically to the right network address
+                when another FLOW user pays them.
+              </p>
+              <p>
+                For anyone outside FLOW, Request Links create a hosted guest
+                checkout page at{" "}
+                <code className="font-mono text-xs bg-neutral-100 dark:bg-white/[0.08] px-1.5 py-0.5 rounded">
+                  flow.devhub.forum/pay/...
+                </code>
+                . Creators can choose a fixed or open amount, set a maximum
+                number of payers (tracking settled payments and remaining spots
+                live), pause or resume the link, or delete it at any time.
+              </p>
+            </section>
+
+            <section id="earn" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">08</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Native yield (Earn)
+              </h2>
+              <p>
+                FLOW integrates directly with established NEAR Mainnet
+                protocols:
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>LiNEAR Protocol:</strong> Deposit NEAR to receive
+                  $LiNEAR and auto-compound validator staking rewards every
+                  12-hour epoch. Standard unstaking follows NEAR&apos;s on-chain
+                  cooldown (~48 hours / ~4 epochs) before claiming back to your
+                  wallet.
+                </li>
+                <li>
+                  <strong>Burrow Finance:</strong> Supply USDC on NEAR Mainnet
+                  to earn variable lending yield directly from your FLOW wallet.
+                </li>
+              </ul>
+            </section>
+
+            <section id="fees" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">09</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Economics &amp; fees
+              </h2>
+              <p>
+                FLOW keeps pricing transparent by showing the exact quote before
+                confirmation. Direct on-chain transfers only incur underlying
+                network gas fees (with a small NEAR gas buffer reserved on
+                staking deposits and withdrawals). Cross-chain routes reflect
+                live NEAR Intents solver rates and network settlement costs
+                directly in the preview.
+              </p>
+            </section>
+
+            <section id="roadmap-risks" className="scroll-mt-24 space-y-3">
+              <p className="font-mono text-xs font-semibold text-[#FF1A1A]">10</p>
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Roadmap &amp; risks
+              </h2>
+              <p>
+                Upcoming milestones include external wallet connections for
+                deposits, expanded multi-chain token coverage, richer payment
+                analytics, and deeper AI Assistant automation.
+              </p>
+              <p>
+                Users should be aware of inherent on-chain risks: irreversible
+                blockchain transactions, variable DeFi yields, smart contract
+                risk in third-party protocols (LiNEAR, Burrow Finance), and
+                cross-chain solver liquidity fluctuations. Review our{" "}
+                <Link
+                  href="/terms"
+                  className="font-medium text-neutral-950 dark:text-white underline decoration-neutral-300"
+                >
                   Terms of Service
                 </Link>{" "}
                 and{" "}
-                <Link href="/privacy" className="underline hover:text-[#FF1A1A]">
+                <Link
+                  href="/privacy"
+                  className="font-medium text-neutral-950 dark:text-white underline decoration-neutral-300"
+                >
                   Privacy Policy
-                </Link>
-                .
-              </li>
-            </ul>
-          </section>
-
-          {/* References */}
-          <section
-            id="references"
-            aria-labelledby="wp-references"
-            className="scroll-mt-24 max-w-[68ch] space-y-3 border-t border-[#EFECE6] dark:border-white/[0.08] pt-8"
-          >
-            <h2
-              id="wp-references"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-3xl"
-            >
-              10. Technical References &amp; Version History
-            </h2>
-            <ul className="list-disc space-y-1.5 pl-6 text-sm text-[#404040] dark:text-neutral-300">
-              <li>
-                NEAR Intents &amp; 1Click API:{" "}
-                <a
-                  href="https://docs.near-intents.org"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono underline hover:text-[#FF1A1A]"
-                >
-                  docs.near-intents.org
-                </a>
-              </li>
-              <li>
-                NEAR Protocol Documentation:{" "}
-                <a
-                  href="https://docs.near.org"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono underline hover:text-[#FF1A1A]"
-                >
-                  docs.near.org
-                </a>
-              </li>
-              <li>
-                LiNEAR Protocol Contract:{" "}
-                <a
-                  href="https://nearblocks.io/address/linear-protocol.near"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono underline hover:text-[#FF1A1A]"
-                >
-                  linear-protocol.near
-                </a>
-              </li>
-              <li>
-                Burrow Finance Contract:{" "}
-                <a
-                  href="https://nearblocks.io/address/contract.main.burrow.near"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono underline hover:text-[#FF1A1A]"
-                >
-                  contract.main.burrow.near
-                </a>
-              </li>
-            </ul>
-            <p className="pt-2 font-mono text-xs text-[#666] dark:text-neutral-400">
-              Document Version: v1.0 | Last Updated: November 20, 2026
-            </p>
-          </section>
-        </article>
-      </div>
+                </Link>{" "}
+                before using FLOW.
+              </p>
+            </section>
+          </article>
+        </div>
+      </main>
     </PublicSiteChrome>
   );
 }

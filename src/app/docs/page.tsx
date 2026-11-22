@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicSiteChrome } from "../../components/public-site-chrome.tsx";
-import {
-  MAINNET_ECOSYSTEM_METADATA,
-  MAINNET_SUPPORTED_DEPLOYMENTS,
-} from "../../domain/supported-assets-catalog.ts";
-import { DocsToc, type TocItem } from "./docs-toc.tsx";
+import { MAINNET_SUPPORTED_DEPLOYMENTS } from "../../domain/supported-assets-catalog.ts";
 
 export const metadata: Metadata = {
-  title: "FLOW Documentation",
+  title: "Docs · FLOW",
   description:
-    "Learn how to use FLOW to manage wallets, receive, send, convert and request payments across supported networks.",
+    "Learn how to use FLOW to send, receive, convert, request payments, and earn yield across NEAR, Solana, Base, and Ethereum.",
   alternates: {
     canonical: "https://flow.devhub.forum/docs",
   },
@@ -25,7 +21,7 @@ export const metadata: Metadata = {
         url: "https://flow.devhub.forum/assets/og-docs.png",
         width: 1200,
         height: 630,
-        alt: "What is FLOW? Why are we building? — FLOW Documentation",
+        alt: "What is FLOW? Why are we building? · FLOW Documentation",
       },
     ],
   },
@@ -38,887 +34,418 @@ export const metadata: Metadata = {
   },
 };
 
-const TOC_ITEMS: readonly TocItem[] = [
-  { id: "getting-started", label: "1. Quickstart & getting started" },
-  { id: "supported-networks", label: "2. Supported networks & assets" },
-  { id: "dashboard", label: "3. Dashboard & activity" },
-  { id: "receive", label: "4. Receive: direct deposits" },
-  { id: "send", label: "5. Send & @flow IDs" },
-  { id: "convert", label: "6. Convert" },
-  { id: "add-money", label: "7. Add Money: native NEAR" },
-  { id: "request-payment", label: "8. Request Payment / Links" },
-  { id: "earn", label: "9. FLOW Earn & fee breakdown" },
-  { id: "states-troubleshooting", label: "10. States & troubleshooting" },
-  { id: "security-privacy", label: "11. Security, anti-phishing & privacy" },
-  { id: "glossary", label: "12. Core concepts & glossary" },
-  { id: "faq", label: "13. FAQ" },
-  { id: "changelog", label: "14. Changelog" },
-];
-
-const FAQ_ITEMS = [
+const NAV_GROUPS = [
   {
-    q: "Do sender and recipient need the same network or asset?",
-    a: "Not always. Direct Receive requires the exact matching asset and network. Payment Links and Add Money can bridge or swap from a different source asset/network only when a supported executable route is available.",
+    label: "Get started",
+    items: [
+      { id: "introduction", label: "Introduction" },
+      { id: "quickstart", label: "Quickstart" },
+      { id: "how-flow-works", label: "How FLOW works" },
+      { id: "networks", label: "Networks & assets" },
+      { id: "security", label: "Security & account" },
+    ],
   },
   {
-    q: "Does the payer need a FLOW account to use a payment link?",
-    a: "No. Guest checkout allows a payer to open a payment link, select an eligible source asset/network, review the quote, and fund the provider-issued deposit address without signing in.",
+    label: "Core concepts",
+    items: [
+      { id: "flow-id", label: "@flow IDs" },
+      { id: "balances-activity", label: "Balances, activity & notifications" },
+    ],
   },
   {
-    q: "Is Receive the same as Request Payment?",
-    a: "No. Receive shows your permanent, account-linked wallet addresses for direct on-chain deposits. Request Payment creates a shareable payment link where a payer can request a live quote and pay cross-chain.",
-  },
-  {
-    q: "Why do Ethereum and Base show the same address?",
-    a: "Ethereum Mainnet and Base Mainnet both use the EVM 0x-prefixed address format derived for your account wallet, but they are separate blockchains with separate balances and gas.",
-  },
-  {
-    q: "How long does a payment take?",
-    a: "Timing depends on source-chain confirmations, cross-chain routing liquidity, and destination-chain finality. FLOW displays live transaction states rather than guaranteeing a fixed settlement time.",
-  },
-  {
-    q: "Are all assets and routes available?",
-    a: "No. Wallet holdings and direct operations are scoped to verified deployments on NEAR, Solana, Ethereum, and Base. Cross-chain routes depend on live NEAR Intents / 1Click liquidity and route availability.",
-  },
-  {
-    q: "Which gas token do I need when converting or sending (e.g., Base to NEAR)?",
-    a: "You only need the native gas token on the network you are sending from (for example, at least 0.00001 ETH on Base when converting or sending from Base to NEAR). You do not need NEAR gas in advance to receive your converted NEAR.",
-  },
-  {
-    q: "If I pay a deposit address and the page refreshes or closes, will I still be credited?",
-    a: "Yes. As long as you sent the quoted amount on the right network before the quote deadline expired, FLOW monitors your deposit in the background until it settles into your wallet. Active, non-expired deposit addresses also persist across page reloads.",
-  },
-  {
-    q: "What happens if someone sends less or more than the quoted amount? Will they be refunded?",
-    a: "If less than the required amount is sent, the payment is not credited unless topped up before expiry, and the partial deposit is refunded by the routing provider to your refund address. On fixed-amount payment links, the recipient still receives the exact requested amount and excess overpayment above the quote buffer is refunded to your refund address, provided a valid source-chain refund address was entered and the refund covers network fee minimums.",
-  },
-  {
-    q: "How do LiNEAR and Burrow withdrawals and gas reserves work?",
-    a: "LiNEAR deposits reserve 0.12 NEAR for gas and NEAR account storage, and withdrawals require a 0.05 NEAR gas floor with a standard ~48h (~4 epochs) unstaking cooldown before you click Claim NEAR. Burrow Finance accepts USDC on NEAR Mainnet and requires 0.37 NEAR on first-time deposit (0.25 NEAR contract storage plus 0.12 NEAR gas).",
-  },
-  {
-    q: "Does FLOW support business or multi-user team accounts?",
-    a: "No. FLOW is built exclusively for personal accounts so individual users get a fast, focused experience.",
+    label: "Guides",
+    items: [
+      { id: "send", label: "Send money" },
+      { id: "add-money", label: "Add money & direct receive" },
+      { id: "convert", label: "Convert & bridge" },
+      { id: "payment-links", label: "Request & payment links" },
+      { id: "earn", label: "Earn (LiNEAR & Burrow)" },
+      { id: "assistant", label: "Flow AI Assistant" },
+    ],
   },
 ] as const;
 
 export default function DocsPage() {
   return (
     <PublicSiteChrome activeRoute="docs">
-      <div className="mb-8 rounded-[28px] border border-[#E6E2DA] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs sm:p-10">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#D51B24]">
-          FLOW · User &amp; Operator Guide
-        </p>
-        <h1 className="mt-3 font-serif text-4xl tracking-tight text-[#0B0B0B] dark:text-white sm:text-5xl">
-          FLOW Documentation
-        </h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-[#555] dark:text-neutral-300">
-          Learn how to use FLOW to manage personal multi-chain wallets, receive,
-          send, convert, request payments, and earn native yield on NEAR.
-          Looking for architecture, design principles, and trust assumptions?
-          Read the{" "}
-          <Link
-            href="/whitepaper"
-            className="font-semibold text-[#D51B24] underline underline-offset-4 hover:opacity-80"
-          >
-            FLOW Whitepaper
-          </Link>
-          .
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2.5 text-xs">
-          <Link
-            href="/sign-in"
-            className="rounded-full bg-[#0B0B0B] dark:bg-white px-3.5 py-1.5 font-semibold text-white dark:text-[#0B0B0B] hover:opacity-90"
-          >
-            Open App
-          </Link>
-          <Link
-            href="/whitepaper"
-            className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3.5 py-1.5 font-medium text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
-          >
-            Whitepaper
-          </Link>
-          <Link
-            href="/privacy"
-            className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3.5 py-1.5 font-medium text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
-          >
-            Privacy Policy
-          </Link>
-          <Link
-            href="/terms"
-            className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3.5 py-1.5 font-medium text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
-          >
-            Terms of Service
-          </Link>
-          <a
-            href="https://github.com/OpeyemiAwt/flow"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-full border border-[#E6E2DA] dark:border-white/[0.12] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-3.5 py-1.5 font-medium text-[#222] dark:text-neutral-200 hover:border-[#0B0B0B] dark:hover:border-white"
-          >
-            GitHub
-          </a>
-        </div>
-      </div>
+      <main className="mx-auto max-w-6xl px-5 sm:px-8 pt-10 pb-24 text-neutral-800 dark:text-neutral-200">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          {/* Left Sidebar (Talise-style grouped docs navigation) */}
+          <aside className="lg:col-span-3 lg:sticky lg:top-24 space-y-6">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400 mb-2 px-2.5">
+                  {group.label}
+                </p>
+                <nav className="space-y-0.5">
+                  {group.items.map((item) => (
+                    <a
+                      key={item.id}
+                      href={`#${item.id}`}
+                      className="block px-2.5 py-1.5 rounded-xl text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100/80 dark:hover:bg-white/[0.05] transition-colors"
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </nav>
+              </div>
+            ))}
 
-      <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
-        <DocsToc items={TOC_ITEMS} />
-
-        <article className="space-y-8 rounded-[28px] border border-[#E6E2DA] dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs sm:p-10">
-          {/* 2.1 Getting started */}
-          <section
-            id="getting-started"
-            aria-labelledby="h-getting-started"
-            className="scroll-mt-24 space-y-3"
-          >
-            <h2
-              id="h-getting-started"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              1. Getting started
-            </h2>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              FLOW is a multi-chain wallet and payment experience. Recipients
-              can receive direct on-chain deposits or share payment links with a
-              chosen settlement asset and network, while payers can fund from a
-              different supported asset/network when an eligible route exists.
-            </p>
-            <ul className="list-disc space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <li>
-                <strong>Create an account:</strong> Sign in with Google or an
-                8-digit email OTP verification code (subject to enrollment),
-                complete Personal account onboarding, accept security/consent
-                steps, provision your multi-chain wallet, and claim your
-                permanent <code className="font-mono text-xs">@flow</code> ID.
-              </li>
-              <li>
-                <strong>Returning users:</strong> Signing back in restores
-                access to your existing account and permanent wallet addresses.
-                Logging in never replaces your wallet with a fresh one.
-              </li>
-              <li>
-                <strong>Provisioning states:</strong> Wallets move through{" "}
-                <code className="font-mono text-xs">WAITING / QUEUED</code>,{" "}
-                <code className="font-mono text-xs">PROVISIONING</code>{" "}
-                (processing),{" "}
-                <code className="font-mono text-xs">ACTIVE</code> (ready), or{" "}
-                <code className="font-mono text-xs">
-                  SETUP_FAILED / RECOVERY_PENDING
-                </code>
-                . Wallet readiness requires verified provider custody
-                registration and security policy confirmation. A displayed address
-                alone does not establish readiness.
-              </li>
-              <li>
-                <strong>5-Minute Quickstart:</strong> (1) Sign in with Google or
-                email OTP on your personal account, (2) wait for your wallet
-                status to reach ACTIVE, (3) fund via Receive or Cross-Chain Add
-                Money, and (4) send to an address or{" "}
-                <code className="font-mono text-xs">@flow</code> ID, convert
-                assets, create a payment link, or deposit into FLOW Earn.
-              </li>
-            </ul>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.2 Supported networks and assets */}
-          <section
-            id="supported-networks"
-            aria-labelledby="h-supported-networks"
-            className="scroll-mt-24 space-y-4"
-          >
-            <h2
-              id="h-supported-networks"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              2. Supported networks and assets
-            </h2>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              Account wallets operate on four mainnet networks:{" "}
-              <strong>NEAR Mainnet</strong>, <strong>Solana Mainnet</strong>,{" "}
-              <strong>Ethereum Mainnet</strong>, and{" "}
-              <strong>Base Mainnet</strong>. Wallet holdings cover five asset
-              families (<strong>NEAR</strong>, <strong>SOL</strong>,{" "}
-              <strong>ETH</strong>, <strong>USDC</strong>, and{" "}
-              <strong>USDT</strong>) strictly on verified chain-specific
-              deployments.
-            </p>
-
-            <div className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3] dark:bg-[#1A1A1C] p-4 text-sm text-[#3B3B3B] dark:text-neutral-300">
-              <p className="font-semibold text-[#0B0B0B] dark:text-white">
-                Network &amp; Address Distinction
+            <div className="pt-4 border-t border-neutral-200/70 dark:border-white/[0.08]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400 mb-2 px-2.5">
+                Resources
               </p>
-              <ul className="mt-2 space-y-1.5 text-xs leading-5">
-                {MAINNET_ECOSYSTEM_METADATA.map((eco) => (
-                  <li key={eco.family}>
-                    <strong>{eco.label}:</strong> {eco.addressFormatHint}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-[#666] dark:text-neutral-400">
-                Ethereum Mainnet and Base Mainnet display the same{" "}
-                <code className="font-mono">0x</code> EVM address for your
-                account, but they are separate blockchains with separate assets
-                and gas.
-              </p>
+              <div className="space-y-0.5">
+                <Link
+                  href="/whitepaper"
+                  className="block px-2.5 py-1.5 rounded-xl text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
+                >
+                  Whitepaper
+                </Link>
+                <Link
+                  href="/privacy"
+                  className="block px-2.5 py-1.5 rounded-xl text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
+                >
+                  Privacy Policy
+                </Link>
+                <Link
+                  href="/terms"
+                  className="block px-2.5 py-1.5 rounded-xl text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white"
+                >
+                  Terms of Service
+                </Link>
+              </div>
             </div>
+          </aside>
 
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-[#0B0B0B] dark:text-white">
-                Verified Mainnet Wallet Catalog (Live Registry)
-              </h3>
-              <p className="mt-1 text-xs text-[#666] dark:text-neutral-400">
-                Rendered directly from FLOW&apos;s curated mainnet catalog.
-                Guest-checkout source assets can span additional chains/tokens
-                when supported by live NEAR Intents / 1Click discovery and an
-                executable route. FLOW does not promise &ldquo;every
-                token.&rdquo;
+          {/* Main Documentation Content */}
+          <article className="lg:col-span-9 space-y-12 text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+            {/* Introduction */}
+            <section
+              id="introduction"
+              className="scroll-mt-24 pb-8 border-b border-neutral-200/80 dark:border-white/[0.08] space-y-4"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#FF1A1A]">
+                Get started · Introduction
               </p>
-              <div className="mt-3 overflow-x-auto rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08]">
-                <table className="w-full min-w-[600px] border-collapse text-left text-xs">
-                  <thead className="bg-[#F8F6F3] dark:bg-[#1A1A1C] text-[#555] dark:text-neutral-300">
+              <h1 className="font-serif text-4xl sm:text-5xl font-normal tracking-tight text-neutral-950 dark:text-white">
+                What is FLOW?
+              </h1>
+              <p className="text-base text-neutral-600 dark:text-neutral-400 max-w-2xl">
+                FLOW is a multi-chain payment wallet that lets you send,
+                receive, convert, request payments, and earn yield across NEAR,
+                Solana, Base, and Ethereum from one simple account.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <a
+                  href="#quickstart"
+                  className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4 hover:border-neutral-400 dark:hover:border-white/25 transition-colors"
+                >
+                  <p className="text-xs font-bold text-neutral-950 dark:text-white">
+                    Quickstart →
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    Sign in, fund your wallet, and make your first payment in
+                    minutes.
+                  </p>
+                </a>
+                <a
+                  href="#payment-links"
+                  className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4 hover:border-neutral-400 dark:hover:border-white/25 transition-colors"
+                >
+                  <p className="text-xs font-bold text-neutral-950 dark:text-white">
+                    Payment links →
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    Create shareable links with payer limits and cross-chain
+                    checkout.
+                  </p>
+                </a>
+                <a
+                  href="#earn"
+                  className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4 hover:border-neutral-400 dark:hover:border-white/25 transition-colors"
+                >
+                  <p className="text-xs font-bold text-neutral-950 dark:text-white">
+                    Earn on NEAR →
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    Stake NEAR with LiNEAR or supply USDC on Burrow Finance.
+                  </p>
+                </a>
+              </div>
+            </section>
+
+            {/* Quickstart */}
+            <section id="quickstart" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Quickstart
+              </h2>
+              <ol className="list-decimal pl-5 space-y-2">
+                <li>
+                  <strong>Sign in:</strong> Go to{" "}
+                  <Link
+                    href="/sign-in"
+                    className="font-medium text-neutral-950 dark:text-white underline decoration-neutral-300"
+                  >
+                    Sign in
+                  </Link>{" "}
+                  using Email OTP or Google SSO. No seed phrase is required.
+                </li>
+                <li>
+                  <strong>Provision your wallet:</strong> FLOW automatically
+                  provisions your multi-chain NEAR OutLayer MPC wallet addresses
+                  for NEAR, Solana, Base, and Ethereum.
+                </li>
+                <li>
+                  <strong>Claim your @flow ID:</strong> Claim a human handle
+                  such as{" "}
+                  <code className="font-mono text-xs bg-neutral-100 dark:bg-white/[0.08] px-1.5 py-0.5 rounded">
+                    yourname@flow
+                  </code>{" "}
+                  from your notifications or Settings.
+                </li>
+                <li>
+                  <strong>Add money:</strong> Deposit directly to any of your
+                  chain addresses or bridge in from another chain via Add money.
+                </li>
+              </ol>
+            </section>
+
+            {/* How FLOW works */}
+            <section id="how-flow-works" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                How FLOW works
+              </h2>
+              <p>
+                Under the hood, FLOW combines two primitives:
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>NEAR OutLayer MPC:</strong> Derives and secures your
+                  multi-chain wallet addresses across NEAR, Solana, Base, and
+                  Ethereum without exposing raw private keys in your browser.
+                </li>
+                <li>
+                  <strong>NEAR Intents (1Click):</strong> Handles cross-chain
+                  quotes and settlement when the coin you send differs from the
+                  coin the recipient wants (for example, paying in SOL on Solana
+                  while the recipient settles in USDT on Ethereum or native
+                  NEAR).
+                </li>
+              </ul>
+            </section>
+
+            {/* Supported Networks & Assets */}
+            <section id="networks" className="scroll-mt-24 space-y-4">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Networks &amp; assets
+              </h2>
+              <p>
+                FLOW supports verified mainnet assets across NEAR Mainnet,
+                Solana, Base, and Ethereum:
+              </p>
+              <div className="overflow-x-auto rounded-2xl border border-neutral-200/80 dark:border-white/[0.08]">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-neutral-50 dark:bg-white/[0.04] text-neutral-600 dark:text-neutral-300">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Asset</th>
                       <th className="px-4 py-3 font-semibold">Network</th>
                       <th className="px-4 py-3 font-semibold">Standard</th>
-                      <th className="px-4 py-3 font-semibold">Decimals</th>
-                      <th className="px-4 py-3 font-semibold">
-                        Contract / Identifier
-                      </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#EFECE6] dark:divide-white/[0.06] text-[#222] dark:text-neutral-200">
-                    {MAINNET_SUPPORTED_DEPLOYMENTS.map((d) => (
-                      <tr key={d.id}>
-                        <td className="px-4 py-2.5 font-semibold">
-                          {d.symbol}{" "}
-                          <span className="font-normal text-[#666] dark:text-neutral-400">
-                            ({d.name})
-                          </span>
+                  <tbody className="divide-y divide-neutral-100 dark:divide-white/[0.06] bg-white dark:bg-[#141414]">
+                    {MAINNET_SUPPORTED_DEPLOYMENTS.map((dep) => (
+                      <tr key={dep.id}>
+                        <td className="px-4 py-2.5 font-semibold text-neutral-950 dark:text-white">
+                          {dep.symbol}
                         </td>
-                        <td className="px-4 py-2.5">{d.networkName}</td>
-                        <td className="px-4 py-2.5 font-mono">{d.standard}</td>
-                        <td className="px-4 py-2.5 font-mono">{d.decimals}</td>
-                        <td className="px-4 py-2.5 font-mono text-[11px] text-[#555] dark:text-neutral-400">
-                          {d.contractIdentifier}
+                        <td className="px-4 py-2.5">{dep.networkName}</td>
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-neutral-500">
+                          {dep.standard}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
+            {/* Security & Account */}
+            <section id="security" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Security &amp; account
+              </h2>
+              <p>
+                Open{" "}
+                <Link
+                  href="/security"
+                  className="font-medium text-neutral-950 dark:text-white underline decoration-neutral-300"
+                >
+                  Settings
+                </Link>{" "}
+                from your profile menu to update your display name or avatar,
+                manage notification preferences, view and revoke active browser
+                sessions, or permanently delete your account. Always withdraw
+                any remaining wallet balances before deleting your account.
+              </p>
+            </section>
 
-          {/* 2.3 Dashboard */}
-          <section
-            id="dashboard"
-            aria-labelledby="h-dashboard"
-            className="scroll-mt-24 space-y-3"
-          >
-            <h2
-              id="h-dashboard"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              3. Dashboard
-            </h2>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              The account dashboard displays verified token balances per network
-              (with explicit network badges so Base USDC and Ethereum USDC are
-              never confused), recent transactions, monthly inflow/outflow
-              totals, and a dedicated Cashflow Insights view.
-            </p>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <strong>Confirmed vs. Pending:</strong> Portfolio balances reflect
-              confirmed on-chain state synced by FLOW&apos;s chain indexers.
-              Pending deposits, unexecuted quotes, or transfers still in
-              processing appear in Activity and live payment timelines until
-              finality is confirmed.
-            </p>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.4 Receive */}
-          <section
-            id="receive"
-            aria-labelledby="h-receive"
-            className="scroll-mt-24 space-y-3"
-          >
-            <h2
-              id="h-receive"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              4. Receive: direct deposits
-            </h2>
-            <ol className="list-decimal space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <li>Choose the network and supported asset you want to receive.</li>
-              <li>Copy or scan your permanent, account-linked wallet address.</li>
-              <li>
-                Send only the supported asset on that exact displayed network.
-              </li>
-              <li>
-                Wait for network confirmation and check Activity and updated
-                balances.
-              </li>
-            </ol>
-            <div
-              role="note"
-              className="rounded-2xl border border-amber-300/80 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-950/30 p-4 text-xs leading-6 text-amber-950 dark:text-amber-200"
-            >
-              <strong>Warning:</strong> Sending an asset on the wrong network or
-              sending an unsupported token to a Receive address can result in
-              permanent loss or difficult recovery. Direct Receive is{" "}
-              <strong>not</strong> a payment link: it does not generate a quote,
-              swap route, or one-off deposit address.
-            </div>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.5 Send */}
-          <section
-            id="send"
-            aria-labelledby="h-send"
-            className="scroll-mt-24 space-y-3"
-          >
-            <h2
-              id="h-send"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              5. Send &amp; @flow IDs
-            </h2>
-            <ol className="list-decimal space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <li>Choose a funded source asset and network.</li>
-              <li>
-                Enter and verify the recipient&apos;s wallet address, or enter
-                their permanent <code className="font-mono text-xs">@flow</code>{" "}
-                ID (e.g. <code className="font-mono text-xs">name@flow</code>)
-                to resolve their active wallet address for the chosen
-                destination asset and network.
-              </li>
-              <li>
-                Enter the amount and review estimated gas/routing fees and your
-                available balance.
-              </li>
-              <li>
-                Approve the transfer using the app&apos;s required security and
-                policy checks.
-              </li>
-              <li>Monitor broadcast and confirmation in Activity.</li>
-            </ol>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              Direct transfers require the source chain&apos;s native gas token
-              where applicable (for example, ETH on Ethereum/Base, SOL on
-              Solana, or NEAR on NEAR). All sends are subject to account policy,
-              spending limits, and execution enablement on that chain; self-sends
-              to your own address or <code className="font-mono text-xs">@flow</code>{" "}
-              ID are blocked.
-            </p>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.6 Convert */}
-          <section
-            id="convert"
-            aria-labelledby="h-convert"
-            className="scroll-mt-24 space-y-3"
-          >
-            <h2
-              id="h-convert"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              6. Convert
-            </h2>
-            <ol className="list-decimal space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <li>
-                Select the source asset you hold and the target asset/network
-                you want in your own wallet.
-              </li>
-              <li>Request an executable quote.</li>
-              <li>
-                Review estimated output, fees, quote expiration, slippage bounds,
-                and funding requirements.
-              </li>
-              <li>Confirm and monitor settlement in the live timeline.</li>
-            </ol>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              A quote is an estimate with an expiration window, not a completed
-              conversion. Route availability varies with provider liquidity and
-              pair support.
-            </p>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.7 Add Money */}
-          <section
-            id="add-money"
-            aria-labelledby="h-add-money"
-            className="scroll-mt-24 space-y-3"
-          >
-            <h2
-              id="h-add-money"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              7. Add Money: native NEAR
-            </h2>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              Add Money lets you fund your permanent NEAR Mainnet wallet with
-              native NEAR starting from an eligible external asset and network,
-              subject to an executable cross-chain route.
-            </p>
-            <p className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3] dark:bg-[#1A1A1C] px-4 py-3 font-mono text-xs text-[#222] dark:text-neutral-200">
-              Source choice → Live quote → Refund address (if required) →
-              Provider-issued deposit instructions → External funding → Routing →
-              Settlement verification
-            </p>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <strong>Important distinction:</strong> Add Money issues a{" "}
-              <em>quote-specific, one-off provider deposit address</em> for that
-              cross-chain swap. Do not confuse it with your permanent Receive
-              address.
-            </p>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.8 Request Payment / Payment Links */}
-          <section
-            id="request-payment"
-            aria-labelledby="h-request-payment"
-            className="scroll-mt-24 space-y-3"
-          >
-            <h2
-              id="h-request-payment"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              8. Request Payment / Payment Links
-            </h2>
-            <ol className="list-decimal space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <li>
-                Recipient chooses the desired settlement network, asset,
-                optional fixed or open amount, and description.
-              </li>
-              <li>Recipient creates and shares the payment link.</li>
-              <li>
-                Guest payer opens the link without needing a FLOW account.
-              </li>
-              <li>
-                Payer independently selects an eligible source network and
-                asset.
-              </li>
-              <li>
-                Payer reviews the live quote (and refund details if applicable)
-                and sends funds to the provider-issued deposit instructions.
-              </li>
-              <li>
-                Both sides track live status until confirmed settlement or an
-                appropriate expiry, failure, or refund outcome.
-              </li>
-            </ol>
-            <div className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3] dark:bg-[#1A1A1C] p-4 text-xs leading-6 text-[#3B3B3B] dark:text-neutral-300">
-              <strong>Illustrative Example:</strong> A payer holds{" "}
-              <strong>SOL on Solana</strong> while the recipient requests{" "}
-              <strong>USDC on Base</strong>. When NEAR Intents / 1Click returns
-              an active executable route, the payer funds the quoted Solana
-              deposit address and FLOW tracks settlement of USDC on Base into
-              the recipient&apos;s wallet.
-            </div>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.9 FLOW Earn & Fee Breakdown */}
-          <section
-            id="earn"
-            aria-labelledby="h-earn"
-            className="scroll-mt-24 space-y-4"
-          >
-            <h2
-              id="h-earn"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              9. FLOW Earn &amp; fee breakdown
-            </h2>
-            <p className="text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              FLOW Earn connects directly to verified NEAR Mainnet DeFi
-              contracts and displays live on-chain yields fetched from NEAR
-              Mainnet RPC.
-            </p>
-            <div className="overflow-x-auto rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08]">
-              <table className="w-full min-w-[540px] border-collapse text-left text-xs">
-                <thead className="bg-[#F8F6F3] dark:bg-[#1A1A1C] text-[#555] dark:text-neutral-300">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Workflow</th>
-                    <th className="px-4 py-3 font-semibold">Asset &amp; Contract</th>
-                    <th className="px-4 py-3 font-semibold">Gas / Storage Reserve</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EFECE6] dark:divide-white/[0.06] text-[#3B3B3B] dark:text-neutral-300">
-                  <tr>
-                    <td className="px-4 py-2.5 font-semibold">LiNEAR Deposit</td>
-                    <td className="px-4 py-2.5 font-mono">NEAR (linear-protocol.near)</td>
-                    <td className="px-4 py-2.5">0.12 NEAR reserved for gas and NEAR account storage</td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-semibold">LiNEAR Withdraw &amp; Claim</td>
-                    <td className="px-4 py-2.5 font-mono">LiNEAR (unstake / withdraw_all)</td>
-                    <td className="px-4 py-2.5">0.05 NEAR gas floor; ~48h (~4 epochs) cooldown before Claim NEAR</td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-semibold">Burrow Finance Deposit</td>
-                    <td className="px-4 py-2.5 font-mono">NEAR-Mainnet USDC (contract.main.burrow.near)</td>
-                    <td className="px-4 py-2.5">0.37 NEAR on first deposit (0.25 NEAR storage + 0.12 NEAR gas); 0.12 NEAR thereafter</td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-semibold">Send &amp; Convert</td>
-                    <td className="px-4 py-2.5 font-mono">NEAR, Solana, Base, Ethereum</td>
-                    <td className="px-4 py-2.5">Native gas on the source chain plus live 1Click routing quote</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.10 Transaction states and troubleshooting */}
-          <section
-            id="states-troubleshooting"
-            aria-labelledby="h-states"
-            className="scroll-mt-24 space-y-4"
-          >
-            <h2
-              id="h-states"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              10. Transaction states and troubleshooting
-            </h2>
-            <div className="overflow-x-auto rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08]">
-              <table className="w-full min-w-[540px] border-collapse text-left text-xs">
-                <thead className="bg-[#F8F6F3] dark:bg-[#1A1A1C] text-[#555] dark:text-neutral-300">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">State</th>
-                    <th className="px-4 py-3 font-semibold">Meaning</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EFECE6] dark:divide-white/[0.06] text-[#3B3B3B] dark:text-neutral-300">
-                  <tr>
-                    <td className="px-4 py-2.5 font-mono font-semibold">
-                      QUOTE_OBSERVED / AWAITING_DEPOSIT / DEPOSIT_COMMITTED
-                    </td>
-                    <td className="px-4 py-2.5">
-                      Awaiting payer funding at the quote-specific deposit
-                      address before the quote deadline.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-mono font-semibold">
-                      DETECTED / DEPOSIT_CONFIRMED
-                    </td>
-                    <td className="px-4 py-2.5">
-                      Source deposit observed on-chain; waiting for required
-                      confirmations before execution.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-mono font-semibold">
-                      PROCESSING / SUBMITTED / SETTLING
-                    </td>
-                    <td className="px-4 py-2.5">
-                      Cross-chain routing or destination broadcast is underway.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-mono font-semibold">
-                      SETTLED
-                    </td>
-                    <td className="px-4 py-2.5">
-                      Destination transaction confirmed and reconciled in your
-                      wallet and Activity.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-mono font-semibold">
-                      EXPIRED / FAILED
-                    </td>
-                    <td className="px-4 py-2.5">
-                      Quote window elapsed before funding or execution could not
-                      complete.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-mono font-semibold">
-                      REFUNDED / EXCEPTION_REFUND_REQUIRED
-                    </td>
-                    <td className="px-4 py-2.5">
-                      Route did not settle; funds are returned to the configured
-                      refund address or flagged for refund handling.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2.5 font-mono font-semibold">
-                      UNKNOWN_AMBIGUOUS / RECONCILIATION_REQUIRED
-                    </td>
-                    <td className="px-4 py-2.5">
-                      Provider response was ambiguous; automatic retries are
-                      paused while final on-chain status is verified.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <ul className="list-disc space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <li>
-                <strong>Payment not detected yet:</strong> Verify the exact
-                network, token contract, deposit address, and that the source
-                transaction has sufficient confirmations.
-              </li>
-              <li>
-                <strong>Quote expired or rate changed:</strong> Request a fresh
-                quote before sending funds; do not send to an expired deposit
+            {/* @flow IDs */}
+            <section id="flow-id" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                @flow IDs
+              </h2>
+              <p>
+                A @flow ID (for example,{" "}
+                <code className="font-mono text-xs bg-neutral-100 dark:bg-white/[0.08] px-1.5 py-0.5 rounded">
+                  amara@flow
+                </code>
+                ) maps your account to a short, memorable name. When another
+                FLOW user enters your @flow ID on the Send page, FLOW verifies
+                it live and automatically routes funds to your matching chain
                 address.
-              </li>
-              <li>
-                <strong>Insufficient gas or balance:</strong> Ensure you hold
-                enough of the source chain&apos;s native gas token in addition
-                to the transfer amount.
-              </li>
-              <li>
-                <strong>Wallet provisioning pending or failed:</strong> Use the
-                built-in onboarding recovery flow rather than attempting to
-                recreate wallets manually.
-              </li>
-              <li>
-                <strong>Wrong-network deposit:</strong> Recovery is not
-                guaranteed and depends on the receiving infrastructure and asset
-                mechanics.
-              </li>
-              <li>
-                <strong>Finding hashes and references:</strong> Open{" "}
-                <strong>Activity</strong> in your wallet to view the transaction
-                hash, explorer link, and payment/transfer public ID.
-              </li>
-            </ul>
-          </section>
+              </p>
+            </section>
 
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.10 Security and privacy */}
-          <section
-            id="security-privacy"
-            aria-labelledby="h-security"
-            className="scroll-mt-24 space-y-3"
-          >
-            <h2
-              id="h-security"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              11. Account security, anti-phishing &amp; privacy
-            </h2>
-            <ul className="list-disc space-y-2 pl-5 text-[15px] leading-7 text-[#3B3B3B] dark:text-neutral-300">
-              <li>
-                Sign in only through the official{" "}
-                <code className="font-mono text-xs">flow.devhub.forum</code>{" "}
-                origin using Google or email OTP; enroll or link email
-                explicitly in Settings when required.
-              </li>
-              <li>
-                Never share OTP codes, session links, private keys, or seed
-                phrases with anyone.
-              </li>
-              <li>
-                Review active sessions in Settings and revoke unrecognized
-                devices immediately.
-              </li>
-              <li>
-                On-chain transaction confirmations can be irreversible. Always
-                double-check destination network, asset, and recipient before
-                confirming.
-              </li>
-              <li>
-                <strong>Custody model:</strong> FLOW provisions and operates
-                wallets via provider-backed custody infrastructure (OutLayer)
-                with encrypted custody credentials and policy enforcement; it
-                should not be treated as purely local browser key custody.
-              </li>
-              <li>
-                <strong>Official Verification &amp; Anti-Phishing:</strong> Only
-                sign in at{" "}
-                <code className="font-mono text-xs">https://flow.devhub.forum</code>.
-                Verify NEAR Mainnet contract IDs before approving interactions:{" "}
-                <code className="font-mono text-xs">outlayer.near</code>,{" "}
-                <code className="font-mono text-xs">intents.near</code>,{" "}
-                <code className="font-mono text-xs">linear-protocol.near</code>,
-                and{" "}
-                <code className="font-mono text-xs">contract.main.burrow.near</code>.
-                FLOW team members will never DM you asking for OTP codes or
-                private credentials.
-              </li>
-            </ul>
-            <p className="text-sm text-[#555] dark:text-neutral-400">
-              Review our{" "}
-              <Link
-                href="/privacy"
-                className="font-semibold text-[#0B0B0B] dark:text-white underline underline-offset-4"
-              >
-                Privacy Policy
-              </Link>{" "}
-              and{" "}
-              <Link
-                href="/terms"
-                className="font-semibold text-[#0B0B0B] dark:text-white underline underline-offset-4"
-              >
-                Terms of Service
-              </Link>
-              .
-            </p>
-          </section>
-
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
-
-          {/* 2.12 Core Concepts & Glossary */}
-          <section
-            id="glossary"
-            aria-labelledby="h-glossary"
-            className="scroll-mt-24 space-y-4"
-          >
-            <h2
-              id="h-glossary"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              12. Core concepts &amp; glossary
-            </h2>
-            <dl className="grid gap-3 sm:grid-cols-2">
-              {[
-                {
-                  term: "Chain Abstraction",
-                  def: "Separating what asset you want to hold or send from which network holds your liquidity, handled via NEAR OutLayer and NEAR Intents.",
-                },
-                {
-                  term: "Flow ID (@handle.flow)",
-                  def: "A unique human-readable handle linked to your personal FLOW account so other FLOW users can send to you without copying long hex or base58 addresses.",
-                },
-                {
-                  term: "MPC Policy Custody",
-                  def: "Multi-party computation custody via NEAR OutLayer (outlayer.near) where on-chain policies authorize transactions without exposing raw seed phrases.",
-                },
-                {
-                  term: "NEAR Intents (1Click)",
-                  def: "Cross-chain intent quoting and solver settlement protocol that routes tokens across NEAR, Solana, Base, Ethereum, and 35+ additional networks.",
-                },
-                {
-                  term: "Storage Deposit",
-                  def: "NEAR Protocol's state-staking requirement locking a small amount of NEAR for account or DeFi contract storage (e.g., 0.25 NEAR on first Burrow deposit).",
-                },
-                {
-                  term: "Unstaking Cooldown",
-                  def: "The ~48 hour (~4 NEAR epochs) protocol waiting period after requesting a LiNEAR withdrawal before Claim NEAR becomes active.",
-                },
-              ].map((entry) => (
-                <div
-                  key={entry.term}
-                  className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4"
+            {/* Balances, activity & notifications */}
+            <section id="balances-activity" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Balances, activity &amp; notifications
+              </h2>
+              <p>
+                Your dashboard displays your combined USD balance across all
+                four networks, monthly inflows and outflows, and recent
+                finalized transactions. When any outgoing send, swap, or Earn
+                claim settles on-chain, FLOW automatically reconciles your
+                balances and indexes the transaction. Click the bell icon in the
+                header to open the dedicated{" "}
+                <Link
+                  href="/notifications"
+                  className="font-medium text-neutral-950 dark:text-white underline decoration-neutral-300"
                 >
-                  <dt className="text-sm font-bold text-[#0B0B0B] dark:text-white">
-                    {entry.term}
-                  </dt>
-                  <dd className="mt-1 text-xs leading-5 text-[#444] dark:text-neutral-300">
-                    {entry.def}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+                  Notifications
+                </Link>{" "}
+                page.
+              </p>
+            </section>
 
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
+            {/* Send money */}
+            <section id="send" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Send money
+              </h2>
+              <p>
+                Sending in FLOW follows a clean guided flow: pick the asset you
+                want to pay with, pick what the recipient should receive, enter
+                the amount and recipient address or @flow ID, review the compact
+                quote (with a reload button to refresh rates), and drag{" "}
+                <strong>Slide to Pay</strong> to confirm. Once submitted, the
+                Live Payment Tracker displays each milestone until on-chain
+                settlement completes.
+              </p>
+            </section>
 
-          {/* 2.13 Compact FAQ */}
-          <section
-            id="faq"
-            aria-labelledby="h-faq"
-            className="scroll-mt-24 space-y-4"
-          >
-            <h2
-              id="h-faq"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              13. Frequently asked questions
-            </h2>
-            <dl className="space-y-4">
-              {FAQ_ITEMS.map((item) => (
-                <div
-                  key={item.q}
-                  className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4"
-                >
-                  <dt className="text-sm font-bold text-[#0B0B0B] dark:text-white">
-                    {item.q}
-                  </dt>
-                  <dd className="mt-1.5 text-sm leading-6 text-[#444] dark:text-neutral-300">
-                    {item.a}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+            {/* Add money & Direct receive */}
+            <section id="add-money" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Add money &amp; direct receive
+              </h2>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>Direct receive:</strong> Select NEAR, Solana, Base, or
+                  Ethereum to view your permanent wallet address and QR code for
+                  direct deposits from any wallet or exchange.
+                </li>
+                <li>
+                  <strong>Deposit from another chain:</strong> Bring assets in
+                  from external chains into native NEAR via NEAR Intents with a
+                  live quote and time-limited deposit address.
+                </li>
+              </ul>
+            </section>
 
-          <hr className="border-[#EFECE6] dark:border-white/[0.08]" />
+            {/* Convert & bridge */}
+            <section id="convert" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Convert &amp; bridge
+              </h2>
+              <p>
+                Use <strong>Convert &amp; Bridge</strong> to swap between assets
+                across your own FLOW wallets (for example, SOL on Solana into
+                USDC on Base or NEAR on NEAR Mainnet). Review the live rate and
+                drag <strong>Slide to Convert</strong> to execute.
+              </p>
+            </section>
 
-          {/* 2.14 Changelog */}
-          <section
-            id="changelog"
-            aria-labelledby="h-changelog"
-            className="scroll-mt-24 space-y-4"
-          >
-            <h2
-              id="h-changelog"
-              className="font-serif text-2xl text-[#0B0B0B] dark:text-white sm:text-[28px]"
-            >
-              14. Changelog
-            </h2>
-            <div className="space-y-3 text-sm text-[#444] dark:text-neutral-300">
-              <div className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4">
-                <p className="font-mono text-xs font-bold text-[#0B0B0B] dark:text-white">
-                  v1.2.0 (November 2026)
-                </p>
-                <p className="mt-1">
-                  Added live on-chain LiNEAR APY and Burrow APR feeds, 0.12 NEAR
-                  deposit gas/storage reserve enforcement, LiNEAR unstaking
-                  status and Claim NEAR button, live Earn settlement tracker
-                  modal, asset-weighted 24h dashboard PnL, and deduplicated
-                  transaction notifications.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4">
-                <p className="font-mono text-xs font-bold text-[#0B0B0B] dark:text-white">
-                  v1.1.0 (November 2026)
-                </p>
-                <p className="mt-1">
-                  Added focus-only Live Payment and Conversion Trackers with
-                  reload persistence, Flow ID (@handle.flow) transfers, Cashflow
-                  Insights, and account-aware FLOW AI.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[#E6E2DA] dark:border-white/[0.08] bg-[#F8F6F3]/60 dark:bg-[#1A1A1C] p-4">
-                <p className="font-mono text-xs font-bold text-[#0B0B0B] dark:text-white">
-                  v1.0.0 (November 2026)
-                </p>
-                <p className="mt-1">
-                  Initial mainnet release with NEAR OutLayer MPC provisioning,
-                  Google and email OTP sign-in, cross-chain Payment Links
-                  (/pay/[id]), and NEAR Intents 1Click routing.
-                </p>
-              </div>
-            </div>
-          </section>
-        </article>
-      </div>
+            {/* Payment links */}
+            <section id="payment-links" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Request &amp; payment links
+              </h2>
+              <p>
+                Open the <strong>Request</strong> tab and click{" "}
+                <strong>+ New request</strong> to create a shareable checkout
+                link:
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  Set a title, optional description, fixed or open amount, and
+                  the asset/network you want to receive.
+                </li>
+                <li>
+                  Choose <strong>Unlimited</strong> or set a{" "}
+                  <strong>Max payers</strong> limit. FLOW tracks how many people
+                  have successfully settled and how many spots remain, closing
+                  the link automatically once full.
+                </li>
+                <li>
+                  Pause, resume, copy, or delete any link directly from{" "}
+                  <strong>Your requests</strong>. Anyone opening a deleted link
+                  sees a clear &ldquo;Link deleted&rdquo; screen.
+                </li>
+              </ul>
+            </section>
+
+            {/* Earn */}
+            <section id="earn" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Earn (LiNEAR &amp; Burrow Finance)
+              </h2>
+              <p>
+                Put idle NEAR ecosystem balances to work directly inside the{" "}
+                <strong>Earn</strong> tab:
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>LiNEAR liquid staking:</strong> Deposit NEAR to
+                  receive $LiNEAR and earn auto-compounding staking rewards.
+                  Deposits reserve a small NEAR gas buffer. Standard unstaking
+                  takes approximately 48 hours (~4 epochs) before you click{" "}
+                  <strong>Claim</strong> to settle NEAR back to your wallet.
+                </li>
+                <li>
+                  <strong>Burrow Finance:</strong> Supply USDC on NEAR Mainnet
+                  to earn variable lending yield. First-time deposits require a
+                  small NEAR storage and gas reserve on-chain.
+                </li>
+              </ul>
+            </section>
+
+            {/* Flow AI Assistant */}
+            <section id="assistant" className="scroll-mt-24 space-y-3">
+              <h2 className="font-serif text-3xl font-normal text-neutral-950 dark:text-white">
+                Flow AI Assistant
+              </h2>
+              <p>
+                Click the Flow AI icon in the top bar to ask questions about
+                your balances, recent activity, or cross-chain routes, or to
+                draft payment actions in plain English. All outgoing transfers
+                still require your explicit confirmation before signing.
+              </p>
+            </section>
+          </article>
+        </div>
+      </main>
     </PublicSiteChrome>
   );
 }
