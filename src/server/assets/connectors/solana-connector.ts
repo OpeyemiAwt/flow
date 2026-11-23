@@ -53,15 +53,31 @@ interface SolanaGetTokenAccountsResult {
   readonly value: SolanaTokenAccountParsed[];
 }
 
+const SOLANA_GENESIS_CACHE = new Map<
+  string,
+  { genesisHash: string; endpointUsed: string; expiresAt: number }
+>();
+const SOLANA_GENESIS_TTL_MS = 10 * 60_000;
+
 /**
  * Verifies that the Solana RPC endpoint connects to the expected network (mainnet or devnet)
- * by verifying its immutable genesis hash.
+ * by verifying its immutable genesis hash (cached per endpoint for 10 minutes to reduce RPC load).
  */
 export async function verifySolanaGenesisHash(
   rpcUrl: string,
   expectedNetwork: "solana-mainnet" | "solana-devnet",
   options?: JsonRpcOptions,
 ): Promise<{ verified: boolean; genesisHash: string; endpointUsed: string }> {
+  const cacheKey = `${rpcUrl}|${expectedNetwork}`;
+  const cached = SOLANA_GENESIS_CACHE.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return {
+      verified: true,
+      genesisHash: cached.genesisHash,
+      endpointUsed: cached.endpointUsed,
+    };
+  }
+
   const { response, endpointUsed } = await callJsonRpc<string>(
     rpcUrl,
     "getGenesisHash",
@@ -87,6 +103,12 @@ export async function verifySolanaGenesisHash(
       `Solana network genesis hash mismatch on ${endpointUsed}: expected ${expectedHash} (${expectedNetwork}), got ${response.result}.`,
     );
   }
+
+  SOLANA_GENESIS_CACHE.set(cacheKey, {
+    genesisHash: response.result,
+    endpointUsed,
+    expiresAt: Date.now() + SOLANA_GENESIS_TTL_MS,
+  });
 
   return { verified: true, genesisHash: response.result, endpointUsed };
 }

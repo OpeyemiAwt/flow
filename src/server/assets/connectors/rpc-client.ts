@@ -111,6 +111,13 @@ export async function callJsonRpc<T>(
           );
         }
 
+        if (res.status === 401 || res.status === 403) {
+          throw new FlowError(
+            "RPC_RATE_LIMITED",
+            `RPC access restricted (HTTP ${res.status}) on ${scrubRpcEndpoint(endpoint)}.`,
+          );
+        }
+
         if (!res.ok && res.status >= 500) {
           if (attempt < maxRetries) {
             continue;

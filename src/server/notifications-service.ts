@@ -350,13 +350,21 @@ export async function getAccountNotifications(
       observed_at: Date;
     }>
   >`
-      SELECT wb.id, na.network, wb.last_error, wb.observed_at
+      SELECT DISTINCT ON (na.network) wb.id, na.network, wb.last_error, wb.observed_at
       FROM flow.wallet_balances wb
       JOIN flow.network_assets na ON na.id = wb.network_asset_id
       JOIN flow.wallets w ON w.id = wb.wallet_id
       WHERE w.account_id = ${accountId}::uuid
+        AND wb.sync_status = 'ERROR'
         AND wb.last_error IS NOT NULL
-      ORDER BY wb.observed_at DESC
+        AND NOT EXISTS (
+          SELECT 1
+          FROM flow.wallet_balances wb_ok
+          WHERE wb_ok.wallet_id = wb.wallet_id
+            AND wb_ok.network_asset_id = wb.network_asset_id
+            AND wb_ok.sync_status = 'SYNCED'
+        )
+      ORDER BY na.network, wb.observed_at DESC
       LIMIT 5
   `;
 

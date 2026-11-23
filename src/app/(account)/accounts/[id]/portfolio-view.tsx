@@ -1575,19 +1575,16 @@ export function PortfolioView({
     const provisioned = MAINNET_SUPPORTED_DEPLOYMENTS.filter((deployment) =>
       getMainnetWalletAddress(portfolio.wallet, deployment.networkKey),
     );
-    if (
-      provisioned.length === 0 ||
-      provisioned.some(
-        (deployment) =>
-          !portfolio.balances.some(
-            (balance) =>
-              balance.syncStatus === "SYNCED" &&
-              balance.networkAsset.isVerified &&
-              balance.networkAsset.status === "ACTIVE" &&
-              isBalanceMatchingDeployment(balance, deployment),
-          ),
-      )
-    ) {
+    const hasAnySyncedBalance = provisioned.some((deployment) =>
+      portfolio.balances.some(
+        (balance) =>
+          balance.syncStatus === "SYNCED" &&
+          balance.networkAsset.isVerified &&
+          balance.networkAsset.status === "ACTIVE" &&
+          isBalanceMatchingDeployment(balance, deployment),
+      ),
+    );
+    if (provisioned.length === 0 || !hasAnySyncedBalance) {
       return isInitialIndexing ? null : "Balance unavailable";
     }
     let total = 0n;
@@ -2538,7 +2535,6 @@ export function PortfolioView({
                       {heldAssets.length === 1 ? "" : "s"} • {totalBalanceUsd}
                     </span>
                   )}
-                  <span className="text-neutral-400">&gt;</span>
                 </button>
                 <button
                   type="button"

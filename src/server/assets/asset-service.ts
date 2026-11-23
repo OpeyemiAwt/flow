@@ -538,14 +538,33 @@ export async function upsertWalletBalance(
           )
           ON CONFLICT (wallet_id, network_asset_id) WHERE token_account_address IS NULL
           DO UPDATE SET
-            atomic_balance = EXCLUDED.atomic_balance,
-            block_height = EXCLUDED.block_height,
-            block_timestamp = EXCLUDED.block_timestamp,
+            atomic_balance = CASE
+              WHEN EXCLUDED.sync_status = 'ERROR' AND flow.wallet_balances.sync_status = 'SYNCED'
+                THEN flow.wallet_balances.atomic_balance
+              ELSE EXCLUDED.atomic_balance
+            END,
+            block_height = COALESCE(EXCLUDED.block_height, flow.wallet_balances.block_height),
+            block_timestamp = COALESCE(EXCLUDED.block_timestamp, flow.wallet_balances.block_timestamp),
             observed_at = EXCLUDED.observed_at,
-            finality = EXCLUDED.finality,
-            sync_status = EXCLUDED.sync_status,
-            last_synced_at = EXCLUDED.last_synced_at,
-            last_error = EXCLUDED.last_error,
+            finality = CASE
+              WHEN EXCLUDED.sync_status = 'ERROR' AND flow.wallet_balances.sync_status = 'SYNCED'
+                THEN flow.wallet_balances.finality
+              ELSE EXCLUDED.finality
+            END,
+            sync_status = CASE
+              WHEN EXCLUDED.sync_status = 'ERROR' AND flow.wallet_balances.sync_status = 'SYNCED'
+                THEN flow.wallet_balances.sync_status
+              ELSE EXCLUDED.sync_status
+            END,
+            last_synced_at = CASE
+              WHEN EXCLUDED.sync_status = 'SYNCED' THEN EXCLUDED.last_synced_at
+              ELSE flow.wallet_balances.last_synced_at
+            END,
+            last_error = CASE
+              WHEN EXCLUDED.sync_status = 'SYNCED' THEN NULL
+              WHEN EXCLUDED.sync_status = 'ERROR' AND flow.wallet_balances.sync_status = 'SYNCED' THEN NULL
+              ELSE EXCLUDED.last_error
+            END,
             updated_at = CURRENT_TIMESTAMP
           RETURNING id
         `
@@ -600,6 +619,15 @@ export async function upsertWalletBalance(
       "DATABASE_UNAVAILABLE",
       "Failed to upsert wallet balance record.",
     );
+  }
+  if (tokenAccount !== null && input.syncStatus === "SYNCED") {
+    await db.$executeRaw`
+      DELETE FROM flow.wallet_balances
+      WHERE wallet_id = ${input.walletId}::uuid
+        AND network_asset_id = ${input.networkAssetId}::uuid
+        AND token_account_address IS NULL
+        AND sync_status <> 'SYNCED'
+    `;
   }
   return row.id;
 }
