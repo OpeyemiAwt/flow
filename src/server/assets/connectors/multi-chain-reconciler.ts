@@ -54,11 +54,12 @@ export function getDefaultRpcConfig(
       primary:
         process.env.FLOW_ETHEREUM_RPC_URL ||
         "https://ethereum-rpc.publicnode.com",
-      fallback: "https://cloudflare-eth.com",
+      fallback: "https://eth.merkle.io",
     },
     near: {
-      primary: process.env.FLOW_NEAR_RPC_URL || "https://rpc.mainnet.near.org",
-      fallback: "https://mainnet.neardata.info/v1/rpc",
+      primary:
+        process.env.FLOW_NEAR_RPC_URL || "https://rpc.mainnet.fastnear.com",
+      fallback: "https://free.rpc.fastnear.com",
     },
     base: {
       primary: process.env.FLOW_BASE_RPC_URL || "https://mainnet.base.org",
@@ -67,8 +68,8 @@ export function getDefaultRpcConfig(
     solana: {
       primary:
         process.env.FLOW_SOLANA_RPC_URL ||
-        "https://api.mainnet-beta.solana.com",
-      fallback: "https://solana-rpc.publicnode.com",
+        "https://solana-rpc.publicnode.com",
+      fallback: "https://api.mainnet-beta.solana.com",
     },
   };
 }
@@ -183,7 +184,7 @@ export async function reconcileWalletBalances(
       if (asset.network === "ethereum") {
         const ethRpc =
           rpc.ethereum?.primary ?? "https://ethereum-rpc.publicnode.com";
-        const fallback = rpc.ethereum?.fallback ?? "https://cloudflare-eth.com";
+        const fallback = rpc.ethereum?.fallback ?? "https://eth.merkle.io";
 
         if (asset.tokenStandard === "NATIVE") {
           tasks.push({
@@ -316,12 +317,29 @@ export async function reconcileWalletBalances(
     }
   }
 
-  const fetched = await Promise.all(
+  const settled = await Promise.allSettled(
     tasks.map(async (task) => ({
       task,
       obs: await task.fetchObs(),
     })),
   );
+
+  let firstError: unknown = null;
+  const fetched: Array<{
+    task: (typeof tasks)[number];
+    obs: BalanceObservation;
+  }> = [];
+  for (const outcome of settled) {
+    if (outcome.status === "fulfilled") {
+      fetched.push(outcome.value);
+    } else if (firstError === null) {
+      firstError = outcome.reason;
+    }
+  }
+
+  if (tasks.length > 0 && fetched.length === 0 && firstError !== null) {
+    throw firstError;
+  }
 
   for (const { task, obs } of fetched) {
     // Persist observation into flow.wallet_balances
@@ -380,7 +398,7 @@ export async function fetchLiveMainnetBalance(params: {
   if (normalizedNetwork === "ethereum") {
     const primary =
       rpc.ethereum?.primary ?? "https://ethereum-rpc.publicnode.com";
-    const fallback = rpc.ethereum?.fallback ?? "https://cloudflare-eth.com";
+    const fallback = rpc.ethereum?.fallback ?? "https://eth.merkle.io";
     return params.standard === "NATIVE"
       ? fetchBaseNativeBalance(primary, params.address, "1", {
           networkAssetId,
@@ -414,7 +432,7 @@ export async function fetchLiveMainnetBalance(params: {
 
   if (normalizedNetwork === "solana") {
     const primary =
-      rpc.solana?.primary ?? "https://api.mainnet-beta.solana.com";
+      rpc.solana?.primary ?? "https://solana-rpc.publicnode.com";
     const fallback = rpc.solana?.fallback;
     return params.standard === "NATIVE"
       ? fetchSolanaNativeBalance(primary, params.address, "solana-mainnet", {
@@ -430,8 +448,8 @@ export async function fetchLiveMainnetBalance(params: {
         );
   }
 
-  const primary = rpc.near?.primary ?? "https://rpc.mainnet.near.org";
-  const fallback = rpc.near?.fallback;
+  const primary = rpc.near?.primary ?? "https://rpc.mainnet.fastnear.com";
+  const fallback = rpc.near?.fallback ?? "https://free.rpc.fastnear.com";
   return params.standard === "NATIVE"
     ? fetchNearNativeBalance(primary, params.address, "near-mainnet", {
         networkAssetId,

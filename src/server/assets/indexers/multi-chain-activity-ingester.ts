@@ -127,7 +127,7 @@ export async function ingestWalletActivities(
               : (rpc.base?.primary ?? "https://sepolia.base.org");
           const fallbackRpc =
             addr.network === "ethereum"
-              ? "https://cloudflare-eth.com"
+              ? (rpc.ethereum?.fallback ?? "https://eth.merkle.io")
               : rpc.base?.fallback;
 
           const items = await indexEvmAddressActivities(
@@ -180,7 +180,7 @@ export async function ingestWalletActivities(
     }),
   );
 
-  if (unavailableNetworkCount > 0) {
+  if (unavailableNetworkCount >= addresses.length && allRawActivities.length === 0) {
     throw new FlowError(
       "RPC_NETWORK_ERROR",
       "One or more network activity providers were unavailable.",

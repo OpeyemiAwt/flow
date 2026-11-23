@@ -845,7 +845,7 @@ export function getNetworkRpcUrl(network: string): string {
       process.env.FLOW_NEAR_RPC_URL ||
       (norm.includes("testnet")
         ? "https://rpc.testnet.near.org"
-        : "https://rpc.mainnet.near.org")
+        : "https://rpc.mainnet.fastnear.com")
     );
   }
   if (norm.includes("base")) {
@@ -861,7 +861,7 @@ export function getNetworkRpcUrl(network: string): string {
       process.env.FLOW_SOLANA_RPC_URL ||
       (norm.includes("devnet")
         ? "https://api.devnet.solana.com"
-        : "https://api.mainnet-beta.solana.com")
+        : "https://solana-rpc.publicnode.com")
     );
   }
   if (norm.includes("ethereum") || norm.includes("eth")) {

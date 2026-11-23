@@ -17,11 +17,11 @@ export interface BlockchainRpcConfig {
 }
 
 export const DEFAULT_RPC_ENDPOINTS = Object.freeze({
-  near: "https://rpc.mainnet.near.org",
+  near: "https://rpc.mainnet.fastnear.com",
   nearTestnet: "https://rpc.testnet.near.org",
   base: "https://mainnet.base.org",
   baseSepolia: "https://sepolia.base.org",
-  solana: "https://api.mainnet-beta.solana.com",
+  solana: "https://solana-rpc.publicnode.com",
   solanaDevnet: "https://api.devnet.solana.com",
 });
 

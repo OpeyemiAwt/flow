@@ -263,7 +263,10 @@ const policySponsorEnvSchema = z.object({
     .string()
     .trim()
     .default(OUTLAYER_POLICY_CONTRACT_ID),
-  FLOW_NEAR_RPC_URL: z.string().trim().default("https://rpc.mainnet.near.org"),
+  FLOW_NEAR_RPC_URL: z
+    .string()
+    .trim()
+    .default("https://rpc.mainnet.fastnear.com"),
   FLOW_NEAR_SPONSOR_MAX_FEE_PER_WALLET_YOCTO: z
     .string()
     .trim()
