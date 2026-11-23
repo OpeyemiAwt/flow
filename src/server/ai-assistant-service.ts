@@ -9,7 +9,11 @@ import {
 } from "../domain/supported-assets-catalog.ts";
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
-import { getConvertBridgeAppFees } from "../domain/platform-fees.ts";
+import {
+  CONVERT_BRIDGE_FEE_BPS,
+  getConvertBridgeAppFees,
+  grossUpForPlatformFee,
+} from "../domain/platform-fees.ts";
 import { quoteOneClickPreview } from "./providers/one-click-preview.ts";
 
 export interface AssistantActionCard {
@@ -729,11 +733,17 @@ export async function processAssistantQuery(params: {
           ]);
           const atomic = parseDisplayToAtomic(requestedAmount, srcDep.decimals);
           if (srcAsset && dstAsset && atomic > 0n) {
+            const { feeAtomic, grossAtomic } = grossUpForPlatformFee(
+              atomic,
+              CONVERT_BRIDGE_FEE_BPS,
+            );
             const preview = await quoteOneClickPreview({
               source: srcAsset,
               destination: dstAsset,
               operationId: `ai:${params.accountId}`,
-              amountAtomic: atomic.toString(),
+              amountAtomic: grossAtomic.toString(),
+              principalAmountAtomic: atomic.toString(),
+              platformFeeAtomic: feeAtomic.toString(),
               swapType: "EXACT_INPUT",
               recipient,
               refundTo,

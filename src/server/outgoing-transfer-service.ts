@@ -29,7 +29,12 @@ import { fetchLiveMainnetBalance } from "./assets/connectors/multi-chain-reconci
 import { getAccountFlowId, resolveFlowIdForSend } from "./flow-id-service.ts";
 import { ApiFailure, input, reply } from "./http.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
-import { getConvertBridgeAppFees } from "../domain/platform-fees.ts";
+import {
+  getConvertBridgeAppFees,
+  getCrossAssetSendAppFees,
+  getOperationPlatformFeeBps,
+  grossUpForPlatformFee,
+} from "../domain/platform-fees.ts";
 import { fetchOneClickCommittedQuote } from "./providers/one-click-adapter.ts";
 
 const sendExecuteSchema = z.strictObject({
@@ -382,12 +387,16 @@ export async function executeSendTransfer(
     throw new ApiFailure(400, "INVALID_RECIPIENT_ADDRESS");
   }
 
+  const sendFeeBps = getOperationPlatformFeeBps("SEND", !isCrossChainSend);
+  const { feeAtomic: sendPlatformFeeAtomic, grossAtomic: sendTotalDebitAtomic } =
+    grossUpForPlatformFee(amountAtomic, sendFeeBps);
+
   const { sourceAssetKey, portfolio } =
     await computeAvailableBalanceForDeployment(
       id,
       token,
       sourceDeployment.id,
-      amountAtomic,
+      sendTotalDebitAtomic,
     );
   const wallet = portfolio.wallet;
   const walletId = wallet?.id;
@@ -422,10 +431,11 @@ export async function executeSendTransfer(
     const committed = await fetchOneClickCommittedQuote({
       originAsset: srcQuote.assetId,
       destinationAsset: dstQuote.assetId,
-      amountAtomic: amountAtomic.toString(),
+      amountAtomic: sendTotalDebitAtomic.toString(),
       swapType: "EXACT_INPUT",
       recipient: trimmedRecipient,
       refundTo: ownSourceAddress,
+      appFees: getCrossAssetSendAppFees(),
     });
     if (
       !committed.ok ||
@@ -458,6 +468,13 @@ export async function executeSendTransfer(
     ...(userMemo ? { userMemo } : {}),
     ...(recipientLabel ? { recipientLabel } : {}),
     ...(senderFlowId ? { senderFlowId } : {}),
+    ...(sendFeeBps > 0
+      ? {
+          principalAtomicAmount: amountAtomic.toString(),
+          platformFeeAtomic: sendPlatformFeeAtomic.toString(),
+          platformFeeBps: sendFeeBps,
+        }
+      : {}),
   });
 
   const created = await transaction(async (tx) => {
@@ -499,7 +516,7 @@ export async function executeSendTransfer(
         ${sourceAssetKey}::text,
         ${sourceDeployment.symbol}::text,
         ${sourceDeployment.decimals}::integer,
-        ${amountAtomic.toString()}::numeric,
+        ${sendTotalDebitAtomic.toString()}::numeric,
         ${trimmedRecipient}::text,
         ${destDeployment.networkKey}::text,
         ${destAssetKey}::text,
@@ -593,12 +610,18 @@ export async function executeConvertTransfer(
     throw new ApiFailure(400, "INVALID_AMOUNT");
   }
 
+  const convertFeeBps = getOperationPlatformFeeBps("CONVERT", false);
+  const {
+    feeAtomic: convertPlatformFeeAtomic,
+    grossAtomic: convertTotalDebitAtomic,
+  } = grossUpForPlatformFee(amountAtomic, convertFeeBps);
+
   const { sourceAssetKey, portfolio } =
     await computeAvailableBalanceForDeployment(
       id,
       token,
       sourceDeployment.id,
-      amountAtomic,
+      convertTotalDebitAtomic,
     );
   const wallet = portfolio.wallet;
   if (!wallet) {
@@ -620,7 +643,7 @@ export async function executeConvertTransfer(
   const committed = await fetchOneClickCommittedQuote({
     originAsset: sourceQuoteAsset.assetId,
     destinationAsset: destinationQuoteAsset.assetId,
-    amountAtomic: amountAtomic.toString(),
+    amountAtomic: convertTotalDebitAtomic.toString(),
     swapType: "EXACT_INPUT",
     recipient: ownDestinationAddress,
     refundTo: ownSourceAddress,
@@ -644,6 +667,11 @@ export async function executeConvertTransfer(
       ? "native"
       : destinationDeployment.contractIdentifier;
   const publicId = `cnv_${randomBytes(10).toString("hex")}`;
+  const convertQuotePayloadJson = JSON.stringify({
+    principalAtomicAmount: amountAtomic.toString(),
+    platformFeeAtomic: convertPlatformFeeAtomic.toString(),
+    platformFeeBps: convertFeeBps,
+  });
 
   const created = await transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true),
@@ -670,6 +698,7 @@ export async function executeConvertTransfer(
         provider_deposit_address,
         provider_deposit_memo,
         provider_correlation_id,
+        provider_quote_payload,
         status,
         created_by_user_id
       )
@@ -683,7 +712,7 @@ export async function executeConvertTransfer(
         ${sourceAssetKey}::text,
         ${sourceDeployment.symbol}::text,
         ${sourceDeployment.decimals}::integer,
-        ${amountAtomic.toString()}::numeric,
+        ${convertTotalDebitAtomic.toString()}::numeric,
         ${ownDestinationAddress}::text,
         ${destinationDeployment.networkKey}::text,
         ${destinationAssetKey}::text,
@@ -693,6 +722,7 @@ export async function executeConvertTransfer(
         ${convertDepositAddress}::text,
         ${convertDepositMemo}::text,
         ${convertCorrelationId}::text,
+        ${convertQuotePayloadJson}::jsonb,
         'PENDING_CUSTODY',
         ${actor.userId}::uuid
       )

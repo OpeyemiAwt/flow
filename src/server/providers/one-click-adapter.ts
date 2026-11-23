@@ -80,8 +80,10 @@ export interface OneClickDryQuoteResult {
   ok: boolean;
   routeStatus: RouteAvailabilityStatus;
   amountInAtomic?: string;
+  amountInUsd?: string | null;
   minAmountInAtomic?: string;
   amountOutAtomic?: string;
+  amountOutUsd?: string | null;
   minAmountOutAtomic?: string;
   timeEstimateSeconds?: number | null;
   fees?: IndicativeQuoteFeeBreakdown;
@@ -309,12 +311,22 @@ export async function fetchOneClickDryQuote(params: {
       );
     }
 
+    const parseUsdString = (value: unknown): string | null => {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!/^[0-9]+(?:\.[0-9]+)?$/.test(trimmed)) return null;
+      const num = Number.parseFloat(trimmed);
+      return Number.isFinite(num) && num >= 0 ? trimmed : null;
+    };
+
     return {
       ok: true,
       routeStatus: "SUPPORTED_AND_QUOTABLE",
       amountInAtomic: quote.amountIn,
+      amountInUsd: parseUsdString(quote.amountInUsd),
       minAmountInAtomic: quote.minAmountIn,
       amountOutAtomic: quote.amountOut,
+      amountOutUsd: parseUsdString(quote.amountOutUsd),
       minAmountOutAtomic: quote.minAmountOut,
       timeEstimateSeconds:
         typeof quote.timeEstimate === "number" &&

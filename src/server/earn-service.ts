@@ -17,7 +17,7 @@ import {
 } from "../domain/earn.ts";
 import {
   EARN_DEPOSIT_FEE_BPS,
-  splitPlatformFee,
+  grossUpForPlatformFee,
 } from "../domain/platform-fees.ts";
 import { getMainnetWalletAddress, serializePortfolio } from "../domain/portfolio.ts";
 import { runtime, transaction } from "../foundation/prisma.ts";
@@ -509,22 +509,22 @@ export async function executeEarnAction(
     if (nearAtomic <= 0n) {
       throw new ApiFailure(400, "INVALID_AMOUNT");
     }
-    const { netAtomic } = splitPlatformFee(nearAtomic, EARN_DEPOSIT_FEE_BPS);
-    if (netAtomic <= 0n) {
-      throw new ApiFailure(400, "INVALID_AMOUNT");
-    }
+    const { grossAtomic } = grossUpForPlatformFee(
+      nearAtomic,
+      EARN_DEPOSIT_FEE_BPS,
+    );
     const reservedNear = await getReservedAtomic(id, token, "native");
     const spendableNear = liveNearAtomic - reservedNear;
-    if (nearAtomic + NEAR_GAS_RESERVE_YOCTO > spendableNear) {
+    if (grossAtomic + NEAR_GAS_RESERVE_YOCTO > spendableNear) {
       throw new ApiFailure(400, "INSUFFICIENT_SPENDABLE_BALANCE");
     }
     memo = EARN_MEMO.LINEAR_DEPOSIT;
     sourceAssetId = "native";
     sourceSymbol = "NEAR";
     sourceDecimals = 24;
-    sourceAtomicAmount = nearAtomic;
+    sourceAtomicAmount = grossAtomic;
     recipientAddress = LINEAR_CONTRACT;
-    expectedDestAtomic = netAtomic;
+    expectedDestAtomic = nearAtomic;
   } else if (body.protocol === "linear" && body.action === "CLAIM") {
     if (liveNearAtomic < NEAR_WITHDRAW_GAS_RESERVE_YOCTO) {
       throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
@@ -603,10 +603,10 @@ export async function executeEarnAction(
     if (usdcAtomic <= 0n) {
       throw new ApiFailure(400, "INVALID_AMOUNT");
     }
-    const { netAtomic } = splitPlatformFee(usdcAtomic, EARN_DEPOSIT_FEE_BPS);
-    if (netAtomic <= 0n) {
-      throw new ApiFailure(400, "INVALID_AMOUNT");
-    }
+    const { grossAtomic } = grossUpForPlatformFee(
+      usdcAtomic,
+      EARN_DEPOSIT_FEE_BPS,
+    );
     const [liveUsdcObs, burrowPos, reservedUsdc] = await Promise.all([
       fetchLiveMainnetBalance({
         networkKey: "near",
@@ -624,7 +624,7 @@ export async function executeEarnAction(
       throw new ApiFailure(409, "BALANCE_REFRESH_REQUIRED");
     }
     const spendableUsdc = BigInt(liveUsdcObs.atomicBalance) - reservedUsdc;
-    if (usdcAtomic > spendableUsdc) {
+    if (grossAtomic > spendableUsdc) {
       throw new ApiFailure(400, "INSUFFICIENT_SPENDABLE_BALANCE");
     }
     const requiredNear = burrowPos.hasStorage
@@ -637,9 +637,9 @@ export async function executeEarnAction(
     sourceAssetId = BURROW_USDC_CONTRACT;
     sourceSymbol = "USDC";
     sourceDecimals = 6;
-    sourceAtomicAmount = usdcAtomic;
+    sourceAtomicAmount = grossAtomic;
     recipientAddress = BURROW_CONTRACT;
-    expectedDestAtomic = netAtomic;
+    expectedDestAtomic = usdcAtomic;
   } else {
     // burrow WITHDRAW
     if (liveNearAtomic < NEAR_WITHDRAW_GAS_RESERVE_YOCTO) {

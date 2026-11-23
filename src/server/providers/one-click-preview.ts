@@ -24,6 +24,8 @@ export interface OneClickPreview {
   readonly amountOutAtomic: string;
   readonly sourceDisplayAmount: string;
   readonly recipientDisplayAmount: string;
+  readonly sourceAmountUsd?: string | null;
+  readonly recipientAmountUsd?: string | null;
   readonly minimumRecipientDisplayAmount: string | null;
   readonly rateDescription: string;
   readonly estimatedTimeSeconds: number | null;
@@ -62,6 +64,8 @@ export async function quoteOneClickPreview(input: {
   destination: DiscoveredToken;
   operationId: string;
   amountAtomic: string;
+  principalAmountAtomic?: string;
+  platformFeeAtomic?: string;
   swapType: QuoteSwapType;
   refundTo: string;
   recipient: string;
@@ -168,8 +172,26 @@ export async function quoteOneClickPreview(input: {
   const appFeeBps = result.fees?.appFeeBps ?? 0;
   const appFeePercent =
     appFeeBps > 0 ? `${Number((appFeeBps / 100).toFixed(2))}%` : null;
+  const principalAtomic = input.principalAmountAtomic ?? result.amountInAtomic;
+  const platformFeeAtomic =
+    input.platformFeeAtomic && BigInt(input.platformFeeAtomic) > 0n
+      ? input.platformFeeAtomic
+      : null;
+  const platformFeeDisplay = formatFee(platformFeeAtomic, source.decimals);
+  const principalSourceDisplay = formatAtomicToDisplay(
+    principalAtomic,
+    source.decimals,
+  );
+  const totalSourceDisplay = formatAtomicToDisplay(
+    result.amountInAtomic,
+    source.decimals,
+  );
   const feeDescription = [
-    appFeePercent ? `Includes ${appFeePercent} FLOW platform fee` : null,
+    appFeePercent
+      ? platformFeeDisplay
+        ? `FLOW platform fee (${appFeePercent}: ${platformFeeDisplay} ${source.symbol}) charged from balance`
+        : `Includes ${appFeePercent} FLOW platform fee`
+      : null,
     withdrawFeeDisplay === null
       ? null
       : `Withdrawal fee ${withdrawFeeDisplay} ${destination.symbol}`,
@@ -205,21 +227,20 @@ export async function quoteOneClickPreview(input: {
       destinationDeploymentId: destination.id,
       amountInAtomic: result.amountInAtomic,
       amountOutAtomic: result.amountOutAtomic,
-      sourceDisplayAmount: formatAtomicToDisplay(
-        result.amountInAtomic,
-        source.decimals,
-      ),
+      sourceDisplayAmount: totalSourceDisplay,
       recipientDisplayAmount: formatAtomicToDisplay(
         result.amountOutAtomic,
         destination.decimals,
       ),
+      sourceAmountUsd: result.amountInUsd ?? null,
+      recipientAmountUsd: result.amountOutUsd ?? null,
       minimumRecipientDisplayAmount: result.minAmountOutAtomic
         ? formatAtomicToDisplay(result.minAmountOutAtomic, destination.decimals)
         : null,
       rateDescription: buildRateDescription(
         source.symbol,
         source.decimals,
-        result.amountInAtomic,
+        principalAtomic,
         destination.symbol,
         destination.decimals,
         result.amountOutAtomic,
@@ -227,6 +248,13 @@ export async function quoteOneClickPreview(input: {
       estimatedTimeSeconds: result.timeEstimateSeconds ?? null,
       fees: {
         appFeeBps,
+        platformFeeAtomic,
+        platformFeeDisplay,
+        platformFeeAssetSymbol: platformFeeDisplay === null ? null : source.symbol,
+        principalSourceAtomic: principalAtomic,
+        principalSourceDisplay,
+        totalSourceAtomic: result.amountInAtomic,
+        totalSourceDisplay,
         refundFeeAtomic: result.fees?.refundFeeAtomic ?? null,
         refundFeeDisplay,
         refundFeeAssetSymbol: refundFeeDisplay === null ? null : source.symbol,

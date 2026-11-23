@@ -1,9 +1,12 @@
 export const EARN_DEPOSIT_FEE_BPS = 15; // 0.15%
 export const EARN_WITHDRAW_FEE_BPS = 0; // 0%
+export const DIRECT_SEND_FEE_BPS = 0; // 0% (same-asset direct send is free)
+export const CROSS_ASSET_SEND_FEE_BPS = 15; // 0.15% (cross-asset send)
 export const CONVERT_BRIDGE_FEE_BPS = 100; // 1.00%
 export const PAYMENT_LINK_FEE_BPS = 0; // 0%
 
 export const EARN_DEPOSIT_FEE_LABEL = "0.15%";
+export const CROSS_ASSET_SEND_FEE_LABEL = "0.15%";
 export const CONVERT_BRIDGE_FEE_LABEL = "1%";
 
 /**
@@ -28,12 +31,45 @@ export function resolveFeeTreasuryAccount(): string {
   return DEFAULT_FEE_TREASURY_ACCOUNT;
 }
 
+export function getCrossAssetSendAppFees(): readonly OneClickAppFee[] {
+  const recipient = resolveFeeTreasuryAccount();
+  if (!recipient || CROSS_ASSET_SEND_FEE_BPS <= 0) {
+    return [];
+  }
+  return [{ recipient, fee: CROSS_ASSET_SEND_FEE_BPS }];
+}
+
 export function getConvertBridgeAppFees(): readonly OneClickAppFee[] {
   const recipient = resolveFeeTreasuryAccount();
   if (!recipient || CONVERT_BRIDGE_FEE_BPS <= 0) {
     return [];
   }
   return [{ recipient, fee: CONVERT_BRIDGE_FEE_BPS }];
+}
+
+export function getOperationPlatformFeeBps(
+  operation: "SEND" | "CONVERT" | "ADD_MONEY",
+  isSameAsset: boolean,
+): number {
+  if (operation === "CONVERT") {
+    return isSameAsset ? 0 : CONVERT_BRIDGE_FEE_BPS;
+  }
+  if (operation === "SEND") {
+    return isSameAsset ? DIRECT_SEND_FEE_BPS : CROSS_ASSET_SEND_FEE_BPS;
+  }
+  return 0;
+}
+
+export function getOperationAppFees(
+  operation: "SEND" | "CONVERT" | "ADD_MONEY",
+  isSameAsset: boolean,
+): readonly OneClickAppFee[] {
+  const feeBps = getOperationPlatformFeeBps(operation, isSameAsset);
+  const recipient = resolveFeeTreasuryAccount();
+  if (!recipient || feeBps <= 0) {
+    return [];
+  }
+  return [{ recipient, fee: feeBps }];
 }
 
 export function splitPlatformFee(
@@ -50,4 +86,52 @@ export function splitPlatformFee(
   const feeAtomic = (grossAtomic * BigInt(feeBps)) / 10_000n;
   const netAtomic = grossAtomic - feeAtomic;
   return { grossAtomic, feeAtomic, netAtomic };
+}
+
+/**
+ * Computes the gross atomic amount to debit from the user's balance when the
+ * platform fee is charged on top of the user's desired principal amount (not
+ * deducted from the amount being sent/deposited).
+ *
+ * Guarantees that after `feeBps` is taken from `grossAtomic` via
+ * `floor(gross * feeBps / 10_000)`, the remaining net principal is >= `principalAtomic`.
+ */
+export function grossUpForPlatformFee(
+  principalAtomic: bigint,
+  feeBps: number,
+): {
+  readonly principalAtomic: bigint;
+  readonly feeAtomic: bigint;
+  readonly grossAtomic: bigint;
+} {
+  if (principalAtomic <= 0n || feeBps <= 0 || feeBps >= 10_000) {
+    return {
+      principalAtomic,
+      feeAtomic: 0n,
+      grossAtomic: principalAtomic,
+    };
+  }
+  const denom = BigInt(10_000 - feeBps);
+  const grossAtomic = (principalAtomic * 10_000n + denom - 1n) / denom;
+  const feeAtomic = grossAtomic - principalAtomic;
+  return {
+    principalAtomic,
+    feeAtomic,
+    grossAtomic,
+  };
+}
+
+/**
+ * Inverse of `grossUpForPlatformFee`: given a maximum spendable balance
+ * (`maxGrossAtomic`, already net of any native gas reserve), returns the largest
+ * principal amount whose grossed-up total (principal + platform fee) does not
+ * exceed `maxGrossAtomic`.
+ */
+export function maxPrincipalBeforePlatformFee(
+  maxGrossAtomic: bigint,
+  feeBps: number,
+): bigint {
+  if (maxGrossAtomic <= 0n) return 0n;
+  if (feeBps <= 0 || feeBps >= 10_000) return maxGrossAtomic;
+  return (maxGrossAtomic * BigInt(10_000 - feeBps)) / 10_000n;
 }

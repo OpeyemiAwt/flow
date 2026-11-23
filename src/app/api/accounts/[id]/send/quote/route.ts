@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { parseDisplayToAtomic } from "../../../../../../domain/atomic-amounts.ts";
-import { getConvertBridgeAppFees } from "../../../../../../domain/platform-fees.ts";
+import {
+  getOperationAppFees,
+  getOperationPlatformFeeBps,
+  grossUpForPlatformFee,
+} from "../../../../../../domain/platform-fees.ts";
 import {
   getMainnetWalletAddress,
   isBalanceMatchingDeployment,
@@ -123,6 +127,12 @@ export async function POST(
       );
     }
 
+    const isSameAsset = source.id === destination.id;
+    const feeBps = getOperationPlatformFeeBps(body.operation, isSameAsset);
+    const appFees = getOperationAppFees(body.operation, isSameAsset);
+    const { feeAtomic: platformFeeAtomic, grossAtomic: totalDebitAtomic } =
+      grossUpForPlatformFee(amount, feeBps);
+
     if (sourceDeployment && !isAddMoney) {
       const balance = portfolio.balances.find(
         (record) =>
@@ -136,10 +146,12 @@ export async function POST(
           "No available balance for the selected source asset.",
         );
       }
-      if (amount > BigInt(balance.atomicBalance)) {
+      if (totalDebitAtomic > BigInt(balance.atomicBalance)) {
         throw new ApiFailure(
           400,
-          "The amount exceeds the available source balance.",
+          feeBps > 0
+            ? "The amount plus platform fee exceeds the available source balance."
+            : "The amount exceeds the available source balance.",
         );
       }
     }
@@ -148,13 +160,13 @@ export async function POST(
       source,
       destination,
       operationId: body.operation + ":" + id,
-      amountAtomic: amount.toString(),
+      amountAtomic: totalDebitAtomic.toString(),
+      principalAmountAtomic: amount.toString(),
+      platformFeeAtomic: platformFeeAtomic.toString(),
       swapType: "EXACT_INPUT",
       recipient,
       refundTo,
-      ...(body.operation === "CONVERT"
-        ? { appFees: getConvertBridgeAppFees() }
-        : {}),
+      ...(appFees.length > 0 ? { appFees } : {}),
       signal: request.signal,
     });
     if (!result.ok) {

@@ -9,6 +9,11 @@ import {
 } from "../../../../components/floating-nav.tsx";
 import { FlowIdClaimModal } from "../../../../components/flow-id-claim-modal.tsx";
 import { isFlowIdInput } from "../../../../domain/flow-id.ts";
+import {
+  getOperationPlatformFeeBps,
+  grossUpForPlatformFee,
+  maxPrincipalBeforePlatformFee,
+} from "../../../../domain/platform-fees.ts";
 import { useToast } from "../../../../components/toast-provider.tsx";
 import { useTranslation } from "../../../../components/language-provider.tsx";
 import { TabContentSkeleton } from "../../../../components/page-skeletons.tsx";
@@ -348,6 +353,50 @@ function formatApproxDisplay(
   return `<${sign}0.${"0".repeat(Math.max(0, maxDecimals - 1))}1`;
 }
 
+function formatUsdApprox(amount: number | null | undefined): string | null {
+  if (
+    amount === null ||
+    amount === undefined ||
+    !Number.isFinite(amount) ||
+    amount < 0
+  ) {
+    return null;
+  }
+  if (amount === 0) return "$0.00";
+  if (amount < 0.01) return "<$0.01";
+  return (
+    "$" +
+    amount.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
+}
+
+function computeDisplayUsd(
+  displayAmount: string | null | undefined,
+  unitPriceUsd: number | null | undefined,
+  fallbackUsdString?: string | null,
+): string | null {
+  const num = displayAmount ? Number.parseFloat(displayAmount) : Number.NaN;
+  if (
+    Number.isFinite(num) &&
+    num > 0 &&
+    typeof unitPriceUsd === "number" &&
+    Number.isFinite(unitPriceUsd) &&
+    unitPriceUsd > 0
+  ) {
+    return formatUsdApprox(num * unitPriceUsd);
+  }
+  if (fallbackUsdString) {
+    const parsed = Number.parseFloat(fallbackUsdString);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return formatUsdApprox(parsed);
+    }
+  }
+  return null;
+}
+
 function formatCompactActivityAmount(
   raw: string | null | undefined,
   maxDecimals = 3,
@@ -490,9 +539,35 @@ function useOutgoingPreview(input: {
     ? positiveQuoteAmount(displayAmount, sourceDeployment.decimals)
     : null;
   const balance = source?.balanceRecord;
+  const samePair = Boolean(
+    sourceDeployment && sourceDeployment.id === destination.id,
+  );
+  const feeBps = sourceDeployment
+    ? getOperationPlatformFeeBps(operation, samePair)
+    : 0;
+  const feeBreakdown = amountAtomic
+    ? grossUpForPlatformFee(BigInt(amountAtomic), feeBps)
+    : null;
+  const totalDebitAtomic = feeBreakdown ? feeBreakdown.grossAtomic : null;
+  const platformFeeAtomic = feeBreakdown ? feeBreakdown.feeAtomic : 0n;
+  const platformFeeDisplay =
+    sourceDeployment && platformFeeAtomic > 0n
+      ? formatAtomicToDisplay(platformFeeAtomic, sourceDeployment.decimals)
+      : null;
+  const totalDebitDisplay =
+    sourceDeployment && totalDebitAtomic !== null
+      ? formatAtomicToDisplay(totalDebitAtomic, sourceDeployment.decimals)
+      : null;
   const insufficientBalance = Boolean(
+    totalDebitAtomic !== null &&
+      (!balance || totalDebitAtomic > BigInt(balance.atomicBalance)),
+  );
+  const feeCausedInsufficientBalance = Boolean(
     amountAtomic &&
-      (!balance || BigInt(amountAtomic) > BigInt(balance.atomicBalance)),
+      balance &&
+      BigInt(amountAtomic) <= BigInt(balance.atomicBalance) &&
+      totalDebitAtomic !== null &&
+      totalDebitAtomic > BigInt(balance.atomicBalance),
   );
   const nativeGasDeployment = sourceDeployment
     ? MAINNET_SUPPORTED_DEPLOYMENTS.find(
@@ -517,16 +592,13 @@ function useOutgoingPreview(input: {
       ? checkNetworkGasBalance({
           networkKey: sourceDeployment.networkKey,
           sourceStandard: sourceDeployment.standard,
-          requestedAmountAtomic: amountAtomic ? BigInt(amountAtomic) : 1n,
+          requestedAmountAtomic: totalDebitAtomic ?? 1n,
           nativeBalanceAtomic: nativeGasRecord
             ? BigInt(nativeGasRecord.atomicBalance)
             : 0n,
         })
       : { ok: true as const };
   const insufficientGas = !gasCheck.ok;
-  const samePair = Boolean(
-    sourceDeployment && sourceDeployment.id === destination.id,
-  );
   const directTransfer =
     operation === "SEND" &&
     samePair &&
@@ -545,28 +617,31 @@ function useOutgoingPreview(input: {
       ? gasCheck.reason
       : !amountAtomic
         ? "Enter an amount greater than 0."
-        : insufficientBalance
-          ? `Insufficient ${sourceDeployment.symbol} balance (available: ${balance ? formatApproxDisplay(balance.displayBalance) : "0"} ${sourceDeployment.symbol}).`
-          : samePair
-            ? operation === "SEND"
-              ? !recipient
-                ? "Enter a valid recipient address to continue."
-                : null
-              : "Source and destination assets are the same — select a different destination asset."
-            : !recipient
+        : feeCausedInsufficientBalance
+          ? `Insufficient ${sourceDeployment.symbol} balance to cover amount + ${Number((feeBps / 100).toFixed(2))}% platform fee. Tap Max to adjust.`
+          : insufficientBalance
+            ? `Insufficient ${sourceDeployment.symbol} balance (available: ${balance ? formatApproxDisplay(balance.displayBalance) : "0"} ${sourceDeployment.symbol}).`
+            : samePair
               ? operation === "SEND"
-                ? "Enter a valid recipient address to fetch a quote."
-                : "Destination wallet address is unavailable."
-              : !refund
-                ? "Source refund address is unavailable."
-                : null;
+                ? !recipient
+                  ? "Enter a valid recipient address to continue."
+                  : null
+                : "Source and destination assets are the same — select a different destination asset."
+              : !recipient
+                ? operation === "SEND"
+                  ? "Enter a valid recipient address to fetch a quote."
+                  : "Destination wallet address is unavailable."
+                : !refund
+                  ? "Source refund address is unavailable."
+                  : null;
   const body =
     active &&
     sourceDeployment &&
     balance &&
     BigInt(balance.atomicBalance) > 0n &&
     amountAtomic &&
-    BigInt(amountAtomic) <= BigInt(balance.atomicBalance) &&
+    totalDebitAtomic !== null &&
+    totalDebitAtomic <= BigInt(balance.atomicBalance) &&
     !insufficientGas &&
     sourceDeployment.id !== destination.id &&
     recipient &&
@@ -590,6 +665,7 @@ function useOutgoingPreview(input: {
     : null;
   const preview = useQuotePreview<OneClickPreview>(previewKey);
   const { load: loadPreview } = preview;
+  const expectedQuoteAmountAtomic = totalDebitAtomic?.toString() ?? amountAtomic;
   const review = useCallback(() => {
     if (!body) return;
     void loadPreview(async (signal) => {
@@ -601,7 +677,7 @@ function useOutgoingPreview(input: {
         quote.identity.sourceNetwork !== sourceDeployment?.networkKey ||
         quote.identity.destinationNetwork !== destination.networkKey ||
         quote.identity.swapType !== "EXACT_INPUT" ||
-        quote.identity.amountAtomic !== amountAtomic ||
+        quote.identity.amountAtomic !== expectedQuoteAmountAtomic ||
         quote.identity.recipient !== recipient ||
         quote.identity.refundTo !== refund
       ) {
@@ -611,7 +687,7 @@ function useOutgoingPreview(input: {
     });
   }, [
     accountId,
-    amountAtomic,
+    expectedQuoteAmountAtomic,
     body,
     destination.id,
     destination.networkKey,
@@ -638,15 +714,26 @@ function useOutgoingPreview(input: {
     samePair,
     directTransfer,
     unavailableReason,
+    feeBps,
+    platformFeeDisplay,
+    totalDebitDisplay,
   };
 }
 
 function OutgoingQuoteDetails({
   preview,
   symbol,
+  destPriceUsd,
+  sourceSymbol,
+  sourcePriceUsd,
+  receiveLabel = "Recipient receives",
 }: {
   preview: ReturnType<typeof useOutgoingPreview>;
   symbol: string;
+  destPriceUsd?: number | null;
+  sourceSymbol?: string;
+  sourcePriceUsd?: number | null;
+  receiveLabel?: string;
 }) {
   const {
     quote,
@@ -656,7 +743,28 @@ function OutgoingQuoteDetails({
     unavailableReason,
     canReview,
     review,
+    feeBps,
+    platformFeeDisplay,
   } = preview;
+  const quoteReceiveUsd = quote
+    ? computeDisplayUsd(
+        quote.recipientDisplayAmount,
+        destPriceUsd,
+        quote.recipientAmountUsd,
+      )
+    : null;
+  const directReceiveUsd = directTransfer
+    ? computeDisplayUsd(directTransfer.displayAmount, destPriceUsd)
+    : null;
+  const effectiveFeeBps = quote?.fees?.appFeeBps ?? feeBps;
+  const effectiveFeeDisplay =
+    quote?.fees?.platformFeeDisplay ?? platformFeeDisplay;
+  const effectiveFeeSymbol =
+    quote?.fees?.platformFeeAssetSymbol ?? sourceSymbol ?? "";
+  const effectiveFeeUsd = computeDisplayUsd(
+    effectiveFeeDisplay,
+    sourcePriceUsd,
+  );
   return (
     <div
       className="rounded-2xl border border-neutral-200/60 dark:border-white/[0.08] bg-neutral-50/60 dark:bg-white/[0.03] px-4 py-3 text-left"
@@ -664,51 +772,78 @@ function OutgoingQuoteDetails({
     >
       <div className="flex items-start justify-between gap-3">
         {quote ? (
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
-                Est. receive
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 pt-0.5">
+                {receiveLabel}
               </span>
-              <span className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
-                {formatApproxDisplay(quote.recipientDisplayAmount)} {symbol}
-              </span>
+              <div className="text-right">
+                <div className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
+                  {formatApproxDisplay(quote.recipientDisplayAmount)} {symbol}
+                </div>
+                {quoteReceiveUsd && (
+                  <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
+                    ≈ {quoteReceiveUsd} USD
+                  </div>
+                )}
+              </div>
             </div>
+            {effectiveFeeBps > 0 && (
+              <div className="flex items-baseline justify-between gap-2 text-[11px] text-neutral-500 dark:text-neutral-400 pt-1 border-t border-neutral-200/60 dark:border-white/[0.06]">
+                <span>
+                  Platform fee ({Number((effectiveFeeBps / 100).toFixed(2))}%)
+                </span>
+                <span className="text-right font-mono font-medium text-neutral-700 dark:text-neutral-300 tabular-nums">
+                  {effectiveFeeDisplay
+                    ? `${formatApproxDisplay(effectiveFeeDisplay)} ${effectiveFeeSymbol}`
+                    : `${Number((effectiveFeeBps / 100).toFixed(2))}%`}
+                  {effectiveFeeUsd ? ` (≈ ${effectiveFeeUsd})` : ""}
+                  <span className="font-sans text-neutral-500 dark:text-neutral-400">
+                    {" "}
+                    · from balance
+                  </span>
+                </span>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 dark:text-neutral-400">
               <span className="font-medium text-neutral-700 dark:text-neutral-300">
                 {quote.rateDescription}
               </span>
               {quote.minimumRecipientDisplayAmount && (
                 <span>
-                  Min {formatApproxDisplay(quote.minimumRecipientDisplayAmount)} {symbol}
+                  Min {formatApproxDisplay(quote.minimumRecipientDisplayAmount)}{" "}
+                  {symbol}
                 </span>
               )}
               {quote.estimatedTimeSeconds !== null && (
                 <span>~{quote.estimatedTimeSeconds}s</span>
               )}
-              {(quote.fees?.appFeeBps ?? 0) > 0 && (
-                <span>
-                  FLOW fee{" "}
-                  {Number(((quote.fees?.appFeeBps ?? 0) / 100).toFixed(2))}%
-                  (included)
-                </span>
-              )}
             </div>
           </div>
         ) : directTransfer ? (
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 pt-0.5">
                 Recipient receives
               </span>
-              <span className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
-                {formatApproxDisplay(directTransfer.displayAmount)} {symbol}
-              </span>
+              <div className="text-right">
+                <div className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
+                  {formatApproxDisplay(directTransfer.displayAmount)} {symbol}
+                </div>
+                {directReceiveUsd && (
+                  <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
+                    ≈ {directReceiveUsd} USD
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 dark:text-neutral-400">
               <span className="font-medium text-neutral-700 dark:text-neutral-300">
                 Direct 1:1 transfer on {directTransfer.networkName}
               </span>
-              <span>No swap fee</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                Platform fee: Free
+              </span>
             </div>
           </div>
         ) : (
@@ -1439,7 +1574,10 @@ export function PortfolioView({
   const sendSourceBalance = sendSource?.displayBalance;
   const convertSourceBalance = convertSource?.displayBalance;
 
-  const getMaxAtomicForSource = (source: typeof sendSource): bigint => {
+  const getMaxAtomicForSource = (
+    source: typeof sendSource,
+    feeBps = 0,
+  ): bigint => {
     if (!source) return 0n;
     try {
       const atomic = source.balanceRecord
@@ -1448,11 +1586,12 @@ export function PortfolioView({
             source.displayBalance,
             source.deployment.decimals,
           );
-      return computeMaxSendableAtomic({
+      const afterGas = computeMaxSendableAtomic({
         networkKey: source.deployment.networkKey,
         sourceStandard: source.deployment.standard,
         balanceAtomic: atomic,
       });
+      return maxPrincipalBeforePlatformFee(afterGas, feeBps);
     } catch {
       return 0n;
     }
@@ -1460,10 +1599,11 @@ export function PortfolioView({
 
   const getMaxAmountForSource = (
     source: typeof sendSource,
+    feeBps = 0,
   ): string => {
     if (!source?.displayBalance) return "";
     try {
-      const maxAtomic = getMaxAtomicForSource(source);
+      const maxAtomic = getMaxAtomicForSource(source, feeBps);
       const exactMax = formatAtomicToDisplay(
         maxAtomic,
         source.deployment.decimals,
@@ -1474,18 +1614,35 @@ export function PortfolioView({
     }
   };
 
-  const sendSourcePriceUsd = useMemo(() => {
-    if (!sendSource) return null;
-    const p = tokenPrices[sendSource.deployment.id];
-    if (typeof p === "number" && Number.isFinite(p) && p > 0) return p;
-    if (
-      sendSource.deployment.symbol === "USDC" ||
-      sendSource.deployment.symbol === "USDT"
-    ) {
-      return 1;
-    }
-    return null;
-  }, [sendSource, tokenPrices]);
+  const resolveTokenPriceUsd = useCallback(
+    (deployment: CatalogTokenDeployment | undefined): number | null => {
+      if (!deployment) return null;
+      const p = tokenPrices[deployment.id];
+      if (typeof p === "number" && Number.isFinite(p) && p > 0) return p;
+      if (deployment.symbol === "USDC" || deployment.symbol === "USDT") {
+        return 1;
+      }
+      return null;
+    },
+    [tokenPrices],
+  );
+
+  const sendSourcePriceUsd = useMemo(
+    () => resolveTokenPriceUsd(sendSource?.deployment),
+    [resolveTokenPriceUsd, sendSource],
+  );
+
+  const sendDestPriceUsd = useMemo(
+    () => resolveTokenPriceUsd(sendDestDeployment),
+    [resolveTokenPriceUsd, sendDestDeployment],
+  );
+
+  const sendFeeBps = sendSource
+    ? getOperationPlatformFeeBps(
+        "SEND",
+        sendSource.deployment.id === sendDestDeployment.id,
+      )
+    : 0;
 
   const handleSendUsdChange = (raw: string) => {
     const cleaned = sanitizeNonNegativeDecimal(raw);
@@ -1507,7 +1664,7 @@ export function PortfolioView({
   };
 
   const handleSendMaxClick = () => {
-    const maxAsset = getMaxAmountForSource(sendSource);
+    const maxAsset = getMaxAmountForSource(sendSource, sendFeeBps);
     setSendAmount(maxAsset);
     if (sendInputMode === "USD" && sendSourcePriceUsd) {
       const maxNum = Number.parseFloat(maxAsset);
@@ -1556,6 +1713,23 @@ export function PortfolioView({
     }
     return selected;
   }, [convertDestDeploymentId, convertSource]);
+
+  const convertSourcePriceUsd = useMemo(
+    () => resolveTokenPriceUsd(convertSource?.deployment),
+    [resolveTokenPriceUsd, convertSource],
+  );
+
+  const convertDestPriceUsd = useMemo(
+    () => resolveTokenPriceUsd(convertDestDeployment),
+    [resolveTokenPriceUsd, convertDestDeployment],
+  );
+
+  const convertFeeBps = convertSource
+    ? getOperationPlatformFeeBps(
+        "CONVERT",
+        convertSource.deployment.id === convertDestDeployment.id,
+      )
+    : 0;
 
   const convertDestAddress =
     getMainnetWalletAddress(wallet, convertDestDeployment.networkKey) ?? "";
@@ -3745,6 +3919,10 @@ export function PortfolioView({
                       <OutgoingQuoteDetails
                         preview={sendPreview}
                         symbol={sendDestDeployment.symbol}
+                        destPriceUsd={sendDestPriceUsd}
+                        sourceSymbol={sendSource?.deployment.symbol}
+                        sourcePriceUsd={sendSourcePriceUsd}
+                        receiveLabel="Recipient receives"
                       />
 
                       <div className="flex items-center gap-2.5 pt-1">
@@ -3790,28 +3968,128 @@ export function PortfolioView({
                       </div>
 
                       <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] p-4 space-y-3 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-neutral-500 dark:text-neutral-400">
-                            You send
-                          </span>
-                          <span className="font-mono font-bold text-neutral-950 dark:text-white">
-                            {sendAmount} {sendSource?.deployment.symbol} ({sendSource?.deployment.networkName})
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-neutral-500 dark:text-neutral-400">
-                            Recipient receives
-                          </span>
-                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                            {sendSource?.deployment.id === sendDestDeployment.id
-                              ? sendAmount
-                              : formatApproxDisplay(
-                                  sendPreview.quote?.recipientDisplayAmount ??
-                                    sendAmount,
-                                )}{" "}
-                            {sendDestDeployment.symbol} ({sendDestDeployment.networkName})
-                          </span>
-                        </div>
+                        {(() => {
+                          const isSameAsset =
+                            sendSource?.deployment.id === sendDestDeployment.id;
+                          const sendUsd = computeDisplayUsd(
+                            sendAmount,
+                            sendSourcePriceUsd,
+                          );
+                          const receiveDisplay = isSameAsset
+                            ? sendAmount
+                            : (sendPreview.quote?.recipientDisplayAmount ??
+                              sendAmount);
+                          const receiveUsd = computeDisplayUsd(
+                            receiveDisplay,
+                            sendDestPriceUsd,
+                            sendPreview.quote?.recipientAmountUsd,
+                          );
+                          const feeDisplay =
+                            sendPreview.quote?.fees?.platformFeeDisplay ??
+                            sendPreview.platformFeeDisplay;
+                          const feeUsd = computeDisplayUsd(
+                            feeDisplay,
+                            sendSourcePriceUsd,
+                          );
+                          const totalDebitDisplay =
+                            sendPreview.quote?.fees?.totalSourceDisplay ??
+                            sendPreview.totalDebitDisplay;
+                          const totalDebitUsd = computeDisplayUsd(
+                            totalDebitDisplay,
+                            sendSourcePriceUsd,
+                          );
+                          return (
+                            <>
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-neutral-500 dark:text-neutral-400">
+                                  You send
+                                </span>
+                                <div className="text-right">
+                                  <div className="font-mono font-bold text-neutral-950 dark:text-white">
+                                    {sendAmount} {sendSource?.deployment.symbol}{" "}
+                                    ({sendSource?.deployment.networkName})
+                                  </div>
+                                  {sendUsd && (
+                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
+                                      ≈ {sendUsd} USD
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-neutral-500 dark:text-neutral-400">
+                                  Platform fee
+                                  {!isSameAsset && sendFeeBps > 0
+                                    ? ` (${Number((sendFeeBps / 100).toFixed(2))}%)`
+                                    : ""}
+                                </span>
+                                {isSameAsset || sendFeeBps === 0 ? (
+                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                    Free (0%)
+                                  </span>
+                                ) : (
+                                  <div className="text-right">
+                                    <div className="font-mono font-semibold text-neutral-900 dark:text-neutral-100">
+                                      {feeDisplay
+                                        ? `${formatApproxDisplay(feeDisplay)} ${sendSource?.deployment.symbol ?? ""}`
+                                        : `${Number((sendFeeBps / 100).toFixed(2))}%`}
+                                    </div>
+                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
+                                      {feeUsd ? `≈ ${feeUsd} · ` : ""}
+                                      charged from balance
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {!isSameAsset &&
+                                sendFeeBps > 0 &&
+                                totalDebitDisplay && (
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-neutral-500 dark:text-neutral-400">
+                                      Total from balance
+                                    </span>
+                                    <div className="text-right">
+                                      <div className="font-mono font-semibold text-neutral-900 dark:text-neutral-200">
+                                        {formatApproxDisplay(totalDebitDisplay)}{" "}
+                                        {sendSource?.deployment.symbol}
+                                      </div>
+                                      {totalDebitUsd && (
+                                        <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
+                                          ≈ {totalDebitUsd} USD
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                              <div className="flex items-start justify-between gap-2 pt-1 border-t border-neutral-200/70 dark:border-white/[0.06]">
+                                <span className="text-neutral-500 dark:text-neutral-400">
+                                  Recipient receives
+                                </span>
+                                <div className="text-right">
+                                  <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                    {isSameAsset
+                                      ? sendAmount
+                                      : formatApproxDisplay(
+                                          sendPreview.quote
+                                            ?.recipientDisplayAmount ??
+                                            sendAmount,
+                                        )}{" "}
+                                    {sendDestDeployment.symbol} (
+                                    {sendDestDeployment.networkName})
+                                  </div>
+                                  {receiveUsd && (
+                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
+                                      ≈ {receiveUsd} USD
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-neutral-500 dark:text-neutral-400">
                             Recipient
@@ -3841,6 +4119,10 @@ export function PortfolioView({
                       <OutgoingQuoteDetails
                         preview={sendPreview}
                         symbol={sendDestDeployment.symbol}
+                        destPriceUsd={sendDestPriceUsd}
+                        sourceSymbol={sendSource?.deployment.symbol}
+                        sourcePriceUsd={sendSourcePriceUsd}
+                        receiveLabel="Recipient receives"
                       />
 
                       <SlideToPay
@@ -3960,7 +4242,10 @@ export function PortfolioView({
                           disabled={!convertSourceBalance}
                           onClick={() =>
                             setConvertAmount(
-                              getMaxAmountForSource(convertSource),
+                              getMaxAmountForSource(
+                                convertSource,
+                                convertFeeBps,
+                              ),
                             )
                           }
                           className="text-xs font-bold text-neutral-950 dark:text-white hover:underline cursor-pointer"
@@ -4033,6 +4318,10 @@ export function PortfolioView({
                   <OutgoingQuoteDetails
                     preview={convertPreview}
                     symbol={convertDestDeployment.symbol}
+                    destPriceUsd={convertDestPriceUsd}
+                    sourceSymbol={convertSource?.deployment.symbol}
+                    sourcePriceUsd={convertSourcePriceUsd}
+                    receiveLabel="Est. receive"
                   />
 
                   <div className="pt-2">

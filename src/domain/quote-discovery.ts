@@ -191,6 +191,13 @@ export interface IndicativeQuoteFeeBreakdown {
   readonly networkGasEstimateDisplay?: string | null;
   readonly networkGasAssetSymbol?: string | null;
   readonly appFeeBps?: number | null;
+  readonly platformFeeAtomic?: string | null;
+  readonly platformFeeDisplay?: string | null;
+  readonly platformFeeAssetSymbol?: string | null;
+  readonly principalSourceAtomic?: string | null;
+  readonly principalSourceDisplay?: string | null;
+  readonly totalSourceAtomic?: string | null;
+  readonly totalSourceDisplay?: string | null;
   readonly isEstimate: boolean;
   readonly description: string;
 }

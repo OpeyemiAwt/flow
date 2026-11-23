@@ -16,6 +16,7 @@ import {
   IconPlus,
   IconSwap,
 } from "./icons.tsx";
+import { EARN_DEPOSIT_FEE_BPS } from "../domain/platform-fees.ts";
 import type { CatalogTokenDeployment } from "../domain/supported-assets-catalog.ts";
 import type { NavTabId } from "./floating-nav.tsx";
 import { PaymentTimelineTracker } from "./payment-timeline-tracker.tsx";
@@ -652,6 +653,13 @@ export function EarnView({
       : availableStablesNum;
   }, [activeModalProtocol, availableNearNum, availableStablesNum]);
 
+  // Max depositable principal after reserving the 0.15% platform fee from wallet balance
+  const modalMaxDeposit = useMemo(() => {
+    if (modalAvailable <= 0) return 0;
+    const rawMax = (modalAvailable * (10_000 - EARN_DEPOSIT_FEE_BPS)) / 10_000;
+    return Math.max(0, Math.floor(rawMax * 1e4) / 1e4);
+  }, [modalAvailable]);
+
   // Projected return in modal
   const inputNum = parseFloat(amountInput.replace(/,/g, "")) || 0;
   const projectedYearlyYield = activeModalProtocol
@@ -1046,7 +1054,7 @@ export function EarnView({
                         type="button"
                         onClick={() => {
                           if (modalAction === "DEPOSIT") {
-                            setAmountInput(modalAvailable.toString());
+                            setAmountInput(modalMaxDeposit.toString());
                           } else {
                             const maxVal =
                               positions[activeModalProtocol.protocolKey]?.depositedAmount || 0;
@@ -1092,7 +1100,7 @@ export function EarnView({
                     {[0.25, 0.5, 0.75, 1].map((pct) => {
                       const baseVal =
                         modalAction === "DEPOSIT"
-                          ? modalAvailable
+                          ? modalMaxDeposit
                           : positions[activeModalProtocol.protocolKey]?.depositedAmount || 0;
                       return (
                         <button
@@ -1117,24 +1125,26 @@ export function EarnView({
                       {(() => {
                         const parsed = Number.parseFloat(amountInput);
                         const hasAmt = Number.isFinite(parsed) && parsed > 0;
-                        const feeVal = hasAmt ? parsed * 0.0015 : 0;
-                        const netVal = hasAmt ? parsed - feeVal : 0;
-                        const dp = activeModalProtocol.assetSymbol === "USDC" ? 4 : 4;
+                        const grossVal = hasAmt
+                          ? (parsed * 10_000) / (10_000 - EARN_DEPOSIT_FEE_BPS)
+                          : 0;
+                        const feeVal = hasAmt ? grossVal - parsed : 0;
+                        const dp = 4;
                         return (
                           <div className="rounded-xl bg-neutral-50 dark:bg-white/[0.03] border border-neutral-200/70 dark:border-white/[0.06] px-3 py-2 text-[11px] space-y-1">
                             <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
                               <span>FLOW platform fee (0.15%)</span>
                               <span className="font-mono font-medium text-neutral-700 dark:text-neutral-300">
                                 {hasAmt
-                                  ? `${feeVal.toFixed(dp)} ${activeModalProtocol.assetSymbol}`
-                                  : "0.15%"}
+                                  ? `${feeVal.toFixed(dp)} ${activeModalProtocol.assetSymbol} · from balance`
+                                  : "0.15% from balance"}
                               </span>
                             </div>
                             {hasAmt && (
                               <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-300 font-medium">
-                                <span>Net deposited</span>
+                                <span>Total from balance</span>
                                 <span className="font-mono font-semibold text-neutral-950 dark:text-white">
-                                  {netVal.toFixed(dp)} {activeModalProtocol.assetSymbol}
+                                  {grossVal.toFixed(dp)} {activeModalProtocol.assetSymbol}
                                 </span>
                               </div>
                             )}
@@ -1209,7 +1219,10 @@ export function EarnView({
                   type="button"
                   disabled={
                     isSubmitting ||
-                    (modalAction === "DEPOSIT" && (modalAvailable === 0 || inputNum > modalAvailable || inputNum <= 0)) ||
+                    (modalAction === "DEPOSIT" &&
+                      (modalMaxDeposit <= 0 ||
+                        inputNum > modalMaxDeposit ||
+                        inputNum <= 0)) ||
                     (modalAction === "WITHDRAW" && inputNum <= 0)
                   }
                   onClick={() =>
@@ -1224,10 +1237,10 @@ export function EarnView({
                       <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                       <span>Processing {modalAction === "DEPOSIT" ? "Deposit" : "Withdrawal"}...</span>
                     </>
-                  ) : modalAction === "DEPOSIT" && modalAvailable === 0 ? (
+                  ) : modalAction === "DEPOSIT" && modalMaxDeposit <= 0 ? (
                     <span>Insufficient {activeModalProtocol.assetSymbol} Balance</span>
-                  ) : modalAction === "DEPOSIT" && inputNum > modalAvailable ? (
-                    <span>Exceeds Available Balance</span>
+                  ) : modalAction === "DEPOSIT" && inputNum > modalMaxDeposit ? (
+                    <span>Exceeds Available Balance (incl. 0.15% fee)</span>
                   ) : (
                     <span>
                       Confirm {modalAction === "DEPOSIT" ? "Deposit" : "Withdrawal"}
