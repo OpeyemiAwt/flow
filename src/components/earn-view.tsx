@@ -34,6 +34,7 @@ export interface EarnViewProps {
   onSelectConvert: (sourceDeploymentId?: string, destDeploymentId?: string) => void;
   onSelectDeposit: (deploymentId?: string) => void;
   onSyncPortfolio?: () => void;
+  onSettled?: () => void;
   pushToast: (toast: {
     title: string;
     description?: string;
@@ -155,6 +156,7 @@ export function EarnView({
   onSelectConvert,
   onSelectDeposit,
   onSyncPortfolio,
+  onSettled,
   pushToast,
 }: EarnViewProps) {
   const [mounted, setMounted] = useState(false);
@@ -342,13 +344,19 @@ export function EarnView({
       lastSettledTrackedIdRef.current = trackedJob.publicId;
       void fetchEarnPositions();
       onSyncPortfolio?.();
-      const followUp = setTimeout(() => {
+      const navTimer = setTimeout(() => {
         void fetchEarnPositions();
-        onSyncPortfolio?.();
-      }, 2500);
-      return () => clearTimeout(followUp);
+        onSettled?.();
+      }, 1800);
+      return () => clearTimeout(navTimer);
     }
-  }, [trackedJob?.publicId, trackedJob?.status, fetchEarnPositions, onSyncPortfolio]);
+  }, [
+    trackedJob?.publicId,
+    trackedJob?.status,
+    fetchEarnPositions,
+    onSyncPortfolio,
+    onSettled,
+  ]);
 
   useEffect(() => {
     if (activeEarnJobs.length === 0 && (!trackedJobId || trackedJobIsTerminal)) {

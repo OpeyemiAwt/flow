@@ -2055,30 +2055,69 @@ export function PortfolioView({
     nearAddr,
   ]);
 
+  const postSettlementTimersRef = useRef<number[]>([]);
+  useEffect(() => {
+    return () => {
+      for (const id of postSettlementTimersRef.current) {
+        window.clearTimeout(id);
+      }
+      postSettlementTimersRef.current = [];
+    };
+  }, []);
+
   const triggerPostSettlementSync = useCallback(() => {
-    void refreshTokenPrices();
-    void refreshActivities();
-    void refreshLedgerMovements();
-    void pollNotifications();
-    void send<SerializedAccountPortfolio>(
-      `/api/accounts/${accountId}/portfolio/refresh`,
-      {},
-      "POST",
-    )
-      .then((p) => setPortfolio(p))
-      .catch(() => {});
-    window.setTimeout(() => {
-      void send<SerializedAccountPortfolio>(
-        `/api/accounts/${accountId}/portfolio`,
-        {},
-        "GET",
-      )
-        .then((p) => setPortfolio(p))
-        .catch(() => {});
+    for (const id of postSettlementTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    postSettlementTimersRef.current = [];
+
+    const pullPortfolioAndFeeds = (requestFreshRpc = false) => {
+      if (requestFreshRpc) {
+        void send<SerializedAccountPortfolio>(
+          `/api/accounts/${accountId}/portfolio/refresh`,
+          {},
+          "POST",
+        )
+          .then((p) => setPortfolio(p))
+          .catch(() => {
+            void send<SerializedAccountPortfolio>(
+              `/api/accounts/${accountId}/portfolio`,
+              {},
+              "GET",
+            )
+              .then((p) => setPortfolio(p))
+              .catch(() => {});
+          });
+      } else {
+        void send<SerializedAccountPortfolio>(
+          `/api/accounts/${accountId}/portfolio`,
+          {},
+          "GET",
+        )
+          .then((p) => setPortfolio(p))
+          .catch(() => {});
+      }
+      void refreshTokenPrices();
       void refreshActivities();
       void refreshLedgerMovements();
       void pollNotifications();
-    }, 2500);
+    };
+
+    // Immediate RPC refresh request, then staggered follow-up reads so the UI
+    // reflects the updated on-chain balance as soon as finality + indexer complete.
+    pullPortfolioAndFeeds(true);
+    for (const [delayMs, triggerRpc] of [
+      [1500, false],
+      [4000, false],
+      [8000, true],
+      [14000, false],
+    ] as const) {
+      const t = window.setTimeout(
+        () => pullPortfolioAndFeeds(triggerRpc),
+        delayMs,
+      );
+      postSettlementTimersRef.current.push(t);
+    }
   }, [
     accountId,
     pollNotifications,
@@ -2087,14 +2126,43 @@ export function PortfolioView({
     refreshTokenPrices,
   ]);
 
+  // Keep portfolio balances fresh in the background while the app tab is visible.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void send<SerializedAccountPortfolio>(
+        `/api/accounts/${accountId}/portfolio`,
+        {},
+        "GET",
+      )
+        .then((p) => setPortfolio(p))
+        .catch(() => {});
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [accountId]);
+
+  const broadcastSyncTriggeredRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeOutgoingTransfer) return;
+    if (
+      ["CONFIRMING", "PROVIDER_SETTLING"].includes(
+        activeOutgoingTransfer.status,
+      ) &&
+      broadcastSyncTriggeredRef.current !== activeOutgoingTransfer.id
+    ) {
+      broadcastSyncTriggeredRef.current = activeOutgoingTransfer.id;
+      triggerPostSettlementSync();
+    }
     if (activeOutgoingTransfer.status === "SETTLED") {
       const doneTimer = window.setTimeout(() => {
         setActiveOutgoingTransfer(null);
+        setSendStep(1);
         setSendAmount("");
+        setSendMemo("");
+        setSendRecipientAddress("");
         setConvertAmount("");
-      }, 2200);
+        changeTab("dashboard");
+      }, 1800);
       return () => window.clearTimeout(doneTimer);
     }
     if (
@@ -2125,7 +2193,7 @@ export function PortfolioView({
       }
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [accountId, activeOutgoingTransfer, triggerPostSettlementSync]);
+  }, [accountId, activeOutgoingTransfer, changeTab, triggerPostSettlementSync]);
 
   useEffect(() => {
     if (!addMoneyIntent?.id) return;
@@ -2216,11 +2284,21 @@ export function PortfolioView({
   }, [addMoneyIntent?.depositDeadline]);
 
   useEffect(() => {
+    if (!addMoneyIntent) return;
+    if (addMoneyIntent.status === "SETTLED") {
+      const doneTimer = window.setTimeout(() => {
+        try {
+          window.localStorage.removeItem(addMoneyStorageKey);
+        } catch {
+          // Ignore storage errors
+        }
+        setAddMoneyIntent(null);
+        changeTab("dashboard");
+      }, 1800);
+      return () => window.clearTimeout(doneTimer);
+    }
     if (
-      !addMoneyIntent ||
-      ["SETTLED", "FAILED", "REFUNDED", "EXPIRED"].includes(
-        addMoneyIntent.status,
-      )
+      ["FAILED", "REFUNDED", "EXPIRED"].includes(addMoneyIntent.status)
     ) {
       return;
     }
@@ -2245,7 +2323,7 @@ export function PortfolioView({
       }
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [accountId, addMoneyIntent]);
+  }, [accountId, addMoneyIntent, addMoneyStorageKey, changeTab, triggerPostSettlementSync]);
 
   const executeAuthorizedTransfer = async (
     kind: "SEND" | "CONVERT",
@@ -5144,21 +5222,10 @@ export function PortfolioView({
               heldAssets={heldAssets}
               hideBalance={hideBalance}
               nearPriceUsd={tokenPrices["near-mainnet:NEAR"] ?? 5.25}
-              onSyncPortfolio={() => {
-                void send<SerializedAccountPortfolio>(
-                  `/api/accounts/${accountId}/portfolio/refresh`,
-                  {},
-                  "POST",
-                )
-                  .then((res) => setPortfolio(res))
-                  .catch(() => {});
-                void send<unknown>(
-                  `/api/accounts/${accountId}/activities/sync`,
-                  {},
-                  "POST",
-                )
-                  .then(() => refreshActivities())
-                  .catch(() => {});
+              onSyncPortfolio={triggerPostSettlementSync}
+              onSettled={() => {
+                triggerPostSettlementSync();
+                changeTab("dashboard");
               }}
               onNavigateToTab={changeTab}
               onSelectConvert={(sourceId, destId) => {

@@ -622,7 +622,12 @@ export async function upsertWalletBalance(
   }
   if (tokenAccount !== null && input.syncStatus === "SYNCED") {
     await db.$executeRaw`
-      DELETE FROM flow.wallet_balances
+      UPDATE flow.wallet_balances
+      SET
+        sync_status = 'SYNCED',
+        last_error = NULL,
+        atomic_balance = 0,
+        updated_at = CURRENT_TIMESTAMP
       WHERE wallet_id = ${input.walletId}::uuid
         AND network_asset_id = ${input.networkAssetId}::uuid
         AND token_account_address IS NULL
