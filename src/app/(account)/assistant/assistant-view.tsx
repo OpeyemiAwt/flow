@@ -428,26 +428,56 @@ export function AssistantView({
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             {hasMessages && (
               <button
                 type="button"
+                aria-label="New chat"
+                title="New chat"
                 onClick={() => {
                   setMessages([]);
                   setCardErrors({});
                   setCreatedLinks({});
                   setLiveTransfers({});
                 }}
-                className="px-3.5 py-1.5 rounded-full text-xs font-semibold border border-neutral-200 dark:border-white/[0.1] bg-white dark:bg-[#141414] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 dark:border-white/[0.1] bg-white dark:bg-[#141414] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
               >
-                New chat
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
               </button>
             )}
             <Link
               href={backHref}
-              className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-neutral-100 hover:bg-neutral-200/80 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] transition-colors"
+              aria-label={t.backToWallet}
+              title={t.backToWallet}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200/80 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] text-neutral-800 dark:text-neutral-100 transition-colors"
             >
-              {t.backToWallet}
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M19 12H5" />
+                <path d="m12 19-7-7 7-7" />
+              </svg>
             </Link>
             <UserAvatar
               name={userName || userEmail}
