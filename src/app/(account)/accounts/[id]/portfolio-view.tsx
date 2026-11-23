@@ -3651,21 +3651,23 @@ export function PortfolioView({
                                     ? `Enter in ${sendSource?.deployment.symbol ?? "asset"}`
                                     : "Enter in USD"
                               }
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.1] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="inline-flex items-center justify-center p-1 text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               <svg
-                                width="15"
-                                height="15"
+                                width="18"
+                                height="18"
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
-                                strokeWidth="2.2"
+                                strokeWidth="2"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 aria-hidden="true"
                               >
-                                <path d="m7 15 5 5 5-5" />
-                                <path d="m7 9 5-5 5 5" />
+                                <path d="M8 19V5" />
+                                <path d="m4 9 4-4 4 4" />
+                                <path d="M16 5v14" />
+                                <path d="m12 15 4 4 4-4" />
                               </svg>
                             </button>
 
