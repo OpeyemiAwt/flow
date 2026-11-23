@@ -683,7 +683,7 @@ export function EarnView({
           Earning
         </span>
 
-        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-neutral-950 dark:text-white font-sans select-none tabular-nums">
+        <h1 className="text-5xl sm:text-6xl font-medium tracking-tight text-neutral-950 dark:text-white font-sans select-none tabular-nums">
           {hideBalance ? (
             "$••••••"
           ) : (

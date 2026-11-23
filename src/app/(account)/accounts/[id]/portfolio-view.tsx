@@ -2880,7 +2880,7 @@ export function PortfolioView({
             >
               <div className="inline-flex items-center justify-center gap-3">
                 {hideBalance ? (
-                  <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-neutral-950 dark:text-white select-none">
+                  <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-medium tracking-tight text-neutral-950 dark:text-white select-none">
                     $••••••
                   </span>
                 ) : totalBalanceUsd === null ? (
@@ -2889,7 +2889,7 @@ export function PortfolioView({
                     className="inline-block h-12 sm:h-14 lg:h-16 w-48 sm:w-64 rounded-2xl bg-neutral-200/80 dark:bg-white/[0.08] animate-pulse"
                   />
                 ) : (
-                  <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-neutral-950 dark:text-white select-none">
+                  <span className="font-display text-5xl sm:text-6xl lg:text-7xl font-medium tracking-tight text-neutral-950 dark:text-white select-none">
                     {totalBalanceUsd.startsWith("$") &&
                     Number.isFinite(
                       Number(totalBalanceUsd.replace(/[$,]/g, "")),

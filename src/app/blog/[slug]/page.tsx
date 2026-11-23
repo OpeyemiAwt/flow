@@ -37,9 +37,35 @@ export async function generateMetadata({
   if (!post) {
     return { title: "Post not found · FLOW Blog" };
   }
+  const canonicalUrl = `https://flow.devhub.forum/blog/${post.slug}`;
+  const ogImageUrl = `https://flow.devhub.forum${post.ogImage}`;
   return {
     title: `${post.title} · FLOW Blog`,
     description: post.summary,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: post.title,
+      description: post.summary,
+      url: canonicalUrl,
+      type: "article",
+      publishedTime: `${post.publishedAt}T00:00:00Z`,
+      images: [
+        {
+          url: ogImageUrl,
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: post.summary,
+      images: [ogImageUrl],
+    },
   };
 }
 
@@ -135,6 +161,17 @@ export default async function BlogPostPage({
             </div>
           </div>
         </header>
+
+        {/* Preview Banner */}
+        <figure className="overflow-hidden rounded-[24px] border border-[#E6E2DA] dark:border-white/[0.1] bg-[#030305] shadow-sm">
+          <img
+            src={post.ogImage}
+            alt={post.title}
+            width={1200}
+            height={630}
+            className="w-full h-auto block object-cover"
+          />
+        </figure>
 
         {/* Key Highlights Card */}
         <section

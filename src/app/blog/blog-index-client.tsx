@@ -133,60 +133,73 @@ export function BlogIndexClient({ posts }: { posts: readonly BlogPost[] }) {
           href={`/blog/${featuredPost.slug}`}
           className="group block overflow-hidden rounded-[28px] border border-[#E6E2DA] dark:border-white/[0.08] bg-white dark:bg-[#141414] shadow-xs hover:shadow-md hover:border-[#0B0B0B]/25 dark:hover:border-white/20 transition-all"
         >
-          <div
-            className={`bg-gradient-to-br ${featuredPost.accent} p-6 sm:p-9 space-y-6`}
-          >
-            <div className="flex flex-wrap items-center gap-2.5 text-xs">
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-1 font-semibold ${categoryBadgeClass(featuredPost.category)}`}
-              >
-                {featuredPost.category}
-              </span>
-              <span className="text-neutral-500 dark:text-neutral-400">
-                {formatBlogDate(featuredPost.publishedAt)}
-              </span>
-              <span className="text-neutral-300 dark:text-neutral-700">·</span>
-              <span className="text-neutral-500 dark:text-neutral-400">
-                {featuredPost.readTime}
-              </span>
-              <span className="ml-auto hidden sm:inline-flex items-center rounded-full bg-[#0B0B0B]/5 dark:bg-white/[0.07] px-2.5 py-0.5 text-[11px] font-semibold text-neutral-700 dark:text-neutral-200">
-                Featured MVP Launch
-              </span>
+          <div className="grid grid-cols-1 lg:grid-cols-12">
+            <div className="lg:col-span-5 bg-[#030305] overflow-hidden">
+              <img
+                src={featuredPost.ogImage}
+                alt={featuredPost.title}
+                width={1200}
+                height={630}
+                className="h-full w-full aspect-[1200/630] lg:aspect-auto object-cover group-hover:scale-[1.02] transition-transform duration-500"
+              />
             </div>
-
-            <div className="space-y-3 max-w-3xl">
-              <h2 className="font-serif text-2xl sm:text-4xl font-normal tracking-tight text-[#0B0B0B] dark:text-white group-hover:text-[#FF1A1A] dark:group-hover:text-[#FF5C5C] transition-colors leading-[1.15]">
-                {featuredPost.title}
-              </h2>
-              <p className="text-sm sm:text-base text-[#555555] dark:text-neutral-300 leading-relaxed">
-                {featuredPost.summary}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-              {featuredPost.highlights.map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-2xl border border-[#E6E2DA]/80 dark:border-white/[0.08] bg-white/80 dark:bg-black/25 px-4 py-3"
-                >
-                  <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
-                    {item.label}
-                  </div>
-                  <div className="mt-0.5 text-sm font-semibold text-[#0B0B0B] dark:text-white">
-                    {item.value}
-                  </div>
+            <div
+              className={`lg:col-span-7 bg-gradient-to-br ${featuredPost.accent} p-6 sm:p-8 space-y-5 flex flex-col justify-between`}
+            >
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2.5 text-xs">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 font-semibold ${categoryBadgeClass(featuredPost.category)}`}
+                  >
+                    {featuredPost.category}
+                  </span>
+                  <span className="text-neutral-500 dark:text-neutral-400">
+                    {formatBlogDate(featuredPost.publishedAt)}
+                  </span>
+                  <span className="text-neutral-300 dark:text-neutral-700">·</span>
+                  <span className="text-neutral-500 dark:text-neutral-400">
+                    {featuredPost.readTime}
+                  </span>
+                  <span className="ml-auto hidden sm:inline-flex items-center rounded-full bg-[#0B0B0B]/5 dark:bg-white/[0.07] px-2.5 py-0.5 text-[11px] font-semibold text-neutral-700 dark:text-neutral-200">
+                    Featured MVP Launch
+                  </span>
                 </div>
-              ))}
-            </div>
 
-            <div className="flex items-center justify-between pt-2 text-xs font-semibold text-[#0B0B0B] dark:text-white">
-              <span className="text-neutral-500 dark:text-neutral-400 font-medium">
-                By {featuredPost.author.name}
-              </span>
-              <span className="inline-flex items-center gap-1.5 group-hover:translate-x-0.5 transition-transform">
-                Read full post
-                <span aria-hidden="true">→</span>
-              </span>
+                <div className="space-y-2.5">
+                  <h2 className="font-serif text-2xl sm:text-3xl font-normal tracking-tight text-[#0B0B0B] dark:text-white group-hover:text-[#FF1A1A] dark:group-hover:text-[#FF5C5C] transition-colors leading-[1.15]">
+                    {featuredPost.title}
+                  </h2>
+                  <p className="text-sm text-[#555555] dark:text-neutral-300 leading-relaxed">
+                    {featuredPost.summary}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  {featuredPost.highlights.map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-2xl border border-[#E6E2DA]/80 dark:border-white/[0.08] bg-white/80 dark:bg-black/25 px-3.5 py-2.5"
+                    >
+                      <div className="text-[10.5px] font-medium text-neutral-500 dark:text-neutral-400">
+                        {item.label}
+                      </div>
+                      <div className="mt-0.5 text-xs font-semibold text-[#0B0B0B] dark:text-white">
+                        {item.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 text-xs font-semibold text-[#0B0B0B] dark:text-white">
+                <span className="text-neutral-500 dark:text-neutral-400 font-medium">
+                  By {featuredPost.author.name}
+                </span>
+                <span className="inline-flex items-center gap-1.5 group-hover:translate-x-0.5 transition-transform">
+                  Read full post
+                  <span aria-hidden="true">→</span>
+                </span>
+              </div>
             </div>
           </div>
         </Link>
@@ -205,10 +218,16 @@ export function BlogIndexClient({ posts }: { posts: readonly BlogPost[] }) {
               className="group flex flex-col justify-between overflow-hidden rounded-[24px] border border-[#E6E2DA] dark:border-white/[0.08] bg-white dark:bg-[#141414] shadow-2xs hover:shadow-md hover:border-[#0B0B0B]/25 dark:hover:border-white/20 transition-all"
             >
               <div>
-                <div
-                  className={`h-2 w-full bg-gradient-to-r ${post.accent}`}
-                  aria-hidden="true"
-                />
+                <div className="aspect-[1200/630] w-full overflow-hidden bg-[#030305] border-b border-[#E6E2DA]/70 dark:border-white/[0.06]">
+                  <img
+                    src={post.ogImage}
+                    alt={post.title}
+                    width={1200}
+                    height={630}
+                    loading="lazy"
+                    className="h-full w-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                  />
+                </div>
                 <div className="p-6 space-y-3.5">
                   <div className="flex items-center gap-2 text-[11px]">
                     <span

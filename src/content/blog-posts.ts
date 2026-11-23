@@ -26,6 +26,7 @@ export interface BlogPost {
     readonly role: string;
   };
   readonly featured?: boolean;
+  readonly ogImage: string;
   readonly accent: string; // Tailwind gradient/tint token
   readonly highlights: readonly {
     readonly label: string;
@@ -52,6 +53,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     readTime: "5 min read",
     author: { name: "FLOW Team", role: "Product & Engineering" },
     featured: true,
+    ogImage: "/assets/blog/introducing-flow-multi-chain-wallet-mvp.png",
     accent: "from-[#FF1A1A]/12 via-amber-500/8 to-transparent",
     highlights: [
       { label: "Supported chains", value: "NEAR, Solana, Base, Ethereum" },
@@ -108,6 +110,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     publishedAt: "2026-11-22",
     readTime: "4 min read",
     author: { name: "FLOW Team", role: "Payments" },
+    ogImage: "/assets/blog/send-anywhere-and-flow-id.png",
     accent: "from-emerald-500/12 via-teal-500/6 to-transparent",
     highlights: [
       { label: "Direct same-asset send", value: "0% FLOW fee" },
@@ -161,6 +164,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     publishedAt: "2026-11-21",
     readTime: "4 min read",
     author: { name: "FLOW Team", role: "Checkout & Merchants" },
+    ogImage: "/assets/blog/payment-links-and-universal-checkout.png",
     accent: "from-sky-500/12 via-blue-500/6 to-transparent",
     highlights: [
       { label: "FLOW platform fee", value: "0%" },
@@ -212,6 +216,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     publishedAt: "2026-11-20",
     readTime: "4 min read",
     author: { name: "FLOW Team", role: "Protocol & Routing" },
+    ogImage: "/assets/blog/convert-and-bridge-powered-by-near-intents.png",
     accent: "from-violet-500/12 via-purple-500/6 to-transparent",
     highlights: [
       { label: "Routing engine", value: "NEAR Intents / 1Click" },
@@ -257,6 +262,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     publishedAt: "2026-11-19",
     readTime: "4 min read",
     author: { name: "FLOW Team", role: "DeFi & Yield" },
+    ogImage: "/assets/blog/earn-native-yield-linear-and-burrow.png",
     accent: "from-amber-500/12 via-orange-500/6 to-transparent",
     highlights: [
       { label: "Protocols", value: "LiNEAR & Burrow" },
@@ -304,6 +310,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     publishedAt: "2026-11-18",
     readTime: "4 min read",
     author: { name: "FLOW Team", role: "AI & Experience" },
+    ogImage: "/assets/blog/flow-ai-assistant-and-live-insights.png",
     accent: "from-rose-500/12 via-pink-500/6 to-transparent",
     highlights: [
       { label: "Assistant", value: "Live wallet context" },
