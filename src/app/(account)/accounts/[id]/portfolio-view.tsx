@@ -407,10 +407,13 @@ function truncateDisplayFloor(
 }
 
 function sanitizeNonNegativeDecimal(raw: string): string {
-  const cleaned = raw.replace(/[-+eE]/g, "");
-  const numeric = Number(cleaned);
-  if (cleaned !== "" && !Number.isNaN(numeric) && numeric < 0) return "0";
-  return cleaned;
+  const normalized = raw.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+  const dotIdx = normalized.indexOf(".");
+  if (dotIdx === -1) return normalized;
+  return (
+    normalized.slice(0, dotIdx + 1) +
+    normalized.slice(dotIdx + 1).replace(/\./g, "")
+  );
 }
 
 function blockNegativeKey(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -3602,9 +3605,9 @@ export function PortfolioView({
                               </span>
                             )}
                             <input
-                              type="number"
-                              step="any"
-                              min="0"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
                               autoFocus
                               aria-label={
                                 sendInputMode === "USD"
@@ -3967,9 +3970,9 @@ export function PortfolioView({
 
                     <div className="flex items-center justify-between gap-3">
                       <input
-                        type="number"
-                        step="any"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
                         aria-label="Convert amount"
                         value={convertAmount}
                         onKeyDown={blockNegativeKey}
@@ -4433,9 +4436,9 @@ export function PortfolioView({
                       Deposit amount
                     </label>
                     <input
-                      type="number"
-                      step="any"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
                       value={crossChainDepositAmount}
                       onKeyDown={blockNegativeKey}
                       onChange={(e) =>
@@ -5168,9 +5171,9 @@ export function PortfolioView({
                       </label>
                       <div className="flex gap-2">
                         <input
-                          type="number"
-                          step="any"
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
                           disabled={prAmountMode === "OPTIONAL"}
                           value={prAmount}
                           onKeyDown={blockNegativeKey}
@@ -5214,10 +5217,10 @@ export function PortfolioView({
                       </label>
                       <div className="flex gap-2">
                         <input
-                          type="number"
-                          step="1"
-                          min="1"
-                          max="10000"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          autoComplete="off"
                           disabled={prMaxPaymentsMode === "UNLIMITED"}
                           value={prMaxPaymentsMode === "UNLIMITED" ? "" : prMaxPayments}
                           onKeyDown={blockNegativeKey}

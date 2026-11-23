@@ -1062,11 +1062,22 @@ export function EarnView({
 
                   <div className="flex items-center rounded-2xl bg-neutral-50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] px-4 py-3 focus-within:border-neutral-900 dark:focus-within:border-white/30 transition-colors">
                     <input
-                      type="number"
-                      step="any"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
                       value={amountInput}
-                      onChange={(e) => setAmountInput(e.target.value)}
+                      onChange={(e) => {
+                        const normalized = e.target.value
+                          .replace(/,/g, ".")
+                          .replace(/[^0-9.]/g, "");
+                        const dotIdx = normalized.indexOf(".");
+                        const cleaned =
+                          dotIdx === -1
+                            ? normalized
+                            : normalized.slice(0, dotIdx + 1) +
+                              normalized.slice(dotIdx + 1).replace(/\./g, "");
+                        setAmountInput(cleaned);
+                      }}
                       placeholder="0.00"
                       className="w-full text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden font-mono"
                       autoFocus
