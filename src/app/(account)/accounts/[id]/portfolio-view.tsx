@@ -381,6 +381,31 @@ function formatCompactActivityAmount(
   return fracRaw ? `${sign}${intPart}.${fracRaw}` : `${sign}${intPart}`;
 }
 
+function truncateDisplayFloor(
+  raw: string | null | undefined,
+  maxDecimals = 4,
+): string {
+  if (!raw) return "0";
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "0" || /^[-+]?0(\.0+)?$/.test(trimmed)) {
+    return "0";
+  }
+  const unsigned = trimmed.replace(/^[-+]/, "");
+  const dotIdx = unsigned.indexOf(".");
+  if (dotIdx === -1) return unsigned;
+  const intPart = unsigned.slice(0, dotIdx) || "0";
+  const fracPart = unsigned.slice(dotIdx + 1);
+  let sliced = fracPart.slice(0, maxDecimals).replace(/0+$/, "");
+  if (intPart === "0" && sliced.length === 0) {
+    const firstNonZero = fracPart.search(/[1-9]/);
+    if (firstNonZero !== -1) {
+      const cut = Math.min(fracPart.length, Math.min(8, firstNonZero + 2));
+      sliced = fracPart.slice(0, cut).replace(/0+$/, "");
+    }
+  }
+  return sliced ? `${intPart}.${sliced}` : intPart;
+}
+
 function sanitizeNonNegativeDecimal(raw: string): string {
   const cleaned = raw.replace(/[-+eE]/g, "");
   const numeric = Number(cleaned);
@@ -1007,6 +1032,8 @@ export function PortfolioView({
   const [sendDestDeploymentId, setSendDestDeploymentId] =
     useState<string>("solana-mainnet:SOL");
   const [sendAmount, setSendAmount] = useState<string>("");
+  const [sendInputMode, setSendInputMode] = useState<"ASSET" | "USD">("ASSET");
+  const [sendUsdInput, setSendUsdInput] = useState<string>("");
   const [sendRecipientAddress, setSendRecipientAddress] = useState<string>("");
   const [sendMemo, setSendMemo] = useState<string>("");
   const [receiptActivity, setReceiptActivity] =
@@ -1434,25 +1461,81 @@ export function PortfolioView({
     if (!source?.displayBalance) return "";
     try {
       const maxAtomic = getMaxAtomicForSource(source);
-      return formatAtomicToDisplay(maxAtomic, source.deployment.decimals);
+      const exactMax = formatAtomicToDisplay(
+        maxAtomic,
+        source.deployment.decimals,
+      );
+      return truncateDisplayFloor(exactMax, 4);
     } catch {
-      return source.displayBalance;
+      return truncateDisplayFloor(source.displayBalance, 4);
     }
   };
 
-  const getPercentageAmountForSource = (
-    source: typeof sendSource,
-    percent: number,
-  ): string => {
-    if (!source) return "";
-    try {
-      const maxAtomic = getMaxAtomicForSource(source);
-      if (maxAtomic <= 0n) return "0";
-      const pctAtomic =
-        percent >= 100 ? maxAtomic : (maxAtomic * BigInt(percent)) / 100n;
-      return formatAtomicToDisplay(pctAtomic, source.deployment.decimals);
-    } catch {
-      return "";
+  const sendSourcePriceUsd = useMemo(() => {
+    if (!sendSource) return null;
+    const p = tokenPrices[sendSource.deployment.id];
+    if (typeof p === "number" && Number.isFinite(p) && p > 0) return p;
+    if (
+      sendSource.deployment.symbol === "USDC" ||
+      sendSource.deployment.symbol === "USDT"
+    ) {
+      return 1;
+    }
+    return null;
+  }, [sendSource, tokenPrices]);
+
+  const handleSendUsdChange = (raw: string) => {
+    const cleaned = sanitizeNonNegativeDecimal(raw);
+    setSendUsdInput(cleaned);
+    if (!cleaned || !sendSource || !sendSourcePriceUsd) {
+      setSendAmount("");
+      return;
+    }
+    const usdNum = Number.parseFloat(cleaned);
+    if (!Number.isFinite(usdNum) || usdNum <= 0) {
+      setSendAmount("");
+      return;
+    }
+    const rawToken = usdNum / sendSourcePriceUsd;
+    const fixedDecimals = Math.min(sendSource.deployment.decimals, 8);
+    const fixedStr = rawToken.toFixed(fixedDecimals);
+    const nextAsset = truncateDisplayFloor(fixedStr, 6);
+    setSendAmount(nextAsset);
+  };
+
+  const handleSendMaxClick = () => {
+    const maxAsset = getMaxAmountForSource(sendSource);
+    setSendAmount(maxAsset);
+    if (sendInputMode === "USD" && sendSourcePriceUsd) {
+      const maxNum = Number.parseFloat(maxAsset);
+      if (Number.isFinite(maxNum) && maxNum > 0) {
+        const flooredUsd = (
+          Math.floor(maxNum * sendSourcePriceUsd * 100) / 100
+        )
+          .toFixed(2)
+          .replace(/\.?0+$/, "");
+        setSendUsdInput(flooredUsd);
+      } else {
+        setSendUsdInput("0");
+      }
+    }
+  };
+
+  const toggleSendInputMode = () => {
+    if (!sendSourcePriceUsd) return;
+    if (sendInputMode === "ASSET") {
+      const assetNum = Number.parseFloat(sendAmount);
+      if (Number.isFinite(assetNum) && assetNum > 0) {
+        const usdStr = (Math.floor(assetNum * sendSourcePriceUsd * 100) / 100)
+          .toFixed(2)
+          .replace(/\.?0+$/, "");
+        setSendUsdInput(usdStr);
+      } else {
+        setSendUsdInput("");
+      }
+      setSendInputMode("USD");
+    } else {
+      setSendInputMode("ASSET");
     }
   };
 
@@ -2188,6 +2271,8 @@ export function PortfolioView({
         setActiveOutgoingTransfer(null);
         setSendStep(1);
         setSendAmount("");
+        setSendUsdInput("");
+        setSendInputMode("ASSET");
         setSendMemo("");
         setSendRecipientAddress("");
         setConvertAmount("");
@@ -3299,9 +3384,12 @@ export function PortfolioView({
                               <button
                                 key={asset.deployment.id}
                                 type="button"
-                                onClick={() =>
-                                  setSendSourceDeploymentId(asset.deployment.id)
-                                }
+                                onClick={() => {
+                                  setSendSourceDeploymentId(asset.deployment.id);
+                                  setSendAmount("");
+                                  setSendUsdInput("");
+                                  setSendInputMode("ASSET");
+                                }}
                                 className={`w-full flex items-center justify-between gap-3 p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                                   selected
                                     ? "border-neutral-950 dark:border-white bg-neutral-50 dark:bg-white/[0.06] shadow-2xs"
@@ -3480,27 +3568,25 @@ export function PortfolioView({
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] p-4 space-y-3">
+                      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] p-4 space-y-2.5">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                             You send
                           </label>
                           <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
-                            <span>
+                            <span className="tabular-nums">
                               Available:{" "}
                               {hideBalance
                                 ? "••••••"
                                 : sendSourceBalance
-                                  ? formatApproxDisplay(sendSourceBalance)
+                                  ? truncateDisplayFloor(sendSourceBalance, 4)
                                   : "Unavailable"}{" "}
                               {sendSource?.deployment.symbol}
                             </span>
                             <button
                               type="button"
                               disabled={!sendSourceBalance}
-                              onClick={() =>
-                                setSendAmount(getMaxAmountForSource(sendSource))
-                              }
+                              onClick={handleSendMaxClick}
                               className="text-xs font-bold text-neutral-950 dark:text-white hover:underline cursor-pointer"
                             >
                               Max
@@ -3508,52 +3594,129 @@ export function PortfolioView({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-3">
-                          <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            autoFocus
-                            aria-label="Send amount"
-                            value={sendAmount}
-                            onKeyDown={blockNegativeKey}
-                            onChange={(e) =>
-                              setSendAmount(sanitizeNonNegativeDecimal(e.target.value))
-                            }
-                            placeholder="0.00"
-                            className="min-w-0 flex-1 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden font-mono"
-                          />
-                          <div className="shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.08] text-xs font-bold text-neutral-950 dark:text-white">
-                            {sendSource && (
-                              <AssetAvatar
-                                symbol={sendSource.deployment.symbol}
-                                size={18}
-                              />
+                        <div className="flex items-center justify-between gap-2.5">
+                          <div className="flex items-center min-w-0 flex-1 gap-1">
+                            {sendInputMode === "USD" && (
+                              <span className="text-2xl font-bold text-neutral-500 dark:text-neutral-400 font-mono select-none">
+                                $
+                              </span>
                             )}
-                            <span>{sendSource?.deployment.symbol}</span>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              autoFocus
+                              aria-label={
+                                sendInputMode === "USD"
+                                  ? "Send amount in USD"
+                                  : "Send amount"
+                              }
+                              value={
+                                sendInputMode === "USD"
+                                  ? sendUsdInput
+                                  : sendAmount
+                              }
+                              onKeyDown={blockNegativeKey}
+                              onChange={(e) => {
+                                if (sendInputMode === "USD") {
+                                  handleSendUsdChange(e.target.value);
+                                } else {
+                                  setSendAmount(
+                                    sanitizeNonNegativeDecimal(e.target.value),
+                                  );
+                                }
+                              }}
+                              placeholder="0.00"
+                              className="min-w-0 flex-1 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden font-mono"
+                            />
+                          </div>
+
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={!sendSourcePriceUsd}
+                              onClick={toggleSendInputMode}
+                              aria-label={
+                                sendInputMode === "USD"
+                                  ? `Switch to ${sendSource?.deployment.symbol ?? "asset"} input`
+                                  : "Switch to USD input"
+                              }
+                              title={
+                                !sendSourcePriceUsd
+                                  ? "Live price unavailable"
+                                  : sendInputMode === "USD"
+                                    ? `Enter in ${sendSource?.deployment.symbol ?? "asset"}`
+                                    : "Enter in USD"
+                              }
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.1] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <path d="m7 15 5 5 5-5" />
+                                <path d="m7 9 5-5 5 5" />
+                              </svg>
+                            </button>
+
+                            {sendInputMode === "USD" ? (
+                              <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.08] text-xs font-bold text-neutral-950 dark:text-white">
+                                <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+                                  $
+                                </span>
+                                <span>USD</span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.08] text-xs font-bold text-neutral-950 dark:text-white">
+                                {sendSource && (
+                                  <AssetAvatar
+                                    symbol={sendSource.deployment.symbol}
+                                    size={18}
+                                  />
+                                )}
+                                <span>{sendSource?.deployment.symbol}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {[25, 50, 75, 100].map((pct) => (
+                        {sendSourcePriceUsd !== null && (
+                          <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
                             <button
-                              key={pct}
                               type="button"
-                              disabled={!sendSourceBalance}
-                              onClick={() => {
-                                const next = getPercentageAmountForSource(
-                                  sendSource,
-                                  pct,
-                                );
-                                if (!next) return;
-                                setSendAmount(next);
-                              }}
-                              className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-neutral-200/70 hover:bg-neutral-300/70 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer disabled:opacity-40"
+                              onClick={toggleSendInputMode}
+                              className="inline-flex items-center gap-1 hover:text-neutral-900 dark:hover:text-neutral-200 transition-colors cursor-pointer tabular-nums"
                             >
-                              {pct === 100 ? "Max" : `${pct}%`}
+                              {sendInputMode === "USD" ? (
+                                <span>
+                                  ≈{" "}
+                                  {sendAmount
+                                    ? truncateDisplayFloor(sendAmount, 4)
+                                    : "0"}{" "}
+                                  {sendSource?.deployment.symbol}
+                                </span>
+                              ) : (
+                                <span>
+                                  ≈ $
+                                  {(() => {
+                                    const n = Number.parseFloat(sendAmount);
+                                    if (!Number.isFinite(n) || n <= 0)
+                                      return "0.00";
+                                    return (n * sendSourcePriceUsd).toFixed(2);
+                                  })()}{" "}
+                                  USD
+                                </span>
+                              )}
                             </button>
-                          ))}
-                        </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-1.5">
@@ -3778,12 +3941,12 @@ export function PortfolioView({
                         You convert
                       </label>
                       <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
-                        <span>
+                        <span className="tabular-nums">
                           Available:{" "}
                           {hideBalance
                             ? "••••••"
                             : convertSourceBalance
-                              ? formatApproxDisplay(convertSourceBalance)
+                              ? truncateDisplayFloor(convertSourceBalance, 4)
                               : "Unavailable"}{" "}
                           {convertSource?.deployment.symbol}
                         </span>

@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { FlowLogo } from "../../../components/flow-logo.tsx";
 import { MotionNumber, MotionReveal } from "../../../components/motion.tsx";
 import { UserAvatar } from "../../../components/user-avatar.tsx";
 import { triggerHaptic } from "../../../components/haptics.ts";
@@ -73,15 +72,8 @@ export function AnalyticsView({
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0B0B] text-neutral-950 dark:text-neutral-50">
       <header className="sticky top-0 z-30 border-b border-neutral-200/70 dark:border-white/[0.08] bg-[#FAF8F5]/90 dark:bg-[#0B0B0B]/90 backdrop-blur-xl">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link
-              href={backHref}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white transition-colors"
-            >
-              <FlowLogo className="h-5 w-auto" />
-            </Link>
-            <span className="text-neutral-300 dark:text-neutral-700">/</span>
-            <span className="text-sm font-semibold tracking-tight">
+          <div className="flex items-center">
+            <span className="text-base font-bold tracking-tight text-neutral-950 dark:text-white">
               Analytics
             </span>
           </div>
