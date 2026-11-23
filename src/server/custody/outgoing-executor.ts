@@ -864,7 +864,7 @@ async function executeNearEarnJob(
         args: {
           receiver_id: treasuryAccount,
           amount: feeAtomic.toString(),
-          memo: "FLOW Earn deposit fee (0.15%)",
+          memo: "FLOW Earn deposit fee (0.3%)",
         },
         gas: "50000000000000",
         deposit: "1",

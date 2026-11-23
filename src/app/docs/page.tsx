@@ -130,7 +130,7 @@ export default function DocsPage() {
                     Powered by NEAR Intents
                   </span>
                   <span className="text-[14px] font-medium text-[#0b0c0e] dark:text-white tabular-nums">
-                    0% Links · 1% Convert
+                    0% Direct · 0.3% Cross-asset · 1.5% Convert
                   </span>
                 </div>
                 <p className="mt-4 text-[13.5px] leading-[1.55] text-[#5f636a] dark:text-neutral-400">
@@ -151,7 +151,7 @@ export default function DocsPage() {
                     LiNEAR &amp; Burrow
                   </span>
                   <span className="text-[14px] font-medium text-[#0b0c0e] dark:text-white tabular-nums">
-                    0.15% in · 0% withdraw
+                    0.3% in · 0% withdraw
                   </span>
                 </div>
                 <p className="mt-4 text-[13.5px] leading-[1.55] text-[#5f636a] dark:text-neutral-400">
@@ -256,10 +256,14 @@ export default function DocsPage() {
           <p>
             Open the <strong>Send</strong> tab to transfer any supported asset
             to a raw wallet address or a recipient&apos;s{" "}
-            <strong>@flow ID</strong>. Same-network transfers execute directly
-            on-chain with <strong>0% FLOW platform fee</strong>. Cross-chain
-            sends automatically route through NEAR Intents and show the exact
-            estimated receive amount before you slide to confirm.
+            <strong>@flow ID</strong>. Same-asset direct transfers execute
+            on-chain with <strong>0% FLOW platform fee</strong>. Cross-asset
+            sends (sending one asset while the recipient receives another)
+            automatically route through NEAR Intents with a{" "}
+            <strong>0.3% FLOW platform fee</strong> charged from your wallet
+            balance so the full amount you enter is routed, and show the exact
+            estimated receive amount in both asset and USD before you slide to
+            confirm.
           </p>
         </section>
 
@@ -314,8 +318,11 @@ export default function DocsPage() {
             Use <strong>Convert &amp; Bridge</strong> to swap between assets
             across your own FLOW wallets (for example, SOL on Solana into USDC
             on Base or NEAR on NEAR Mainnet). Live quotes are fetched from NEAR
-            Intents / 1Click and include the FLOW platform fee alongside solver
-            rates and network execution costs before you slide to confirm.
+            Intents / 1Click and display the{" "}
+            <strong>1.5% FLOW platform fee</strong> (charged from your wallet
+            balance rather than deducted from the converted amount) alongside
+            solver rates, USD estimates, and network execution costs before you
+            slide to confirm.
           </p>
         </section>
 
@@ -350,9 +357,10 @@ export default function DocsPage() {
               One-shot deposit fee:
             </strong>{" "}
             Moving funds into an Earn protocol includes a{" "}
-            <strong className="text-[#0b0c0e] dark:text-white">0.15%</strong>{" "}
-            FLOW platform fee deducted automatically before depositing. Moving
-            funds out of Earn (withdrawals and claims) carries a{" "}
+            <strong className="text-[#0b0c0e] dark:text-white">0.3%</strong>{" "}
+            FLOW platform fee charged from your wallet balance on deposit so
+            your full entered amount is supplied. Moving funds out of Earn
+            (withdrawals and claims) carries a{" "}
             <strong className="text-[#0b0c0e] dark:text-white">0%</strong> FLOW
             fee.
           </div>
@@ -455,13 +463,25 @@ export default function DocsPage() {
               <tbody className="divide-y divide-[#e4e6e9] dark:divide-white/[0.06]">
                 <tr>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
-                    Direct sends
+                    Direct sends (same asset)
                   </td>
                   <td className="px-4 py-3 font-medium text-[#2e7d53] dark:text-emerald-400">
                     0%
                   </td>
                   <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
                     Underlying network gas only.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
+                    Cross-asset sends
+                  </td>
+                  <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
+                    0.3%
+                  </td>
+                  <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
+                    Charged from wallet balance when sending one asset and
+                    settling another; shown in the live quote.
                   </td>
                 </tr>
                 <tr>
@@ -480,10 +500,10 @@ export default function DocsPage() {
                     Earn deposits
                   </td>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
-                    0.15%
+                    0.3%
                   </td>
                   <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
-                    One-shot fee deducted on deposit in the deposited asset.
+                    One-shot fee charged from wallet balance on deposit.
                   </td>
                 </tr>
                 <tr>
@@ -502,10 +522,11 @@ export default function DocsPage() {
                     Convert &amp; Bridge
                   </td>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
-                    Up to 1%
+                    1.5%
                   </td>
                   <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
-                    Included natively in the live NEAR Intents / 1Click quote.
+                    Charged from wallet balance via the live NEAR Intents /
+                    1Click quote.
                   </td>
                 </tr>
               </tbody>

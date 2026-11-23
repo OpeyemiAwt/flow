@@ -16,18 +16,24 @@ import {
   computeMaxSendableAtomic,
 } from "../src/domain/supported-assets-catalog.ts";
 
-test("direct same-asset send is free and cross-asset send charges 0.15% (15 bps)", () => {
+test("direct same-asset send is free, cross-asset send & earn charge 0.3% (30 bps), and convert charges 1.5% (150 bps)", () => {
   assert.equal(DIRECT_SEND_FEE_BPS, 0);
-  assert.equal(CROSS_ASSET_SEND_FEE_BPS, 15);
+  assert.equal(CROSS_ASSET_SEND_FEE_BPS, 30);
+  assert.equal(EARN_DEPOSIT_FEE_BPS, 30);
+  assert.equal(CONVERT_BRIDGE_FEE_BPS, 150);
   assert.equal(getOperationPlatformFeeBps("SEND", true), 0);
-  assert.equal(getOperationPlatformFeeBps("SEND", false), 15);
-  assert.equal(getOperationPlatformFeeBps("CONVERT", false), CONVERT_BRIDGE_FEE_BPS);
+  assert.equal(getOperationPlatformFeeBps("SEND", false), 30);
+  assert.equal(getOperationPlatformFeeBps("CONVERT", false), 150);
   assert.equal(getOperationPlatformFeeBps("ADD_MONEY", false), 0);
 
   assert.deepEqual(getOperationAppFees("SEND", true), []);
   const crossSendFees = getOperationAppFees("SEND", false);
   assert.equal(crossSendFees.length, 1);
-  assert.equal(crossSendFees[0]?.fee, 15);
+  assert.equal(crossSendFees[0]?.fee, 30);
+
+  const convertFees = getOperationAppFees("CONVERT", false);
+  assert.equal(convertFees.length, 1);
+  assert.equal(convertFees[0]?.fee, 150);
 });
 
 test("grossUpForPlatformFee charges fee on top of principal so net >= principal", () => {

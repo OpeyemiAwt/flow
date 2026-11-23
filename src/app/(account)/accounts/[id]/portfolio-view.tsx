@@ -373,6 +373,11 @@ function formatUsdApprox(amount: number | null | undefined): string | null {
   );
 }
 
+function formatApproxUsdLabel(usd: string | null | undefined): string | null {
+  if (!usd) return null;
+  return usd.startsWith("<") ? usd : `≈ ${usd}`;
+}
+
 function computeDisplayUsd(
   displayAmount: string | null | undefined,
   unitPriceUsd: number | null | undefined,
@@ -765,50 +770,85 @@ function OutgoingQuoteDetails({
     effectiveFeeDisplay,
     sourcePriceUsd,
   );
+  const refreshButton = (
+    <button
+      type="button"
+      onClick={review}
+      disabled={!canReview || loading}
+      aria-label="Refresh quote"
+      title="Refresh quote"
+      className="shrink-0 p-1.5 rounded-full border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={loading ? "animate-spin" : ""}
+        aria-hidden="true"
+      >
+        <polyline points="23 4 23 10 17 10" />
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+      </svg>
+    </button>
+  );
+
   return (
     <div
       className="rounded-2xl border border-neutral-200/60 dark:border-white/[0.08] bg-neutral-50/60 dark:bg-white/[0.03] px-4 py-3 text-left"
       role="status"
     >
-      <div className="flex items-start justify-between gap-3">
-        {quote ? (
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex items-start justify-between gap-2 flex-wrap">
-              <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 pt-0.5">
-                {receiveLabel}
-              </span>
-              <div className="text-right">
-                <div className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
+      {quote ? (
+        <div className="space-y-2.5">
+          <div className="flex items-start justify-between gap-2.5">
+            <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 pt-0.5 shrink-0 whitespace-nowrap">
+              {receiveLabel}
+            </span>
+            <div className="flex items-start gap-2 min-w-0">
+              <div className="text-right min-w-0">
+                <div className="text-sm font-bold font-mono text-neutral-950 dark:text-white whitespace-nowrap">
                   {formatApproxDisplay(quote.recipientDisplayAmount)} {symbol}
                 </div>
                 {quoteReceiveUsd && (
-                  <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
-                    ≈ {quoteReceiveUsd} USD
+                  <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                    {formatApproxUsdLabel(quoteReceiveUsd)} USD
                   </div>
                 )}
               </div>
+              {refreshButton}
             </div>
-            {effectiveFeeBps > 0 && (
-              <div className="flex items-baseline justify-between gap-2 text-[11px] text-neutral-500 dark:text-neutral-400 pt-1 border-t border-neutral-200/60 dark:border-white/[0.06]">
-                <span>
-                  Platform fee ({Number((effectiveFeeBps / 100).toFixed(2))}%)
-                </span>
-                <span className="text-right font-mono font-medium text-neutral-700 dark:text-neutral-300 tabular-nums">
+          </div>
+
+          {effectiveFeeBps > 0 && (
+            <div className="flex items-start justify-between gap-3 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px]">
+              <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
+                Platform fee ({Number((effectiveFeeBps / 100).toFixed(2))}%)
+              </span>
+              <div className="text-right min-w-0">
+                <div className="font-mono font-medium text-neutral-800 dark:text-neutral-200 tabular-nums whitespace-nowrap">
                   {effectiveFeeDisplay
                     ? `${formatApproxDisplay(effectiveFeeDisplay)} ${effectiveFeeSymbol}`
                     : `${Number((effectiveFeeBps / 100).toFixed(2))}%`}
-                  {effectiveFeeUsd ? ` (≈ ${effectiveFeeUsd})` : ""}
-                  <span className="font-sans text-neutral-500 dark:text-neutral-400">
-                    {" "}
-                    · from balance
-                  </span>
-                </span>
+                </div>
+                <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                  {effectiveFeeUsd
+                    ? `${formatApproxUsdLabel(effectiveFeeUsd)} · `
+                    : ""}
+                  from balance
+                </div>
               </div>
-            )}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 dark:text-neutral-400">
-              <span className="font-medium text-neutral-700 dark:text-neutral-300">
-                {quote.rateDescription}
-              </span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px] text-neutral-500 dark:text-neutral-400">
+            <span className="font-medium text-neutral-700 dark:text-neutral-300">
+              {quote.rateDescription}
+            </span>
+            <div className="flex items-center gap-2.5 whitespace-nowrap">
               {quote.minimumRecipientDisplayAmount && (
                 <span>
                   Min {formatApproxDisplay(quote.minimumRecipientDisplayAmount)}{" "}
@@ -820,33 +860,35 @@ function OutgoingQuoteDetails({
               )}
             </div>
           </div>
-        ) : directTransfer ? (
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex items-start justify-between gap-2 flex-wrap">
-              <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 pt-0.5">
-                Recipient receives
-              </span>
-              <div className="text-right">
-                <div className="text-sm font-bold font-mono text-neutral-950 dark:text-white">
-                  {formatApproxDisplay(directTransfer.displayAmount)} {symbol}
-                </div>
-                {directReceiveUsd && (
-                  <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
-                    ≈ {directReceiveUsd} USD
-                  </div>
-                )}
+        </div>
+      ) : directTransfer ? (
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-2.5">
+            <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 pt-0.5 shrink-0 whitespace-nowrap">
+              Recipient receives
+            </span>
+            <div className="text-right min-w-0">
+              <div className="text-sm font-bold font-mono text-neutral-950 dark:text-white whitespace-nowrap">
+                {formatApproxDisplay(directTransfer.displayAmount)} {symbol}
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 dark:text-neutral-400">
-              <span className="font-medium text-neutral-700 dark:text-neutral-300">
-                Direct 1:1 transfer on {directTransfer.networkName}
-              </span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                Platform fee: Free
-              </span>
+              {directReceiveUsd && (
+                <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                  {formatApproxUsdLabel(directReceiveUsd)} USD
+                </div>
+              )}
             </div>
           </div>
-        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px] text-neutral-500 dark:text-neutral-400">
+            <span className="font-medium text-neutral-700 dark:text-neutral-300">
+              Direct 1:1 transfer on {directTransfer.networkName}
+            </span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+              Platform fee: Free
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 text-xs text-neutral-600 dark:text-neutral-400">
             <p>
               {loading
@@ -857,33 +899,9 @@ function OutgoingQuoteDetails({
               <p className="mt-1 text-[#FF1A1A] dark:text-red-400">{error}</p>
             )}
           </div>
-        )}
-
-        <button
-          type="button"
-          onClick={review}
-          disabled={!canReview || loading}
-          aria-label="Refresh quote"
-          title="Refresh quote"
-          className="shrink-0 p-2 rounded-full border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={loading ? "animate-spin" : ""}
-            aria-hidden="true"
-          >
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
-        </button>
-      </div>
+          {refreshButton}
+        </div>
+      )}
     </div>
   );
 }
@@ -4000,44 +4018,48 @@ export function PortfolioView({
                           );
                           return (
                             <>
-                              <div className="flex items-start justify-between gap-2">
-                                <span className="text-neutral-500 dark:text-neutral-400">
+                              <div className="flex items-start justify-between gap-3">
+                                <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
                                   You send
                                 </span>
-                                <div className="text-right">
+                                <div className="text-right min-w-0">
                                   <div className="font-mono font-bold text-neutral-950 dark:text-white">
                                     {sendAmount} {sendSource?.deployment.symbol}{" "}
-                                    ({sendSource?.deployment.networkName})
+                                    <span className="font-sans font-medium text-neutral-500 dark:text-neutral-400">
+                                      ({sendSource?.deployment.networkName})
+                                    </span>
                                   </div>
                                   {sendUsd && (
-                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
-                                      ≈ {sendUsd} USD
+                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                                      {formatApproxUsdLabel(sendUsd)} USD
                                     </div>
                                   )}
                                 </div>
                               </div>
 
-                              <div className="flex items-start justify-between gap-2">
-                                <span className="text-neutral-500 dark:text-neutral-400">
+                              <div className="flex items-start justify-between gap-3">
+                                <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
                                   Platform fee
                                   {!isSameAsset && sendFeeBps > 0
                                     ? ` (${Number((sendFeeBps / 100).toFixed(2))}%)`
                                     : ""}
                                 </span>
                                 {isSameAsset || sendFeeBps === 0 ? (
-                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                                     Free (0%)
                                   </span>
                                 ) : (
-                                  <div className="text-right">
-                                    <div className="font-mono font-semibold text-neutral-900 dark:text-neutral-100">
+                                  <div className="text-right min-w-0">
+                                    <div className="font-mono font-semibold text-neutral-900 dark:text-neutral-100 whitespace-nowrap">
                                       {feeDisplay
                                         ? `${formatApproxDisplay(feeDisplay)} ${sendSource?.deployment.symbol ?? ""}`
                                         : `${Number((sendFeeBps / 100).toFixed(2))}%`}
                                     </div>
-                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
-                                      {feeUsd ? `≈ ${feeUsd} · ` : ""}
-                                      charged from balance
+                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                                      {feeUsd
+                                        ? `${formatApproxUsdLabel(feeUsd)} · `
+                                        : ""}
+                                      from balance
                                     </div>
                                   </div>
                                 )}
@@ -4046,29 +4068,30 @@ export function PortfolioView({
                               {!isSameAsset &&
                                 sendFeeBps > 0 &&
                                 totalDebitDisplay && (
-                                  <div className="flex items-start justify-between gap-2">
-                                    <span className="text-neutral-500 dark:text-neutral-400">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
                                       Total from balance
                                     </span>
-                                    <div className="text-right">
-                                      <div className="font-mono font-semibold text-neutral-900 dark:text-neutral-200">
+                                    <div className="text-right min-w-0">
+                                      <div className="font-mono font-semibold text-neutral-900 dark:text-neutral-200 whitespace-nowrap">
                                         {formatApproxDisplay(totalDebitDisplay)}{" "}
                                         {sendSource?.deployment.symbol}
                                       </div>
                                       {totalDebitUsd && (
-                                        <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
-                                          ≈ {totalDebitUsd} USD
+                                        <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                                          {formatApproxUsdLabel(totalDebitUsd)}{" "}
+                                          USD
                                         </div>
                                       )}
                                     </div>
                                   </div>
                                 )}
 
-                              <div className="flex items-start justify-between gap-2 pt-1 border-t border-neutral-200/70 dark:border-white/[0.06]">
-                                <span className="text-neutral-500 dark:text-neutral-400">
+                              <div className="flex items-start justify-between gap-3 pt-2 border-t border-neutral-200/70 dark:border-white/[0.06]">
+                                <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
                                   Recipient receives
                                 </span>
-                                <div className="text-right">
+                                <div className="text-right min-w-0">
                                   <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                                     {isSameAsset
                                       ? sendAmount
@@ -4077,12 +4100,14 @@ export function PortfolioView({
                                             ?.recipientDisplayAmount ??
                                             sendAmount,
                                         )}{" "}
-                                    {sendDestDeployment.symbol} (
-                                    {sendDestDeployment.networkName})
+                                    {sendDestDeployment.symbol}{" "}
+                                    <span className="font-sans font-medium text-emerald-600/80 dark:text-emerald-400/80">
+                                      ({sendDestDeployment.networkName})
+                                    </span>
                                   </div>
                                   {receiveUsd && (
-                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums">
-                                      ≈ {receiveUsd} USD
+                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                                      {formatApproxUsdLabel(receiveUsd)} USD
                                     </div>
                                   )}
                                 </div>

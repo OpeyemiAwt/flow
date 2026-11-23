@@ -16,7 +16,10 @@ import {
   IconPlus,
   IconSwap,
 } from "./icons.tsx";
-import { EARN_DEPOSIT_FEE_BPS } from "../domain/platform-fees.ts";
+import {
+  EARN_DEPOSIT_FEE_BPS,
+  EARN_DEPOSIT_FEE_LABEL,
+} from "../domain/platform-fees.ts";
 import type { CatalogTokenDeployment } from "../domain/supported-assets-catalog.ts";
 import type { NavTabId } from "./floating-nav.tsx";
 import { PaymentTimelineTracker } from "./payment-timeline-tracker.tsx";
@@ -653,7 +656,7 @@ export function EarnView({
       : availableStablesNum;
   }, [activeModalProtocol, availableNearNum, availableStablesNum]);
 
-  // Max depositable principal after reserving the 0.15% platform fee from wallet balance
+  // Max depositable principal after reserving the 0.3% platform fee from wallet balance
   const modalMaxDeposit = useMemo(() => {
     if (modalAvailable <= 0) return 0;
     const rawMax = (modalAvailable * (10_000 - EARN_DEPOSIT_FEE_BPS)) / 10_000;
@@ -1133,11 +1136,11 @@ export function EarnView({
                         return (
                           <div className="rounded-xl bg-neutral-50 dark:bg-white/[0.03] border border-neutral-200/70 dark:border-white/[0.06] px-3 py-2 text-[11px] space-y-1">
                             <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
-                              <span>FLOW platform fee (0.15%)</span>
+                              <span>FLOW platform fee ({EARN_DEPOSIT_FEE_LABEL})</span>
                               <span className="font-mono font-medium text-neutral-700 dark:text-neutral-300">
                                 {hasAmt
                                   ? `${feeVal.toFixed(dp)} ${activeModalProtocol.assetSymbol} · from balance`
-                                  : "0.15% from balance"}
+                                  : `${EARN_DEPOSIT_FEE_LABEL} from balance`}
                               </span>
                             </div>
                             {hasAmt && (
@@ -1240,7 +1243,7 @@ export function EarnView({
                   ) : modalAction === "DEPOSIT" && modalMaxDeposit <= 0 ? (
                     <span>Insufficient {activeModalProtocol.assetSymbol} Balance</span>
                   ) : modalAction === "DEPOSIT" && inputNum > modalMaxDeposit ? (
-                    <span>Exceeds Available Balance (incl. 0.15% fee)</span>
+                    <span>Exceeds Available Balance (incl. {EARN_DEPOSIT_FEE_LABEL} fee)</span>
                   ) : (
                     <span>
                       Confirm {modalAction === "DEPOSIT" ? "Deposit" : "Withdrawal"}

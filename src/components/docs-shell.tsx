@@ -82,7 +82,7 @@ const SEARCH_INDEX = [
   { title: "Flow AI Assistant", section: "Docs · Core product", href: "/docs#assistant", keywords: "ai assistant chat natural language draft payment" },
   { title: "Networks & assets", section: "Docs · Reference", href: "/docs#networks", keywords: "near solana base ethereum usdc usdt eth sol supported tokens" },
   { title: "Security & custody", section: "Docs · Reference", href: "/docs#security", keywords: "security non-custodial mpc sessions delete account" },
-  { title: "Fees", section: "Docs · Reference", href: "/docs#fees", keywords: "fees pricing 0.15% earn 1% convert 0% payment links" },
+  { title: "Fees", section: "Docs · Reference", href: "/docs#fees", keywords: "fees pricing 0.3% cross-asset send earn 1.5% convert 0% payment links" },
   { title: "Whitepaper · Abstract & Thesis", section: "Whitepaper", href: "/whitepaper#abstract", keywords: "whitepaper thesis product architecture vision" },
   { title: "Whitepaper · Non-custodial MPC & Identity", section: "Whitepaper", href: "/whitepaper#mpc", keywords: "mpc outlayer signing policy encryption" },
   { title: "Whitepaper · Cross-chain Routing", section: "Whitepaper", href: "/whitepaper#routing", keywords: "1click intents solver cross-chain settlement" },

@@ -206,21 +206,28 @@ export default function TermsPage() {
           </p>
           <ul className="list-disc pl-5 space-y-2">
             <li>
-              <strong>Direct sends &amp; Payment Link checkouts:</strong> 0%
-              FLOW platform fee. Standard underlying network gas fees apply (and
-              NEAR reserves a small gas buffer for transactions and contract
-              storage). Cross-chain payment link checkouts reflect live solver
-              spreads and network execution fees.
+              <strong>Direct sends (same asset) &amp; Payment Link checkouts:</strong>{" "}
+              0% FLOW platform fee. Standard underlying network gas fees apply
+              (and NEAR reserves a small gas buffer for transactions and
+              contract storage). Cross-chain payment link checkouts reflect live
+              solver spreads and network execution fees.
             </li>
             <li>
-              <strong>Convert &amp; Bridge:</strong> Up to 1% FLOW platform fee
-              included in the live quote via NEAR Intents before you slide to
-              confirm, in addition to solver spreads and network settlement
-              costs.
+              <strong>Cross-asset sends:</strong> 0.3% FLOW platform fee (30
+              bps) when sending one asset and settling a different asset via
+              NEAR Intents, charged from your wallet balance alongside solver
+              spreads and network settlement costs and shown in the live quote
+              before you slide to confirm.
             </li>
             <li>
-              <strong>Earn deposits &amp; withdrawals:</strong> 0.15% one-time
-              FLOW platform fee (15 bps) deducted from the deposit asset when
+              <strong>Convert &amp; Bridge:</strong> 1.5% FLOW platform fee (150
+              bps) charged from your wallet balance via NEAR Intents before you
+              slide to confirm, in addition to solver spreads and network
+              settlement costs.
+            </li>
+            <li>
+              <strong>Earn deposits &amp; withdrawals:</strong> 0.3% one-time
+              FLOW platform fee (30 bps) charged from your wallet balance when
               moving funds into an Earn protocol. Moving funds out of Earn
               (withdrawals and claims) carries a 0% FLOW fee. Protocol-level
               fees and on-chain NEAR storage deposits (for example, Burrow
@@ -229,8 +236,12 @@ export default function TermsPage() {
             </li>
           </ul>
           <p className="text-[14.5px] text-[#5f636a] dark:text-neutral-400">
-            FLOW platform fees are routed to the FLOW treasury and settled in
-            NEAR to support protocol operations and account sponsorship.
+            All FLOW platform fees are charged from your remaining wallet
+            balance (like network transaction fees) rather than deducted from
+            the amount being sent or deposited, and clicking Max automatically
+            reserves room for both gas and applicable platform fees. Collected
+            fees are routed to the FLOW treasury and settled in NEAR to support
+            protocol operations and account sponsorship.
           </p>
         </section>
 

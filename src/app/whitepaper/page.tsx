@@ -394,7 +394,7 @@ export default function WhitepaperPage() {
               <tbody className="divide-y divide-[#e4e6e9] dark:divide-white/[0.06]">
                 <tr>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
-                    Direct sends &amp; Payment Links
+                    Direct sends (same asset) &amp; Payment Links
                   </td>
                   <td className="px-4 py-3 font-medium text-[#2e7d53] dark:text-emerald-400">
                     0%
@@ -405,13 +405,24 @@ export default function WhitepaperPage() {
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
+                    Cross-asset sends
+                  </td>
+                  <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
+                    0.3%
+                  </td>
+                  <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
+                    Charged from wallet balance via 1Click appFee
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
                     Earn deposits
                   </td>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
-                    0.15%
+                    0.3%
                   </td>
                   <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
-                    One-shot on deposit; 0% on withdraw / claim
+                    One-shot from balance on deposit; 0% on withdraw / claim
                   </td>
                 </tr>
                 <tr>
@@ -419,10 +430,10 @@ export default function WhitepaperPage() {
                     Convert &amp; Bridge
                   </td>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
-                    Up to 1%
+                    1.5%
                   </td>
                   <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
-                    Native 1Click appFee settled to FLOW treasury
+                    Charged from wallet balance via native 1Click appFee
                   </td>
                 </tr>
               </tbody>

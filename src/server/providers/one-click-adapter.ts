@@ -336,10 +336,10 @@ export async function fetchOneClickDryQuote(params: {
           : null,
       fees: {
         appFeeBps:
-          echo.appFees && echo.appFees.length > 0
-            ? echo.appFees.reduce((sum, item) => sum + item.fee, 0)
-            : normalizedAppFees
-              ? normalizedAppFees.reduce((sum, item) => sum + item.fee, 0)
+          normalizedAppFees && normalizedAppFees.length > 0
+            ? normalizedAppFees.reduce((sum, item) => sum + item.fee, 0)
+            : echo.appFees && echo.appFees.length > 0
+              ? echo.appFees.reduce((sum, item) => sum + item.fee, 0)
               : 0,
         refundFeeAtomic: atomicFee(quote.refundFee),
         withdrawFeeAtomic: atomicFee(quote.withdrawFee),

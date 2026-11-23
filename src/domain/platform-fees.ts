@@ -1,13 +1,13 @@
-export const EARN_DEPOSIT_FEE_BPS = 15; // 0.15%
+export const EARN_DEPOSIT_FEE_BPS = 30; // 0.30%
 export const EARN_WITHDRAW_FEE_BPS = 0; // 0%
 export const DIRECT_SEND_FEE_BPS = 0; // 0% (same-asset direct send is free)
-export const CROSS_ASSET_SEND_FEE_BPS = 15; // 0.15% (cross-asset send)
-export const CONVERT_BRIDGE_FEE_BPS = 100; // 1.00%
+export const CROSS_ASSET_SEND_FEE_BPS = 30; // 0.30% (cross-asset send)
+export const CONVERT_BRIDGE_FEE_BPS = 150; // 1.50%
 export const PAYMENT_LINK_FEE_BPS = 0; // 0%
 
-export const EARN_DEPOSIT_FEE_LABEL = "0.15%";
-export const CROSS_ASSET_SEND_FEE_LABEL = "0.15%";
-export const CONVERT_BRIDGE_FEE_LABEL = "1%";
+export const EARN_DEPOSIT_FEE_LABEL = "0.3%";
+export const CROSS_ASSET_SEND_FEE_LABEL = "0.3%";
+export const CONVERT_BRIDGE_FEE_LABEL = "1.5%";
 
 /**
  * Default FLOW fee treasury NEAR mainnet account (also used as the gas/policy sponsor).
