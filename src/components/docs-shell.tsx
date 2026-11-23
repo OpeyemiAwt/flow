@@ -54,6 +54,7 @@ const SIDEBAR_GROUPS: readonly SidebarGroup[] = [
   {
     label: "Deeper",
     items: [
+      { href: "/blog", label: "Blog" },
       { href: "/whitepaper", label: "Whitepaper", route: "whitepaper" },
       { href: "/privacy", label: "Privacy Policy", route: "privacy" },
       { href: "/terms", label: "Terms of Service", route: "terms" },
@@ -87,6 +88,7 @@ const SEARCH_INDEX = [
   { title: "Whitepaper · Non-custodial MPC & Identity", section: "Whitepaper", href: "/whitepaper#mpc", keywords: "mpc outlayer signing policy encryption" },
   { title: "Whitepaper · Cross-chain Routing", section: "Whitepaper", href: "/whitepaper#routing", keywords: "1click intents solver cross-chain settlement" },
   { title: "Whitepaper · Economics & Fees", section: "Whitepaper", href: "/whitepaper#fees", keywords: "economics fees treasury sponsor near" },
+  { title: "FLOW Blog & Shipping Updates", section: "Blog", href: "/blog", keywords: "blog updates changelog weekly shipping mvp releases news" },
   { title: "Privacy Policy", section: "Legal", href: "/privacy", keywords: "privacy data cookies storage deletion" },
   { title: "Terms of Service", section: "Legal", href: "/terms", keywords: "terms legal conditions risk" },
 ] as const;
@@ -557,6 +559,7 @@ export function DocsShell({
                     Resources
                   </p>
                   <ul className="space-y-2 text-white/70">
+                    <li><Link href="/blog" className="hover:text-white transition-colors">Blog</Link></li>
                     <li><Link href="/docs" className="hover:text-white transition-colors">Documentation</Link></li>
                     <li><Link href="/whitepaper" className="hover:text-white transition-colors">Whitepaper</Link></li>
                     <li><Link href="/docs#fees" className="hover:text-white transition-colors">Fees</Link></li>

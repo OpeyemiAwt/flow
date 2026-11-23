@@ -6,7 +6,7 @@ export function PublicSiteChrome({
   activeRoute,
   children,
 }: {
-  activeRoute: "docs" | "whitepaper" | "privacy" | "terms";
+  activeRoute: "docs" | "whitepaper" | "blog" | "privacy" | "terms";
   children: ReactNode;
 }) {
   const navLinkClass = (active: boolean) =>
@@ -32,6 +32,9 @@ export function PublicSiteChrome({
             aria-label="Public resources"
             className="flex items-center gap-1 sm:gap-2 overflow-x-auto"
           >
+            <Link href="/blog" className={navLinkClass(activeRoute === "blog")}>
+              Blog
+            </Link>
             <Link href="/docs" className={navLinkClass(activeRoute === "docs")}>
               Docs
             </Link>
@@ -74,6 +77,12 @@ export function PublicSiteChrome({
             <span>Multi-chain wallet &amp; payment infrastructure</span>
           </div>
           <div className="flex flex-wrap items-center gap-5">
+            <Link
+              href="/blog"
+              className="hover:text-[#0B0B0B] dark:hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF1A1A]"
+            >
+              Blog
+            </Link>
             <Link
               href="/docs"
               className="hover:text-[#0B0B0B] dark:hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF1A1A]"

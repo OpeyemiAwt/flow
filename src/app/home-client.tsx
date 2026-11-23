@@ -94,6 +94,12 @@ export function HomePageClient() {
               Use Cases
             </a>
             <Link
+              href="/blog"
+              className="transition-colors hover:text-[#FF1A1A]"
+            >
+              Blog
+            </Link>
+            <Link
               href="/docs"
               className="transition-colors hover:text-[#FF1A1A]"
             >
@@ -164,6 +170,13 @@ export function HomePageClient() {
               >
                 Use Cases
               </a>
+              <Link
+                href="/blog"
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-1.5"
+              >
+                Blog
+              </Link>
               <Link
                 href="/docs"
                 onClick={() => setMobileMenuOpen(false)}
@@ -965,6 +978,14 @@ export function HomePageClient() {
                 Resources
               </div>
               <ul className="mt-2.5 space-y-1.5 text-[#666666] dark:text-neutral-400">
+                <li>
+                  <Link
+                    href="/blog"
+                    className="hover:text-[#0B0B0B] dark:hover:text-white"
+                  >
+                    Blog
+                  </Link>
+                </li>
                 <li>
                   <Link
                     href="/docs"
