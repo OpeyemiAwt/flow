@@ -218,7 +218,27 @@ function ledgerMovementLabel(
   let totalUsdCents = 0n;
   let hasPriceForAny = false;
   let hasMovement = false;
-  const labels: string[] = [];
+  const aggregatedByDeployment = new Map<
+    string,
+    { deployment: CatalogTokenDeployment; decimals: number; atomic: bigint }
+  >();
+
+  const addAggregate = (
+    deployment: CatalogTokenDeployment,
+    decimals: number,
+    delta: bigint,
+  ) => {
+    const existing = aggregatedByDeployment.get(deployment.id);
+    if (existing) {
+      existing.atomic += delta;
+    } else {
+      aggregatedByDeployment.set(deployment.id, {
+        deployment,
+        decimals,
+        atomic: delta,
+      });
+    }
+  };
 
   for (const row of movements ?? []) {
     const deployment = MAINNET_SUPPORTED_DEPLOYMENTS.find(
@@ -234,6 +254,7 @@ function ledgerMovementLabel(
         : BigInt(row[direction]);
     if (amount === 0n) continue;
     hasMovement = true;
+    addAggregate(deployment, row.decimals, amount);
     const cents = atomicAmountToUsdCents(
       amount,
       row.decimals,
@@ -243,22 +264,24 @@ function ledgerMovementLabel(
       hasPriceForAny = true;
       totalUsdCents += cents;
     }
-    labels.push(
-      formatAtomicToDisplay(amount, row.decimals) +
-        " " +
-        deployment.symbol +
-        " (" +
-        deployment.networkName +
-        ")",
-    );
   }
 
   if (!hasMovement) {
+    const nowUtc = new Date();
+    const monthStartUtcMs = Date.UTC(
+      nowUtc.getUTCFullYear(),
+      nowUtc.getUTCMonth(),
+      1,
+    );
     for (const act of activities) {
       if (act.finality !== "CONFIRMED" && act.finality !== "FINALIZED") {
         continue;
       }
       if (act.direction !== "INCOMING" && act.direction !== "OUTGOING") {
+        continue;
+      }
+      const ts = act.blockTimestamp ? Date.parse(act.blockTimestamp) : Number.NaN;
+      if (Number.isFinite(ts) && ts < monthStartUtcMs) {
         continue;
       }
       const raw = BigInt(act.atomicAmount || "0");
@@ -274,6 +297,7 @@ function ledgerMovementLabel(
       );
       if (!deployment) continue;
       hasMovement = true;
+      addAggregate(deployment, act.decimals, signed);
       const cents = atomicAmountToUsdCents(
         signed,
         act.decimals,
@@ -283,19 +307,26 @@ function ledgerMovementLabel(
         hasPriceForAny = true;
         totalUsdCents += cents;
       }
-      labels.push(
-        formatAtomicToDisplay(signed, act.decimals) +
-          " " +
-          deployment.symbol +
-          " (" +
-          deployment.networkName +
-          ")",
-      );
     }
   }
 
   if (hasPriceForAny) return formatSignedUsdCents(totalUsdCents, direction);
-  if (hasMovement) return labels.join(", ");
+  if (hasMovement) {
+    const labels: string[] = [];
+    for (const entry of aggregatedByDeployment.values()) {
+      if (entry.atomic === 0n) continue;
+      const isNegative = entry.atomic < 0n;
+      const absAtomic = isNegative ? -entry.atomic : entry.atomic;
+      const compact = formatCompactActivityAmount(
+        formatAtomicToDisplay(absAtomic, entry.decimals),
+        3,
+      );
+      const prefix =
+        direction === "net" ? (isNegative ? "−" : "+") : "";
+      labels.push(`${prefix}${compact} ${entry.deployment.symbol}`);
+    }
+    if (labels.length > 0) return labels.join(", ");
+  }
   if (movements === null && activities.length === 0) return "$0.00";
   return "$0.00";
 }
@@ -1268,6 +1299,25 @@ export function PortfolioView({
         MAINNET_SUPPORTED_DEPLOYMENTS[0]!,
     );
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("flow_cached_token_prices");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const valid: Record<string, number> = {};
+      for (const [k, v] of Object.entries(parsed ?? {})) {
+        if (typeof v === "number" && Number.isFinite(v) && v > 0) {
+          valid[k] = v;
+        }
+      }
+      if (Object.keys(valid).length > 0) {
+        setTokenPrices((prev) =>
+          Object.keys(prev).length > 0 ? prev : valid,
+        );
+      }
+    } catch {}
+  }, []);
   const [tokenChanges24h, setTokenChanges24h] = useState<Record<string, number>>({});
   const [linearLiveApy, setLinearLiveApy] = useState<number | null>(null);
   const [ledgerMovements, setLedgerMovements] = useState<
@@ -1275,6 +1325,9 @@ export function PortfolioView({
   >(null);
 
   const refreshTokenPrices = useCallback(async (signal?: AbortSignal) => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      return;
+    }
     const prices: Record<string, number> = {};
     try {
       const response = await fetch(
@@ -1284,12 +1337,11 @@ export function PortfolioView({
           cache: "no-store",
         },
       );
-      const data = response.ok
-        ? ((await response.json()) as {
-            tokens: DiscoveredToken[];
-            priceChanges24h?: Record<string, number>;
-          })
-        : null;
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        tokens: DiscoveredToken[];
+        priceChanges24h?: Record<string, number>;
+      };
       const now = Date.now();
       for (const token of data?.tokens ?? []) {
         const updatedAt = Date.parse(token.priceUpdatedAt ?? "");
@@ -1306,8 +1358,21 @@ export function PortfolioView({
       if (!signal?.aborted && data?.priceChanges24h) {
         setTokenChanges24h(data.priceChanges24h);
       }
-    } catch {}
-    if (!signal?.aborted) setTokenPrices(prices);
+      if (!signal?.aborted && Object.keys(prices).length > 0) {
+        setTokenPrices((prev) => {
+          const merged = { ...prev, ...prices };
+          try {
+            window.localStorage.setItem(
+              "flow_cached_token_prices",
+              JSON.stringify(merged),
+            );
+          } catch {}
+          return merged;
+        });
+      }
+    } catch {
+      // Preserve last known prices when offline or network hiccups occur
+    }
   }, []);
 
   useEffect(() => {
@@ -1317,14 +1382,20 @@ export function PortfolioView({
       () => void refreshTokenPrices(controller.signal),
       30_000,
     );
+    const handleOnline = () => void refreshTokenPrices(controller.signal);
+    window.addEventListener("online", handleOnline);
     return () => {
       window.clearInterval(timer);
+      window.removeEventListener("online", handleOnline);
       controller.abort();
     };
   }, [refreshTokenPrices]);
 
   const refreshLedgerMovements = useCallback(
     async (signal?: AbortSignal) => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        return;
+      }
       try {
         const response = await fetch(
           "/api/accounts/" + accountId + "/ledger/summary",
@@ -1333,13 +1404,13 @@ export function PortfolioView({
             cache: "no-store",
           },
         );
-        if (!response.ok) throw new Error("Ledger unavailable");
+        if (!response.ok) return;
         const { movements } = (await response.json()) as {
           movements: LedgerMovement[];
         };
         if (!signal?.aborted) setLedgerMovements(movements);
       } catch {
-        if (!signal?.aborted) setLedgerMovements(null);
+        // Preserve last known ledger summary while offline
       }
     },
     [accountId],
@@ -3276,16 +3347,16 @@ export function PortfolioView({
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-7 w-7 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <div className="h-7 w-7 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold shrink-0">
                         ↓
                       </div>
-                      <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                      <span className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
                         Inflow
                       </span>
                     </div>
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 text-right min-w-0 break-words tabular-nums">
                       {hideBalance
                         ? "••••••"
                         : ledgerMovementLabel(
@@ -3297,16 +3368,16 @@ export function PortfolioView({
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-7 w-7 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs font-bold">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <div className="h-7 w-7 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs font-bold shrink-0">
                         ↑
                       </div>
-                      <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                      <span className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
                         Outflow
                       </span>
                     </div>
-                    <span className="text-sm font-bold text-neutral-950 dark:text-white">
+                    <span className="text-sm font-bold text-neutral-950 dark:text-white text-right min-w-0 break-words tabular-nums">
                       {hideBalance
                         ? "••••••"
                         : ledgerMovementLabel(
@@ -3318,11 +3389,11 @@ export function PortfolioView({
                     </span>
                   </div>
 
-                  <div className="pt-3 border-t border-neutral-100 dark:border-white/[0.06] flex items-center justify-between">
-                    <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                  <div className="pt-3 border-t border-neutral-100 dark:border-white/[0.06] flex items-start justify-between gap-3">
+                    <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
                       Net movement
                     </span>
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 text-right min-w-0 break-words tabular-nums">
                       {hideBalance
                         ? "••••••"
                         : ledgerMovementLabel(
