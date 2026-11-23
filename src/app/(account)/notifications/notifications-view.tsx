@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FloatingNav, type NavTabId } from "../../../components/floating-nav.tsx";
 import { FlowIdClaimModal } from "../../../components/flow-id-claim-modal.tsx";
+import { startRouteTransition } from "../../../components/route-skeleton-transition.tsx";
 import { SegmentedTabPill } from "../../../components/motion.tsx";
 import {
   isInAppNotificationEnabled,
@@ -112,11 +113,9 @@ export function NotificationsView({
   };
 
   const handleTabChange = (tab: NavTabId) => {
-    if (tab === "dashboard") {
-      router.push("/app");
-      return;
-    }
-    router.push(`/app/${tab}`);
+    const target = tab === "dashboard" ? "/app" : `/app/${tab}`;
+    startRouteTransition(target);
+    router.push(target);
   };
 
   const filtered = notifications.filter((n) => {
@@ -144,8 +143,8 @@ export function NotificationsView({
         onTabChange={handleTabChange}
         unreadCount={unreadCount}
         onOpenNotifications={() => void loadNotifications()}
-        onOpenAssistant={() =>
-          router.push(accountId ? `/assistant?account=${accountId}` : "/assistant")
+        assistantHref={
+          accountId ? `/assistant?account=${accountId}` : "/assistant"
         }
         userEmail={userEmail}
         userName={userName}
@@ -292,6 +291,7 @@ export function NotificationsView({
                         void markSingleRead(n.id);
                       }
                       if (n.link) {
+                        startRouteTransition(n.link);
                         router.push(n.link);
                       }
                     }}

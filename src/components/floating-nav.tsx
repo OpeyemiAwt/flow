@@ -37,7 +37,9 @@ export interface FloatingNavProps {
   onTabChange: (tab: NavTabId) => void;
   unreadCount?: number;
   onOpenNotifications?: () => void;
+  notificationsHref?: string;
   onOpenAssistant?: () => void;
+  assistantHref?: string;
   userEmail?: string;
   userName?: string;
   userAvatarUrl?: string | null;
@@ -135,7 +137,9 @@ export function FloatingNav({
   onTabChange,
   unreadCount = 0,
   onOpenNotifications,
+  notificationsHref,
   onOpenAssistant,
+  assistantHref,
   userEmail = "user@flow.xyz",
   userName,
   userAvatarUrl,
@@ -564,7 +568,20 @@ export function FloatingNav({
         {/* Right Liquid Glass Controls: AI Mascot, Notifications, My Profile (Desktop) */}
         <div className="flex items-center justify-self-end gap-2.5">
           {/* Round Flow AI Mascot Button */}
-          {onOpenAssistant && (
+          {assistantHref ? (
+            <Link
+              href={assistantHref}
+              prefetch
+              aria-label="Flow AI Assistant"
+              title="Flow AI Assistant"
+              className="flow-liquid-btn relative flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-full text-neutral-900 dark:text-white cursor-pointer group"
+            >
+              <FlowAiMascot
+                size={24}
+                className="transition-transform duration-200 group-hover:scale-105"
+              />
+            </Link>
+          ) : onOpenAssistant ? (
             <button
               type="button"
               onClick={onOpenAssistant}
@@ -577,10 +594,37 @@ export function FloatingNav({
                 className="transition-transform duration-200 group-hover:scale-105"
               />
             </button>
-          )}
+          ) : null}
 
           {/* Liquid Glass Notifications Button */}
-          {onOpenNotifications && (
+          {notificationsHref ? (
+            <Link
+              href={notificationsHref}
+              prefetch
+              aria-label="Notifications"
+              title="Notifications"
+              className="flow-liquid-btn relative flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-full text-neutral-700 hover:text-neutral-950 dark:text-neutral-200 dark:hover:text-white cursor-pointer"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#FF1A1A] text-white text-[10px] font-bold leading-none ring-2 ring-white dark:ring-[#18181B]">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </Link>
+          ) : onOpenNotifications ? (
             <button
               type="button"
               onClick={onOpenNotifications}
@@ -607,7 +651,7 @@ export function FloatingNav({
                 </span>
               )}
             </button>
-          )}
+          ) : null}
 
           {/* Liquid Glass My Profile Dropdown Button (Desktop top bar; moved to bottom on mobile) */}
           <div className="hidden md:block relative" ref={profileRef}>

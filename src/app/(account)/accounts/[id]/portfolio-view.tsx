@@ -2823,6 +2823,14 @@ export function PortfolioView({
     return <PaymentTimelineTracker transfer={activeOutgoingTransfer} />;
   };
 
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    router.prefetch(`/assistant?account=${accountId}`);
+    router.prefetch(`/notifications?account=${accountId}`);
+    router.prefetch("/insights");
+    router.prefetch("/security");
+  }, [accountId, router]);
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0B0B] text-neutral-900 dark:text-neutral-100 transition-colors duration-200">
       {/* Floating Top Navigation */}
@@ -2834,10 +2842,8 @@ export function PortfolioView({
           changeTab(tab);
         }}
         unreadCount={unreadNotifications}
-        onOpenNotifications={() =>
-          router.push(`/notifications?account=${accountId}`)
-        }
-        onOpenAssistant={() => router.push(`/assistant?account=${accountId}`)}
+        notificationsHref={`/notifications?account=${accountId}`}
+        assistantHref={`/assistant?account=${accountId}`}
         userName={initialDisplayName?.trim() || userEmail || account?.name || "Personal"}
         userAvatarUrl={userAvatarUrl}
         profileId={profileId}
