@@ -51,6 +51,72 @@ function withTimeout<T>(
   });
 }
 
+async function readWalletBalanceFingerprint(
+  db: FlowDb,
+  walletId: string,
+): Promise<string> {
+  const rows = await db.$queryRaw<
+    Array<{ network_asset_id: string; atomic_balance: string }>
+  >`
+    SELECT network_asset_id::text, COALESCE(SUM(atomic_balance), 0)::text AS atomic_balance
+    FROM flow.wallet_balances
+    WHERE wallet_id = ${walletId}::uuid
+    GROUP BY network_asset_id
+    ORDER BY network_asset_id
+  `;
+  return rows.map((r) => `${r.network_asset_id}:${r.atomic_balance}`).join("|");
+}
+
+async function reconcileBalancesAndSyncActivityOnChange(
+  db: FlowDb,
+  walletId: string,
+  rpcConfig: ReturnType<typeof getDefaultRpcConfig>,
+  balanceTimeoutMs: number,
+  activityTimeoutMs: number,
+  forceActivitySync: boolean,
+  workerId: string,
+): Promise<{ balanceChanged: boolean }> {
+  const before = await readWalletBalanceFingerprint(db, walletId).catch(
+    () => "",
+  );
+  await withTimeout(
+    reconcileWalletBalances(db, walletId, rpcConfig),
+    balanceTimeoutMs,
+    "balance_sync",
+  );
+  const after = await readWalletBalanceFingerprint(db, walletId).catch(
+    () => before,
+  );
+  const balanceChanged = before !== after;
+
+  if (balanceChanged || forceActivitySync) {
+    try {
+      await withTimeout(
+        ingestWalletActivities(db, walletId, { rpcConfig }),
+        activityTimeoutMs,
+        balanceChanged ? "balance_change_activity_sync" : "activity_sync",
+      );
+      if (balanceChanged) {
+        log("info", "indexer_balance_change_activity_synced", {
+          workerId,
+          walletId,
+        });
+      }
+    } catch (err) {
+      log("info", "indexer_periodic_sync_error", {
+        workerId,
+        walletId,
+        phase: "activity",
+        errorCode: errorCode(err),
+        errorMessage:
+          err instanceof Error ? err.message.slice(0, 200) : String(err),
+      });
+    }
+  }
+
+  return { balanceChanged };
+}
+
 async function drainUrgentSyncJobs(
   db: FlowDb,
   workerId: string,
@@ -84,10 +150,14 @@ async function drainUrgentSyncJobs(
       if (!wallet) throw new Error("WALLET_NOT_AVAILABLE");
       const rpcConfig = getDefaultRpcConfig(wallet.environment);
       if (job.job_type === "BALANCE_REFRESH") {
-        await withTimeout(
-          reconcileWalletBalances(db, job.wallet_id, rpcConfig),
+        await reconcileBalancesAndSyncActivityOnChange(
+          db,
+          job.wallet_id,
+          rpcConfig,
           25_000,
-          "BALANCE_REFRESH",
+          25_000,
+          false,
+          workerId,
         );
       } else if (job.job_type === "ACTIVITY_SYNC") {
         await withTimeout(
@@ -243,10 +313,14 @@ async function main(): Promise<void> {
 
           if (shouldSyncBalances) {
             try {
-              await withTimeout(
-                reconcileWalletBalances(db, activeWallet.id, rpcConfig),
+              await reconcileBalancesAndSyncActivityOnChange(
+                db,
+                activeWallet.id,
+                rpcConfig,
                 15_000,
-                "periodic_balance_sync",
+                20_000,
+                shouldSyncActivities,
+                workerId,
               );
             } catch (err) {
               log("info", "indexer_periodic_sync_error", {
@@ -258,9 +332,7 @@ async function main(): Promise<void> {
                   err instanceof Error ? err.message.slice(0, 200) : String(err),
               });
             }
-          }
-
-          if (shouldSyncActivities) {
+          } else if (shouldSyncActivities) {
             // Re-check urgent jobs before slower activity ingestion.
             await drainUrgentSyncJobs(db, workerId, controller.signal);
             if (controller.signal.aborted) break;

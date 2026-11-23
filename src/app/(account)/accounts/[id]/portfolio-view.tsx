@@ -2126,8 +2126,17 @@ export function PortfolioView({
     refreshTokenPrices,
   ]);
 
-  // Keep portfolio balances fresh in the background while the app tab is visible.
+  // Keep portfolio balances, activities, and notifications fresh together while the tab is visible.
+  const prevBalanceSigRef = useRef<string>("");
   useEffect(() => {
+    const computeSig = (p: SerializedAccountPortfolio) =>
+      p.balances
+        .map((b) => `${b.networkAssetId}:${b.atomicBalance}`)
+        .sort()
+        .join("|");
+    if (!prevBalanceSigRef.current) {
+      prevBalanceSigRef.current = computeSig(portfolio);
+    }
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       void send<SerializedAccountPortfolio>(
@@ -2135,11 +2144,32 @@ export function PortfolioView({
         {},
         "GET",
       )
-        .then((p) => setPortfolio(p))
+        .then((p) => {
+          const nextSig = computeSig(p);
+          const changed =
+            prevBalanceSigRef.current !== "" &&
+            nextSig !== prevBalanceSigRef.current;
+          prevBalanceSigRef.current = nextSig;
+          setPortfolio(p);
+          if (changed) {
+            void refreshActivities();
+            void refreshLedgerMovements();
+            void pollNotifications();
+            void refreshTokenPrices();
+          }
+        })
         .catch(() => {});
-    }, 15_000);
+      void refreshActivities();
+      void pollNotifications();
+    }, 10_000);
     return () => window.clearInterval(timer);
-  }, [accountId]);
+  }, [
+    accountId,
+    pollNotifications,
+    refreshActivities,
+    refreshLedgerMovements,
+    refreshTokenPrices,
+  ]);
 
   const broadcastSyncTriggeredRef = useRef<string | null>(null);
   useEffect(() => {
