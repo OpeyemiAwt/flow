@@ -26,7 +26,7 @@ import { access, accountId, principal } from "./accounts.ts";
 import { requestAccountSync } from "./account-sync.ts";
 import { getAccountBalances } from "./assets/asset-service.ts";
 import { fetchLiveMainnetBalance } from "./assets/connectors/multi-chain-reconciler.ts";
-import { resolveFlowIdForSend } from "./flow-id-service.ts";
+import { getAccountFlowId, resolveFlowIdForSend } from "./flow-id-service.ts";
 import { ApiFailure, input, reply } from "./http.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import { getConvertBridgeAppFees } from "../domain/platform-fees.ts";
@@ -451,9 +451,13 @@ export async function executeSendTransfer(
       : destDeployment.contractIdentifier;
   const publicId = `snd_${randomBytes(10).toString("hex")}`;
 
+  const senderFlowId = await getAccountFlowId(runtime().db, id).catch(
+    () => null,
+  );
   const quotePayloadJson = JSON.stringify({
     ...(userMemo ? { userMemo } : {}),
     ...(recipientLabel ? { recipientLabel } : {}),
+    ...(senderFlowId ? { senderFlowId } : {}),
   });
 
   const created = await transaction(async (tx) => {

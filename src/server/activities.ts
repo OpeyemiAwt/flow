@@ -446,6 +446,129 @@ export async function readActivities(
       ? await dbWithTx.$transaction(execute)
       : await execute(db);
 
+  // Enrich incoming Flow-to-Flow transfers with the sender's Flow ID (and memo)
+  // for both direct same-chain and cross-chain (1Click) transfers.
+  const incomingRows = result.activities.filter(
+    (act) => act.direction === "INCOMING",
+  );
+  if (incomingRows.length > 0 && typeof dbWithTx.$transaction === "function") {
+    const incomingTxHashes = Array.from(
+      new Set(incomingRows.map((a) => a.txHash).filter(Boolean)),
+    );
+    const incomingFromAddresses = Array.from(
+      new Set(incomingRows.map((a) => a.fromAddress).filter(Boolean)),
+    );
+
+    const txSenderMap = new Map<
+      string,
+      { flowId: string | null; memo: string | null }
+    >();
+    const addrFlowIdMap = new Map<string, string>();
+
+    if (incomingTxHashes.length > 0) {
+      try {
+        const senderRows = await dbWithTx.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${actor.session.token}, true),
+            set_config('flow.current_account_id', ${accountId}, true)`;
+          return tx.$queryRaw<
+            Array<{
+              matched_tx_hash: string;
+              sender_flow_id: string | null;
+              sender_memo: string | null;
+            }>
+          >`
+            SELECT matched_tx_hash, sender_flow_id, sender_memo
+            FROM flow.resolve_incoming_transfer_senders(
+              ${accountId}::uuid,
+              ${incomingTxHashes}::text[]
+            )
+          `;
+        });
+        for (const row of senderRows) {
+          if (row.matched_tx_hash) {
+            txSenderMap.set(row.matched_tx_hash.toLowerCase(), {
+              flowId: row.sender_flow_id,
+              memo: row.sender_memo,
+            });
+          }
+        }
+      } catch {
+        // Safe fallback while DB migration rolls out
+      }
+    }
+
+    if (incomingFromAddresses.length > 0) {
+      try {
+        const addrRows = await dbWithTx.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${actor.session.token}, true),
+            set_config('flow.current_account_id', ${accountId}, true)`;
+          return tx.$queryRaw<
+            Array<{ address_key: string; flow_id: string }>
+          >`
+            SELECT address_key, flow_id
+            FROM flow.resolve_wallet_address_flow_ids(${incomingFromAddresses}::text[])
+          `;
+        });
+        for (const row of addrRows) {
+          if (row.address_key && row.flow_id) {
+            addrFlowIdMap.set(row.address_key.toLowerCase(), row.flow_id);
+          }
+        }
+      } catch {
+        try {
+          const lowerAddrs = incomingFromAddresses.map((a) => a.toLowerCase());
+          const fallbackRows = await db.$queryRaw<
+            Array<{ address_key: string; flow_id: string }>
+          >`
+            SELECT DISTINCT ON (LOWER(wa.address))
+              LOWER(wa.address)::text AS address_key,
+              a.flow_id::text AS flow_id
+            FROM flow.wallet_addresses wa
+            JOIN flow.wallets w ON w.id = wa.wallet_id
+            JOIN flow.accounts a ON a.id = w.account_id
+            WHERE w.environment = 'mainnet'
+              AND a.flow_id IS NOT NULL
+              AND LOWER(wa.address) = ANY(${lowerAddrs}::text[])
+            ORDER BY LOWER(wa.address), w.created_at DESC
+          `;
+          for (const row of fallbackRows) {
+            if (row.address_key && row.flow_id) {
+              addrFlowIdMap.set(row.address_key.toLowerCase(), row.flow_id);
+            }
+          }
+        } catch {
+          // Ignore enrichment failures
+        }
+      }
+    }
+
+    if (txSenderMap.size > 0 || addrFlowIdMap.size > 0) {
+      const enriched = result.activities.map((act) => {
+        if (act.direction !== "INCOMING") return act;
+        const txMatch = txSenderMap.get(act.txHash.toLowerCase());
+        const addrFlowId = act.fromAddress
+          ? addrFlowIdMap.get(act.fromAddress.toLowerCase())
+          : undefined;
+        const senderLabel = txMatch?.flowId || addrFlowId || null;
+        const senderMemo = txMatch?.memo || null;
+        if (!senderLabel && !senderMemo) return act;
+        const existingMemo =
+          typeof act.metadata?.memo === "string" && act.metadata.memo.trim()
+            ? act.metadata.memo
+            : null;
+        return {
+          ...act,
+          metadata: {
+            ...act.metadata,
+            ...(senderLabel ? { senderLabel } : {}),
+            ...(!existingMemo && senderMemo ? { memo: senderMemo } : {}),
+          },
+        };
+      });
+      return reply(200, { ...result, activities: enriched });
+    }
+  }
+
   return reply(200, result);
 }
 

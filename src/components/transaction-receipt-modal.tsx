@@ -63,8 +63,15 @@ function resolveReceiptFields(activity: SerializedWalletActivityRecord) {
     typeof meta.recipientLabel === "string" && meta.recipientLabel.trim()
       ? meta.recipientLabel.trim()
       : null;
-  const flowIdMatch = rawRecipientLabel?.match(/\b([a-z0-9][a-z0-9._-]*@flow)\b/i);
-  const recipientLabel = flowIdMatch ? flowIdMatch[1] : rawRecipientLabel;
+  const recipientFlowIdMatch = rawRecipientLabel?.match(/\b([a-z0-9][a-z0-9._-]*@flow)\b/i);
+  const recipientLabel = recipientFlowIdMatch ? recipientFlowIdMatch[1] : rawRecipientLabel;
+
+  const rawSenderLabel =
+    (typeof meta.senderLabel === "string" && meta.senderLabel.trim()) ||
+    (typeof meta.senderFlowId === "string" && meta.senderFlowId.trim()) ||
+    null;
+  const senderFlowIdMatch = rawSenderLabel?.match(/\b([a-z0-9][a-z0-9._-]*@flow)\b/i);
+  const senderLabel = senderFlowIdMatch ? senderFlowIdMatch[1] : rawSenderLabel;
 
   let typeLabel =
     activity.direction === "OUTGOING" ? "Transfer" : "Received";
@@ -98,8 +105,10 @@ function resolveReceiptFields(activity: SerializedWalletActivityRecord) {
     activity.direction === "OUTGOING"
       ? activity.toAddress
       : activity.fromAddress;
+  const preferredCounterparty =
+    activity.direction === "OUTGOING" ? recipientLabel : senderLabel;
   const counterpartyValue =
-    recipientLabel ||
+    preferredCounterparty ||
     (rawCounterparty ? truncateMiddle(rawCounterparty, 10, 8) : "FLOW Wallet");
 
   const isFailed =
