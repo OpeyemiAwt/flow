@@ -68,8 +68,8 @@ export function getDefaultRpcConfig(
     solana: {
       primary:
         process.env.FLOW_SOLANA_RPC_URL ||
-        "https://solana-rpc.publicnode.com",
-      fallback: "https://api.mainnet-beta.solana.com",
+        "https://api.mainnet-beta.solana.com",
+      fallback: "https://solana-rpc.publicnode.com",
     },
   };
 }
@@ -432,7 +432,7 @@ export async function fetchLiveMainnetBalance(params: {
 
   if (normalizedNetwork === "solana") {
     const primary =
-      rpc.solana?.primary ?? "https://solana-rpc.publicnode.com";
+      rpc.solana?.primary ?? "https://api.mainnet-beta.solana.com";
     const fallback = rpc.solana?.fallback;
     return params.standard === "NATIVE"
       ? fetchSolanaNativeBalance(primary, params.address, "solana-mainnet", {

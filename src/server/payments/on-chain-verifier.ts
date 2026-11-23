@@ -861,7 +861,7 @@ export function getNetworkRpcUrl(network: string): string {
       process.env.FLOW_SOLANA_RPC_URL ||
       (norm.includes("devnet")
         ? "https://api.devnet.solana.com"
-        : "https://solana-rpc.publicnode.com")
+        : "https://api.mainnet-beta.solana.com")
     );
   }
   if (norm.includes("ethereum") || norm.includes("eth")) {

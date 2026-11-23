@@ -21,7 +21,7 @@ export const DEFAULT_RPC_ENDPOINTS = Object.freeze({
   nearTestnet: "https://rpc.testnet.near.org",
   base: "https://mainnet.base.org",
   baseSepolia: "https://sepolia.base.org",
-  solana: "https://solana-rpc.publicnode.com",
+  solana: "https://api.mainnet-beta.solana.com",
   solanaDevnet: "https://api.devnet.solana.com",
 });
 
