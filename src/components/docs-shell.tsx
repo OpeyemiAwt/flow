@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { BLOG_POSTS } from "../content/blog-posts.ts";
 import { FlowLogo } from "./flow-logo.tsx";
 import {
   THEME_CHANGE_EVENT,
@@ -20,7 +21,8 @@ interface SidebarGroup {
     readonly href: string;
     readonly label: string;
     readonly sectionId?: string;
-    readonly route?: "docs" | "whitepaper" | "privacy" | "terms";
+    readonly blogSlug?: string;
+    readonly route?: "docs" | "whitepaper" | "blog" | "privacy" | "terms";
   }[];
 }
 
@@ -54,13 +56,26 @@ const SIDEBAR_GROUPS: readonly SidebarGroup[] = [
   {
     label: "Deeper",
     items: [
-      { href: "/blog", label: "Blog" },
+      { href: "/blog", label: "Blog", route: "blog" },
       { href: "/whitepaper", label: "Whitepaper", route: "whitepaper" },
       { href: "/privacy", label: "Privacy Policy", route: "privacy" },
       { href: "/terms", label: "Terms of Service", route: "terms" },
     ],
   },
 ];
+
+const BLOG_SIDEBAR_GROUP: SidebarGroup = {
+  label: "Articles",
+  items: [
+    { href: "/blog", label: "All posts", route: "blog" },
+    ...BLOG_POSTS.map((post) => ({
+      href: `/blog/${post.slug}`,
+      label: post.title,
+      blogSlug: post.slug,
+      route: "blog" as const,
+    })),
+  ],
+};
 
 const TOP_TABS = [
   { href: "/docs", label: "Overview", match: "docs-overview" },
@@ -70,6 +85,7 @@ const TOP_TABS = [
   { href: "/docs#earn", label: "Earn", match: "earn" },
   { href: "/docs#fees", label: "Fees", match: "fees" },
   { href: "/whitepaper", label: "Whitepaper", match: "whitepaper" },
+  { href: "/blog", label: "Blog", match: "blog" },
 ] as const;
 
 const SEARCH_INDEX = [
@@ -89,17 +105,25 @@ const SEARCH_INDEX = [
   { title: "Whitepaper · Cross-chain Routing", section: "Whitepaper", href: "/whitepaper#routing", keywords: "1click intents solver cross-chain settlement" },
   { title: "Whitepaper · Economics & Fees", section: "Whitepaper", href: "/whitepaper#fees", keywords: "economics fees treasury sponsor near" },
   { title: "FLOW Blog & Shipping Updates", section: "Blog", href: "/blog", keywords: "blog updates changelog weekly shipping mvp releases news" },
+  ...BLOG_POSTS.map((post) => ({
+    title: post.title,
+    section: `Blog · ${post.category}`,
+    href: `/blog/${post.slug}`,
+    keywords: `${post.summary} ${post.tags.join(" ")}`.toLowerCase(),
+  })),
   { title: "Privacy Policy", section: "Legal", href: "/privacy", keywords: "privacy data cookies storage deletion" },
   { title: "Terms of Service", section: "Legal", href: "/terms", keywords: "terms legal conditions risk" },
 ] as const;
 
 export function DocsShell({
   activeRoute,
+  activeBlogSlug,
   eyebrow,
   toc,
   children,
 }: {
-  activeRoute: "docs" | "whitepaper" | "privacy" | "terms";
+  activeRoute: "docs" | "whitepaper" | "blog" | "privacy" | "terms";
+  activeBlogSlug?: string;
   eyebrow: string;
   toc: readonly DocsTocItem[];
   children: ReactNode;
@@ -199,8 +223,9 @@ export function DocsShell({
 
   const isTopTabActive = (match: string) => {
     if (activeRoute === "whitepaper") return match === "whitepaper";
+    if (activeRoute === "blog") return match === "blog";
     if (activeRoute !== "docs") return false;
-    if (match === "whitepaper") return false;
+    if (match === "whitepaper" || match === "blog") return false;
     if (match === "docs-overview") {
       return (
         !activeId ||
@@ -215,17 +240,38 @@ export function DocsShell({
     return activeId === match;
   };
 
+  const sidebarGroups = useMemo(
+    () =>
+      activeRoute === "blog"
+        ? [BLOG_SIDEBAR_GROUP, ...SIDEBAR_GROUPS]
+        : SIDEBAR_GROUPS,
+    [activeRoute],
+  );
+
   const headerSectionLabel =
     activeRoute === "whitepaper"
       ? "Whitepaper"
-      : activeRoute === "privacy"
-        ? "Privacy"
-        : activeRoute === "terms"
-          ? "Terms"
-          : "Docs";
+      : activeRoute === "blog"
+        ? "Blog"
+        : activeRoute === "privacy"
+          ? "Privacy"
+          : activeRoute === "terms"
+            ? "Terms"
+            : "Docs";
+
+  const headerSectionHref =
+    activeRoute === "whitepaper"
+      ? "/whitepaper"
+      : activeRoute === "blog"
+        ? "/blog"
+        : activeRoute === "privacy"
+          ? "/privacy"
+          : activeRoute === "terms"
+            ? "/terms"
+            : "/docs";
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0b0c0e] text-[#0b0c0e] dark:text-[#f5f6f8] transition-colors duration-200">
+    <div className="min-h-screen overflow-x-clip bg-white dark:bg-[#0b0c0e] text-[#0b0c0e] dark:text-[#f5f6f8] transition-colors duration-200">
       {/* Top Sticky Gloam-style Docs Header */}
       <header className="sticky top-0 z-40 border-b border-[#e4e6e9] dark:border-white/[0.08] bg-white/90 dark:bg-[#0b0c0e]/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-[#0b0c0e]/80">
         <div className="mx-auto max-w-[1440px]">
@@ -255,15 +301,7 @@ export function DocsShell({
                 </Link>
                 <span className="h-4 w-px bg-[#e4e6e9] dark:bg-white/[0.12]" aria-hidden="true" />
                 <Link
-                  href={
-                    activeRoute === "whitepaper"
-                      ? "/whitepaper"
-                      : activeRoute === "privacy"
-                        ? "/privacy"
-                        : activeRoute === "terms"
-                          ? "/terms"
-                          : "/docs"
-                  }
+                  href={headerSectionHref}
                   className="text-[17px] leading-none tracking-[-0.015em] text-[#5f636a] dark:text-neutral-400 hover:text-[#0b0c0e] dark:hover:text-white transition-colors"
                 >
                   {headerSectionLabel}
@@ -283,7 +321,7 @@ export function DocsShell({
                   <circle cx="11" cy="11" r="8" />
                   <path d="m21 21-4.3-4.3" />
                 </svg>
-                <span className="min-w-0 flex-1 truncate">Search the docs</span>
+                <span className="min-w-0 flex-1 truncate">Search docs &amp; blog</span>
                 <kbd className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-md border border-[#e4e6e9] dark:border-white/[0.12] bg-white dark:bg-[#141518] px-1.5 font-sans text-[11.5px] font-medium leading-none text-[#5f636a] dark:text-neutral-400">
                   ⌘K
                 </kbd>
@@ -375,7 +413,7 @@ export function DocsShell({
                 aria-label="Sidebar navigation"
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2"
               >
-                {SIDEBAR_GROUPS.map((group) => (
+                {sidebarGroups.map((group) => (
                   <div key={group.label} className="mb-7 last:mb-0">
                     <p className="px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b6f76] dark:text-neutral-500">
                       {group.label}
@@ -383,6 +421,13 @@ export function DocsShell({
                     <ul className="mt-2 space-y-0.5">
                       {group.items.map((item) => {
                         const active =
+                          (item.blogSlug &&
+                            activeRoute === "blog" &&
+                            item.blogSlug === activeBlogSlug) ||
+                          (!item.blogSlug &&
+                            item.route === "blog" &&
+                            activeRoute === "blog" &&
+                            !activeBlogSlug) ||
                           (item.route === "whitepaper" && activeRoute === "whitepaper") ||
                           (item.route === "privacy" && activeRoute === "privacy") ||
                           (item.route === "terms" && activeRoute === "terms") ||
@@ -390,16 +435,18 @@ export function DocsShell({
                             activeRoute === "docs" &&
                             item.sectionId === activeId);
                         return (
-                          <li key={item.href}>
+                          <li key={`${group.label}-${item.href}`}>
                             <Link
                               href={item.href}
-                              className={`flex items-center rounded-full px-3 py-2 text-[14px] transition-colors ${
+                              className={`flex items-center rounded-xl px-3 py-2 text-[13.5px] leading-snug transition-colors ${
                                 active
                                   ? "bg-[#f3f4f5] dark:bg-white/[0.08] font-medium text-[#0b0c0e] dark:text-white"
                                   : "text-[#5f636a] dark:text-neutral-400 hover:bg-[#f3f4f5]/70 dark:hover:bg-white/[0.05] hover:text-[#0b0c0e] dark:hover:text-white"
                               }`}
                             >
-                              {item.label}
+                              <span className={item.blogSlug ? "line-clamp-2" : "truncate"}>
+                                {item.label}
+                              </span>
                             </Link>
                           </li>
                         );
@@ -610,23 +657,42 @@ export function DocsShell({
               </button>
             </div>
             <nav className="mt-4 flex-1 overflow-y-auto space-y-6">
-              {SIDEBAR_GROUPS.map((group) => (
+              {sidebarGroups.map((group) => (
                 <div key={group.label}>
                   <p className="px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b6f76] dark:text-neutral-500">
                     {group.label}
                   </p>
                   <ul className="mt-2 space-y-0.5">
-                    {group.items.map((item) => (
-                      <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          onClick={() => setMobileMenuOpen(false)}
-                          className="flex items-center rounded-full px-3 py-2 text-[14px] text-[#5f636a] dark:text-neutral-300 hover:bg-[#f3f4f5] dark:hover:bg-white/[0.08] hover:text-[#0b0c0e] dark:hover:text-white"
-                        >
-                          {item.label}
-                        </Link>
-                      </li>
-                    ))}
+                    {group.items.map((item) => {
+                      const active =
+                        (item.blogSlug &&
+                          activeRoute === "blog" &&
+                          item.blogSlug === activeBlogSlug) ||
+                        (!item.blogSlug &&
+                          item.route === "blog" &&
+                          activeRoute === "blog" &&
+                          !activeBlogSlug) ||
+                        (item.route === "whitepaper" && activeRoute === "whitepaper") ||
+                        (item.route === "privacy" && activeRoute === "privacy") ||
+                        (item.route === "terms" && activeRoute === "terms");
+                      return (
+                        <li key={`${group.label}-${item.href}`}>
+                          <Link
+                            href={item.href}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={`flex items-center rounded-xl px-3 py-2 text-[14px] leading-snug ${
+                              active
+                                ? "bg-[#f3f4f5] dark:bg-white/[0.08] font-medium text-[#0b0c0e] dark:text-white"
+                                : "text-[#5f636a] dark:text-neutral-300 hover:bg-[#f3f4f5] dark:hover:bg-white/[0.08] hover:text-[#0b0c0e] dark:hover:text-white"
+                            }`}
+                          >
+                            <span className={item.blogSlug ? "line-clamp-2" : "truncate"}>
+                              {item.label}
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}
@@ -672,7 +738,7 @@ export function DocsShell({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search docs and whitepaper..."
+                placeholder="Search docs, whitepaper & blog..."
                 className="w-full bg-transparent text-[15px] text-[#0b0c0e] dark:text-white placeholder:text-[#6b6f76] focus:outline-hidden"
               />
               <button

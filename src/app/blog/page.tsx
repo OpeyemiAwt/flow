@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PublicSiteChrome } from "../../components/public-site-chrome.tsx";
+import { DocsShell, type DocsTocItem } from "../../components/docs-shell.tsx";
 import { getAllBlogPosts } from "../../content/blog-posts.ts";
 import { BlogIndexClient } from "./blog-index-client.tsx";
 
@@ -34,12 +34,23 @@ export const metadata: Metadata = {
   },
 };
 
+const BLOG_INDEX_TOC: readonly DocsTocItem[] = [
+  { id: "overview", label: "Overview" },
+  { id: "filter", label: "Browse & filter" },
+  { id: "featured", label: "Featured release" },
+  { id: "all-posts", label: "All articles" },
+];
+
 export default function BlogPage() {
   const posts = getAllBlogPosts();
 
   return (
-    <PublicSiteChrome activeRoute="blog">
+    <DocsShell
+      activeRoute="blog"
+      eyebrow="Journal & Shipping"
+      toc={BLOG_INDEX_TOC}
+    >
       <BlogIndexClient posts={posts} />
-    </PublicSiteChrome>
+    </DocsShell>
   );
 }
