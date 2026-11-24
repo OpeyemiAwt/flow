@@ -3580,7 +3580,7 @@ export function PortfolioView({
                 </div>
               </div>
             ) : (
-              <div className="max-w-2xl mx-auto space-y-6">
+              <div className="max-w-2xl mx-auto space-y-4">
                 <div>
                   <button
                     type="button"
@@ -3588,7 +3588,7 @@ export function PortfolioView({
                       setSendHubOpen(true);
                       setSendStep(1);
                     }}
-                    className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                    className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
                   >
                     ← Back to Send options
                   </button>
@@ -3599,27 +3599,16 @@ export function PortfolioView({
                     Send any asset in your wallet to any supported address or{" "}
                     <span className="font-mono">@flow</span> ID.
                   </p>
-                  {sendIsFlowId && sendRecipientAddress.trim() && (
-                    <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      <span>
-                        Direct payment to{" "}
-                        <strong className="font-mono">
-                          {sendRecipientAddress.trim()}
-                        </strong>
-                      </span>
-                    </div>
-                  )}
-                  <div className="mt-2.5">
-                    <NearIntentsBadge />
-                  </div>
                 </div>
 
-                {/* Step Progress Slide Bar */}
-                <div
-                  aria-label="Send progress"
-                  className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4 shadow-2xs space-y-3"
-                >
+                {/* Continuous Thin Joined Progress Bar (No Card Background) */}
+                <div aria-label="Send progress" className="space-y-2 pt-0.5">
+                  <div className="h-[3px] w-full rounded-full bg-neutral-200/90 dark:bg-white/[0.1] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-neutral-950 dark:bg-white transition-all duration-300"
+                      style={{ width: `${(sendStep / 4) * 100}%` }}
+                    />
+                  </div>
                   <div className="grid grid-cols-4 gap-2">
                     {[
                       { step: 1 as const, label: "Your asset" },
@@ -3638,34 +3627,17 @@ export function PortfolioView({
                           onClick={() => {
                             if (canJump) setSendStep(item.step);
                           }}
-                          className={`text-left space-y-1.5 ${
+                          className={`text-left text-[11px] font-semibold truncate transition-colors ${
                             canJump ? "cursor-pointer" : "cursor-default"
+                          } ${
+                            isCompleted
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : isCurrent
+                                ? "text-neutral-950 dark:text-white"
+                                : "text-neutral-400 dark:text-neutral-500"
                           }`}
                         >
-                          <div className="h-1.5 w-full rounded-full bg-neutral-200 dark:bg-white/[0.08] overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${
-                                isCompleted
-                                  ? "w-full bg-emerald-500"
-                                  : isCurrent
-                                    ? "w-1/2 bg-neutral-950 dark:bg-white"
-                                    : "w-0"
-                              }`}
-                            />
-                          </div>
-                          <div className="flex items-center gap-1 text-[11px] font-semibold truncate">
-                            <span
-                              className={
-                                isCompleted
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : isCurrent
-                                    ? "text-neutral-950 dark:text-white"
-                                    : "text-neutral-400 dark:text-neutral-500"
-                              }
-                            >
-                              {item.label}
-                            </span>
-                          </div>
+                          {item.label}
                         </button>
                       );
                     })}
@@ -4416,6 +4388,10 @@ export function PortfolioView({
                       {renderOutgoingStatusCard("SEND")}
                     </div>
                   )}
+                </div>
+
+                <div className="flex justify-center pt-1">
+                  <NearIntentsBadge />
                 </div>
               </div>
             )}
