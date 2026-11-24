@@ -97,3 +97,29 @@ test("maxPrincipalBeforePlatformFee guarantees grossUp(maxPrincipal) <= maxGross
     }
   }
 });
+
+test("Solana native Max send leaves enough lamports for rent exemption plus base fee", () => {
+  const RENT_EXEMPT_LAMPORTS = 890_880n;
+  const BASE_FEE_LAMPORTS = 5_000n;
+  const balanceAtomic = 12_410_000n; // 0.01241 SOL
+
+  const maxSendable = computeMaxSendableAtomic({
+    networkKey: "solana-mainnet",
+    sourceStandard: "NATIVE",
+    balanceAtomic,
+  });
+  const remainingAfterTx = balanceAtomic - maxSendable - BASE_FEE_LAMPORTS;
+  assert.ok(
+    remainingAfterTx >= RENT_EXEMPT_LAMPORTS,
+    `remaining lamports (${remainingAfterTx}) must stay >= rent-exempt minimum (${RENT_EXEMPT_LAMPORTS})`,
+  );
+
+  // Sending too close to full balance (leaving < 0.001 SOL) must fail pre-check
+  const tooClose = checkNetworkGasBalance({
+    networkKey: "solana-mainnet",
+    sourceStandard: "NATIVE",
+    requestedAmountAtomic: 12_400_000n,
+    nativeBalanceAtomic: balanceAtomic,
+  });
+  assert.equal(tooClose.ok, false);
+});

@@ -712,8 +712,8 @@ export const NETWORK_GAS_RESERVES: Record<string, NetworkGasReserve> = {
   "solana-mainnet": {
     symbol: "SOL",
     decimals: 9,
-    minAtomic: 10_000n,
-    minDisplay: "0.00001",
+    minAtomic: 1_000_000n,
+    minDisplay: "0.001",
     networkLabel: "Solana",
   },
   "near-mainnet": {
@@ -759,9 +759,14 @@ export function checkNetworkGasBalance(params: {
     return { ok: true };
   }
 
+  const isSolana = params.networkKey === "solana-mainnet";
   const reason = isNative
-    ? `Leave at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas.`
-    : `You need at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} to pay network gas for this transaction.`;
+    ? isSolana
+      ? `Leave at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas and account rent.`
+      : `Leave at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas.`
+    : isSolana
+      ? `You need at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas and account rent.`
+      : `You need at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} to pay network gas for this transaction.`;
 
   return {
     ok: false,

@@ -58,6 +58,9 @@ const ERC20_TRANSFER_ABI = parseAbi([
 const SOLANA_SYSTEM_PROGRAM = "11111111111111111111111111111111";
 const SOLANA_ASSOCIATED_TOKEN_PROGRAM =
   "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+const SOLANA_SYSTEM_RENT_EXEMPT_LAMPORTS = 890_880n;
+const SOLANA_ATA_RENT_LAMPORTS = 2_039_280n;
+const SOLANA_BASE_FEE_LAMPORTS = 5_000n;
 const BASE58_ALPHABET =
   "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
@@ -415,6 +418,60 @@ async function deriveAtaAddress(
   return pda;
 }
 
+function formatSolanaRpcSendError(
+  error:
+    | {
+        readonly message?: string;
+        readonly data?: unknown;
+      }
+    | undefined,
+): string {
+  const baseMessage = error?.message ?? "Solana sendTransaction rejected.";
+  const data =
+    error?.data && typeof error.data === "object"
+      ? (error.data as { err?: unknown; logs?: unknown })
+      : null;
+  const err = data?.err;
+
+  if (err && typeof err === "object") {
+    const errObj = err as Record<string, unknown>;
+    if ("InsufficientFundsForRent" in errObj) {
+      const rentObj = errObj.InsufficientFundsForRent as
+        | { account_index?: number }
+        | undefined;
+      if (rentObj?.account_index === 0) {
+        return "Solana requires keeping at least 0.001 SOL in your wallet for account rent and network fee. Try sending a slightly smaller amount.";
+      }
+      return "Recipient Solana address needs at least 0.001 SOL on first deposit to cover Solana account rent.";
+    }
+    if ("InstructionError" in errObj) {
+      const logs = Array.isArray(data?.logs)
+        ? data.logs.filter((l): l is string => typeof l === "string")
+        : [];
+      const insufficientLamports = logs.some((l) =>
+        /insufficient lamports|insufficient funds/i.test(l),
+      );
+      if (insufficientLamports) {
+        return "Insufficient SOL balance to cover this transfer, account rent, and Solana network fee.";
+      }
+      return `${baseMessage} (${JSON.stringify(err)})`;
+    }
+    return `${baseMessage} (${JSON.stringify(err)})`;
+  }
+
+  if (typeof err === "string") {
+    if (err === "AccountNotFound" || err === "InsufficientFundsForFee") {
+      return "Insufficient SOL balance in your wallet to pay Solana network fees.";
+    }
+    if (err === "BlockhashNotFound") {
+      return "Solana blockhash expired before broadcast. Please retry your transfer.";
+    }
+    return `${baseMessage} (${err})`;
+  }
+
+  return baseMessage;
+}
+
 async function executeSolanaTransfer(
   job: ClaimedOutgoingCustodyJob,
   apiKey: string,
@@ -429,11 +486,19 @@ async function executeSolanaTransfer(
   const amount = BigInt(job.source_atomic_amount);
   const isNative = job.source_asset_id.toLowerCase() === "native";
 
-  const blockhashRes = await callJsonRpc<{
-    value?: { blockhash?: string; lastValidBlockHeight?: number };
-  }>(primary, "getLatestBlockhash", [{ commitment: "finalized" }], {
-    fallbackEndpoint: fallback,
-  });
+  const [blockhashRes, senderBalanceRes] = await Promise.all([
+    callJsonRpc<{
+      value?: { blockhash?: string; lastValidBlockHeight?: number };
+    }>(primary, "getLatestBlockhash", [{ commitment: "finalized" }], {
+      fallbackEndpoint: fallback,
+    }),
+    callJsonRpc<{ value?: number }>(
+      primary,
+      "getBalance",
+      [job.source_address, { commitment: "confirmed" }],
+      { fallbackEndpoint: fallback },
+    ).catch(() => null),
+  ]);
 
   const blockhash = blockhashRes.response.result?.value?.blockhash;
   const lastValidBlockHeight =
@@ -445,11 +510,58 @@ async function executeSolanaTransfer(
     );
   }
 
+  const senderLamportsRaw = senderBalanceRes?.response.result?.value;
+  const senderLamports =
+    typeof senderLamportsRaw === "number" ? BigInt(senderLamportsRaw) : null;
+
   const fromAddr = address(job.source_address);
   const toAddr = address(targetAddress);
   const instructions = [];
 
   if (isNative) {
+    if (senderLamports !== null) {
+      if (senderLamports < amount + SOLANA_BASE_FEE_LAMPORTS) {
+        throw new FlowError(
+          "INSUFFICIENT_FUNDS",
+          "Insufficient SOL balance to cover this transfer and Solana network fee.",
+        );
+      }
+      const remainingLamports =
+        senderLamports - amount - SOLANA_BASE_FEE_LAMPORTS;
+      if (
+        remainingLamports > 0n &&
+        remainingLamports < SOLANA_SYSTEM_RENT_EXEMPT_LAMPORTS
+      ) {
+        throw new FlowError(
+          "INSUFFICIENT_FUNDS",
+          "Solana requires keeping at least 0.001 SOL in your wallet for account rent and network fee. Try sending a slightly smaller amount.",
+        );
+      }
+    }
+
+    if (amount < SOLANA_SYSTEM_RENT_EXEMPT_LAMPORTS) {
+      const recipientBalanceRes = await callJsonRpc<{ value?: number }>(
+        primary,
+        "getBalance",
+        [targetAddress, { commitment: "confirmed" }],
+        { fallbackEndpoint: fallback },
+      ).catch(() => null);
+      const recipientLamportsRaw = recipientBalanceRes?.response.result?.value;
+      const recipientLamports =
+        typeof recipientLamportsRaw === "number"
+          ? BigInt(recipientLamportsRaw)
+          : null;
+      if (
+        recipientLamports !== null &&
+        recipientLamports + amount < SOLANA_SYSTEM_RENT_EXEMPT_LAMPORTS
+      ) {
+        throw new FlowError(
+          "INSUFFICIENT_FUNDS",
+          "New Solana wallets require at least 0.0009 SOL on first deposit to cover account rent.",
+        );
+      }
+    }
+
     const data = new Uint8Array(12);
     const view = new DataView(data.buffer);
     view.setUint32(0, 2, true); // SystemProgram::Transfer = 2
@@ -500,6 +612,18 @@ async function executeSolanaTransfer(
     );
 
     if (!destAtaInfo.response.result?.value) {
+      if (
+        senderLamports !== null &&
+        senderLamports <
+          SOLANA_ATA_RENT_LAMPORTS +
+            SOLANA_BASE_FEE_LAMPORTS +
+            SOLANA_SYSTEM_RENT_EXEMPT_LAMPORTS
+      ) {
+        throw new FlowError(
+          "INSUFFICIENT_FUNDS",
+          "Sending tokens to a new Solana address requires at least ~0.003 SOL in your wallet to initialize the recipient token account.",
+        );
+      }
       instructions.push({
         programAddress: address(SOLANA_ASSOCIATED_TOKEN_PROGRAM),
         accounts: [
@@ -585,7 +709,7 @@ async function executeSolanaTransfer(
   if (sendRes.response.error || !sendRes.response.result) {
     throw new FlowError(
       "RPC_NETWORK_ERROR",
-      sendRes.response.error?.message ?? "Solana sendTransaction rejected.",
+      formatSolanaRpcSendError(sendRes.response.error),
     );
   }
 
@@ -1206,8 +1330,10 @@ async function processNextQueuedOutgoingJob(
     log("error", "outgoing_transfer_failed", {
       workerId,
       jobId: job.id,
+      network: job.source_network,
       status,
       code,
+      errorMessage: message,
     });
   }
   return true;
