@@ -182,12 +182,12 @@ export default async function BlogPostPage({
             {post.highlights.map((item) => (
               <div
                 key={item.label}
-                className="rounded-2xl border border-[#E6E2DA]/80 dark:border-white/[0.08] bg-white/85 dark:bg-black/25 px-4 py-3"
+                className="min-w-0 overflow-hidden rounded-2xl border border-[#E6E2DA]/80 dark:border-white/[0.08] bg-white/85 dark:bg-black/25 px-4 py-3"
               >
                 <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
                   {item.label}
                 </div>
-                <div className="mt-0.5 text-sm font-semibold text-[#0B0B0B] dark:text-white">
+                <div className="mt-0.5 text-sm font-semibold text-[#0B0B0B] dark:text-white [overflow-wrap:anywhere] leading-snug">
                   {item.value}
                 </div>
               </div>

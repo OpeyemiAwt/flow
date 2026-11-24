@@ -46,9 +46,9 @@ export const BLOG_POSTS: readonly BlogPost[] = [
   {
     slug: "direct-flow-id-payment-links",
     title:
-      "Direct @flow Links: Get Paid With a Single URL Like flow.devhub.forum/yemi@flow",
+      "Direct @flow Links: Get Paid With a Single URL Like flow.devhub.forum/name@flow",
     summary:
-      "Every FLOW user now has a permanent personal payment URL. Share flow.devhub.forum/you@flow anywhere and anyone who opens it is taken through sign-in or onboarding straight into Send with your @flow ID already pre-filled.",
+      "Every FLOW user now has a permanent personal payment URL. Share flow.devhub.forum/name@flow anywhere and anyone who opens it is taken through sign-in or onboarding straight into Send with your @flow ID already pre-filled.",
     category: "Shipping",
     publishedAt: "2026-11-24",
     readTime: "6 min read",
@@ -57,7 +57,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     ogImage: "/assets/blog/direct-flow-id-payment-links.png",
     accent: "from-emerald-500/14 via-teal-500/6 to-transparent",
     highlights: [
-      { label: "Personal URL", value: "flow.devhub.forum/<you>@flow" },
+      { label: "Personal URL", value: "flow.devhub.forum/name@flow" },
       { label: "Direct same-asset", value: "0% FLOW fee" },
       { label: "Cross-asset route", value: "0.3% via NEAR Intents" },
     ],
@@ -68,7 +68,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
         paragraphs: [
           "Even when two people both want to settle on-chain, the conversation almost always stalls at the exact same moment: which network are you on, which stablecoin do you want, and can you paste your 44-character Solana public key or 64-character NEAR implicit address?",
           "On the web, we solved this decades ago with URLs. You do not ask someone for an IP address to visit a profile or send a message; you drop a short, human-readable link. When we built @flow IDs, the natural next step was making every @flow handle work directly as a live payment link right at the root of FLOW.",
-          "Today, every claimed @flow ID automatically gets a permanent direct URL at flow.devhub.forum/<handle>@flow, such as flow.devhub.forum/yemi@flow. Drop it in your social bio, a group chat, an email signature, or a client message, and anyone who clicks it lands directly in a payment flow addressed to you.",
+          "Today, every claimed @flow ID automatically gets a permanent direct URL at flow.devhub.forum/name@flow. Drop it in your social bio, a group chat, an email signature, or a client message, and anyone who clicks it lands directly in a payment flow addressed to you.",
         ],
       },
       {
@@ -77,22 +77,22 @@ export const BLOG_POSTS: readonly BlogPost[] = [
           "We designed direct @flow links to adapt automatically depending on whether the person clicking your link already has an active FLOW session or is meeting FLOW for the very first time:",
         ],
         bullets: [
-          "Already signed in to FLOW: opening flow.devhub.forum/yemi@flow detects your active session on the server and redirects straight to /app/send?to=yemi@flow. The Send hub is skipped automatically and yemi@flow is pre-filled as the recipient.",
-          "Signed out or brand new to FLOW: visitors land on a clean Pay yemi@flow card that confirms the @flow handle is verified and active, shows transparent fees upfront (0% on direct same-asset sends, 0.3% on cross-asset transfers), and offers a single Continue to Send button.",
-          "Returning users signing back in: as soon as they authenticate with Google or an 8-digit Email OTP code, FLOW remembers who they came to pay and routes them straight into Send with yemi@flow locked in.",
-          "Brand-new users: after signing up, FLOW provisions their non-custodial multi-chain wallet across NEAR, Solana, Base, and Ethereum, lets them claim their own permanent @flow ID, and then drops them straight into Send targeting yemi@flow without losing context.",
+          "Already signed in to FLOW: opening flow.devhub.forum/name@flow detects your active session on the server and redirects straight to /app/send?to=name@flow. The Send hub is skipped automatically and name@flow is pre-filled as the recipient.",
+          "Signed out or brand new to FLOW: visitors land on a clean Pay name@flow card that confirms the @flow handle is verified and active, shows transparent fees upfront (0% on direct same-asset sends, 0.3% on cross-asset transfers), and offers a single Continue to Send button.",
+          "Returning users signing back in: as soon as they authenticate with Google or an 8-digit Email OTP code, FLOW remembers who they came to pay and routes them straight into Send with name@flow locked in.",
+          "Brand-new users: after signing up, FLOW provisions their non-custodial multi-chain wallet across NEAR, Solana, Base, and Ethereum, lets them claim their own permanent @flow ID, and then drops them straight into Send targeting name@flow without losing context.",
         ],
       },
       {
         heading: "Preserving payment intent across Google OAuth and onboarding",
         paragraphs: [
-          "Redirecting a logged-in user to /app/send?to=yemi@flow is straightforward. The harder engineering problem is making sure a brand-new user who clicks a link in a DM, signs up through Google OAuth (which leaves our domain and returns through a callback route), waits a few seconds for multi-chain MPC wallet provisioning, and claims their own @flow handle still lands on the exact recipient they clicked in the first place.",
-          "To make that handoff reliable across every authentication path, we combine validated query parameters (?to=yemi@flow) with a short-lived first-party SameSite=Lax cookie (flow_pending_send_to). When a visitor opens a direct @flow link, the target handle is validated against FLOW's handle rules, verified against active mainnet wallets on the server, and persisted before sign-in begins.",
+          "Redirecting a logged-in user to /app/send?to=name@flow is straightforward. The harder engineering problem is making sure a brand-new user who clicks a link in a DM, signs up through Google OAuth (which leaves our domain and returns through a callback route), waits a few seconds for multi-chain MPC wallet provisioning, and claims their own @flow handle still lands on the exact recipient they clicked in the first place.",
+          "To make that handoff reliable across every authentication path, we combine validated query parameters (?to=name@flow) with a short-lived first-party SameSite=Lax cookie (flow_pending_send_to). When a visitor opens a direct @flow link, the target handle is validated against FLOW's handle rules, verified against active mainnet wallets on the server, and persisted before sign-in begins.",
           "Both our server routes (/sign-in, /onboarding, and /app/send) and client onboarding handoff read that pending recipient, route directly into the Send flow once the wallet is ready, and immediately clear the cookie once consumed so returning home always starts completely fresh.",
         ],
         callout: {
           title: "Privacy-first public lookup",
-          body: "Opening flow.devhub.forum/<handle>@flow only checks whether a claimed handle exists and has an active mainnet wallet. It never exposes private email addresses, wallet balances, or raw deposit keys to unauthenticated visitors.",
+          body: "Opening flow.devhub.forum/name@flow only checks whether a claimed handle exists and has an active mainnet wallet. It never exposes private email addresses, wallet balances, or raw deposit keys to unauthenticated visitors.",
         },
       },
       {
@@ -100,7 +100,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
         paragraphs: [
           "Direct @flow links pair naturally with the streamlined Send flow we rolled out alongside them. Instead of crowding every field onto one busy form, Send now moves cleanly through four focused stages: Your asset, Amount, Recipient, and Review & Pay.",
           "First, you pick which asset in your wallet will fund the payment. Next, you enter the amount on a distraction-free centered Amount screen with live USD and asset toggling, a quick wallet balance readout, and a smart Max button that automatically reserves room for network gas and any cross-asset platform fee.",
-          "When you advance to Recipient, yemi@flow is already pre-filled and automatically resolves to the recipient's verified address on whichever destination asset and network you choose. Even if you switch the destination from NEAR to Solana or Base, the @flow ID stays intact and re-resolves automatically. Add an optional memo, inspect the live quote with both token and USD values, and Slide to Pay.",
+          "When you advance to Recipient, name@flow is already pre-filled and automatically resolves to the recipient's verified address on whichever destination asset and network you choose. Even if you switch the destination from NEAR to Solana or Base, the @flow ID stays intact and re-resolves automatically. Add an optional memo, inspect the live quote with both token and USD values, and Slide to Pay.",
         ],
       },
       {
@@ -109,22 +109,22 @@ export const BLOG_POSTS: readonly BlogPost[] = [
           "FLOW now gives you two complementary ways to get paid, depending on the situation:",
         ],
         bullets: [
-          "Use your Direct @flow Link (flow.devhub.forum/you@flow) as your permanent personal handle URL. It is ideal for social bios, personal QR codes, splitting dinner with friends, tips, and fast wallet-to-wallet transfers where the sender pays from their FLOW wallet (or signs up in seconds).",
+          "Use your Direct @flow Link (flow.devhub.forum/name@flow) as your permanent personal handle URL. It is ideal for social bios, personal QR codes, splitting dinner with friends, tips, and fast wallet-to-wallet transfers where the sender pays from their FLOW wallet (or signs up in seconds).",
           "Use a Payment Link from the Request tab when you want to lock a specific invoice amount, set a maximum number of payers, configure who covers cross-chain routing fees, or let someone pay directly from an external wallet or exchange without creating a FLOW account.",
         ],
       },
       {
         heading: "How to share your direct link right now",
         paragraphs: [
-          "If you have already claimed your @flow ID, your direct link is live immediately. Open Profile inside FLOW, look under Unique Flow ID, and tap Copy link to copy https://flow.devhub.forum/<yourhandle>@flow to your clipboard.",
-          "When you paste your link into X, Telegram, WhatsApp, Discord, or iMessage, FLOW automatically serves a rich link preview card titled Pay <yourhandle>@flow so people know the link is legitimate before they even tap it.",
+          "If you have already claimed your @flow ID, your direct link is live immediately. Open Profile inside FLOW, look under Unique Flow ID, and tap Copy link to copy https://flow.devhub.forum/name@flow to your clipboard.",
+          "When you paste your link into X, Telegram, WhatsApp, Discord, or iMessage, FLOW automatically serves a rich link preview card titled Pay name@flow so people know the link is legitimate before they even tap it.",
         ],
       },
     ],
     cta: {
       title: "Claim your @flow ID and get your direct link",
       description:
-        "Sign in to FLOW, claim your permanent @flow handle, and start sharing your own flow.devhub.forum/<you>@flow link today.",
+        "Sign in to FLOW, claim your permanent @flow handle, and start sharing your own flow.devhub.forum/name@flow link today.",
       href: "/sign-in",
       label: "Claim your @flow link",
     },
