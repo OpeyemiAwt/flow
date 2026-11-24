@@ -270,7 +270,7 @@ async function executeEvmTransfer(
   const amount = BigInt(job.source_atomic_amount);
   const isNative = job.source_asset_id.toLowerCase() === "native";
 
-  const [nonceRes, blockRes, priorityRes] = await Promise.all([
+  const [nonceRes, blockRes, priorityRes, nativeBalRes] = await Promise.all([
     callJsonRpc<string>(
       primary,
       "eth_getTransactionCount",
@@ -286,6 +286,12 @@ async function executeEvmTransfer(
     callJsonRpc<string>(primary, "eth_maxPriorityFeePerGas", [], {
       fallbackEndpoint: fallback,
     }),
+    callJsonRpc<string>(
+      primary,
+      "eth_getBalance",
+      [job.source_address, "latest"],
+      { fallbackEndpoint: fallback },
+    ).catch(() => null),
   ]);
 
   if (nonceRes.response.error || !nonceRes.response.result) {
@@ -337,6 +343,21 @@ async function executeEvmTransfer(
     const estimated = BigInt(estRes.response.result ?? "65000");
     const padded = (estimated * 125n) / 100n;
     gas = padded < 65_000n ? 65_000n : padded > 250_000n ? 250_000n : padded;
+  }
+
+  const maxGasCost = gas * maxFeePerGas;
+  const liveNativeBalanceHex = nativeBalRes?.response.result;
+  if (liveNativeBalanceHex && /^0x[0-9a-f]+$/i.test(liveNativeBalanceHex)) {
+    const liveNativeBalance = BigInt(liveNativeBalanceHex);
+    const requiredNative = isNative ? amount + maxGasCost : maxGasCost;
+    if (liveNativeBalance < requiredNative) {
+      throw new FlowError(
+        "INSUFFICIENT_FUNDS",
+        isNative
+          ? "Insufficient ETH balance to cover this transfer and current network gas fees. Try tapping Max or sending a slightly smaller amount."
+          : "Insufficient ETH gas balance on this network to pay transaction fees.",
+      );
+    }
   }
 
   const unsignedTx = {

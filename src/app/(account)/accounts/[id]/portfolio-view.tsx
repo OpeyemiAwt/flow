@@ -55,6 +55,7 @@ import {
   checkNetworkGasBalance,
   computeMaxSendableAtomic,
   MAINNET_SUPPORTED_DEPLOYMENTS,
+  NETWORK_GAS_RESERVES,
   validateEcosystemAddress,
   type CatalogTokenDeployment,
 } from "../../../../domain/supported-assets-catalog.ts";
@@ -1807,13 +1808,18 @@ export function PortfolioView({
     if (!source?.displayBalance) return "";
     try {
       const maxAtomic = getMaxAtomicForSource(source, feeBps);
+      if (maxAtomic <= 0n) return "0";
       const exactMax = formatAtomicToDisplay(
         maxAtomic,
         source.deployment.decimals,
       );
-      return truncateDisplayFloor(exactMax, 4);
+      const precision =
+        source.deployment.symbol === "ETH" || source.deployment.symbol === "SOL"
+          ? 6
+          : 4;
+      return truncateDisplayFloor(exactMax, precision);
     } catch {
-      return truncateDisplayFloor(source.displayBalance, 4);
+      return "0";
     }
   };
 
@@ -4021,19 +4027,43 @@ export function PortfolioView({
                           </div>
 
                           {/* Helper / Validation Copy */}
-                          <p
-                            className={`text-xs sm:text-sm ${
-                              amountExceedsBalance || amountExceedsGas
-                                ? "text-[#FF1A1A] dark:text-red-400 font-medium"
-                                : "text-neutral-500 dark:text-neutral-400"
-                            }`}
-                          >
-                            {amountExceedsBalance
-                              ? `Insufficient ${sendSource?.deployment.symbol ?? ""} balance. Tap Max to send your available balance.`
-                              : amountExceedsGas
-                                ? `Leave room for network gas and fees. Tap Max to adjust.`
-                                : "Type an amount, then press Enter to continue."}
-                          </p>
+                          {(() => {
+                            const nativeReserve =
+                              sendSource?.deployment.standard === "NATIVE"
+                                ? NETWORK_GAS_RESERVES[
+                                    sendSource.deployment.networkKey
+                                  ]
+                                : undefined;
+                            const belowReserveOnly =
+                              !isEmptyBalance &&
+                              maxSendableStep2Atomic <= 0n &&
+                              Boolean(nativeReserve);
+                            const showError =
+                              amountExceedsBalance ||
+                              amountExceedsGas ||
+                              belowReserveOnly;
+                            return (
+                              <p
+                                className={`text-xs sm:text-sm ${
+                                  showError
+                                    ? "text-[#FF1A1A] dark:text-red-400 font-medium"
+                                    : "text-neutral-500 dark:text-neutral-400"
+                                }`}
+                              >
+                                {amountExceedsBalance
+                                  ? `Insufficient ${sendSource?.deployment.symbol ?? ""} balance. Tap Max to send your available balance.`
+                                  : belowReserveOnly && nativeReserve
+                                    ? `Keep at least ${nativeReserve.minDisplay} ${nativeReserve.symbol} on ${nativeReserve.networkLabel} for network gas${nativeReserve.networkLabel === "Solana" || nativeReserve.networkLabel === "NEAR" ? " and account rent" : ""}.`
+                                    : amountExceedsGas && nativeReserve
+                                      ? `Leave at least ${nativeReserve.minDisplay} ${nativeReserve.symbol} for network gas${nativeReserve.networkLabel === "Solana" || nativeReserve.networkLabel === "NEAR" ? " and rent" : ""}. Tap Max to adjust.`
+                                      : amountExceedsGas
+                                        ? "Leave room for network gas and fees. Tap Max to adjust."
+                                        : sendUsedMax && nativeReserve
+                                          ? `${nativeReserve.minDisplay} ${nativeReserve.symbol} reserved for ${nativeReserve.networkLabel} network gas${nativeReserve.networkLabel === "Solana" || nativeReserve.networkLabel === "NEAR" ? " & rent" : ""}.`
+                                          : "Type an amount, then press Enter to continue."}
+                              </p>
+                            );
+                          })()}
 
                           {/* Big Continue Pill + Back Link */}
                           <div className="w-full space-y-2.5 pt-1">

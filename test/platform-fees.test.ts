@@ -64,35 +64,66 @@ test("grossUpForPlatformFee charges fee on top of principal so net >= principal"
   }
 });
 
-test("maxPrincipalBeforePlatformFee guarantees grossUp(maxPrincipal) <= maxGross and passes gas check", () => {
-  const balances = [
-    0n,
-    10_000_000_000_000_000_000_000n, // exact NEAR reserve (0.01 NEAR)
-    15_000_000_000_000_000_000_000n, // 0.015 NEAR
-    1_010_000_000_000_000_000_000_000n, // 1.01 NEAR
-    2_543_219_876_543_210_987_654_321n, // arbitrary NEAR
+test("maxPrincipalBeforePlatformFee guarantees grossUp(maxPrincipal) <= maxGross and passes gas check across all 4 mainnets", () => {
+  const cases: Array<{
+    networkKey: string;
+    balances: bigint[];
+    minReserve: bigint;
+  }> = [
+    {
+      networkKey: "ethereum-mainnet",
+      minReserve: 1_500_000_000_000_000n, // 0.0015 ETH
+      balances: [0n, 1_500_000_000_000_000n, 10_000_000_000_000_000n, 250_000_000_000_000_000n],
+    },
+    {
+      networkKey: "base-mainnet",
+      minReserve: 100_000_000_000_000n, // 0.0001 ETH
+      balances: [0n, 100_000_000_000_000n, 500_000_000_000_000n, 50_000_000_000_000_000n],
+    },
+    {
+      networkKey: "solana-mainnet",
+      minReserve: 1_000_000n, // 0.001 SOL
+      balances: [0n, 1_000_000n, 12_410_000n, 1_500_000_000n],
+    },
+    {
+      networkKey: "near-mainnet",
+      minReserve: 50_000_000_000_000_000_000_000n, // 0.05 NEAR
+      balances: [
+        0n,
+        50_000_000_000_000_000_000_000n,
+        150_000_000_000_000_000_000_000n,
+        2_543_219_876_543_210_987_654_321n,
+      ],
+    },
   ];
-  for (const balanceAtomic of balances) {
-    for (const feeBps of [0, CROSS_ASSET_SEND_FEE_BPS, CONVERT_BRIDGE_FEE_BPS]) {
-      const afterGas = computeMaxSendableAtomic({
-        networkKey: "near-mainnet",
-        sourceStandard: "NATIVE",
-        balanceAtomic,
-      });
-      const maxPrincipal = maxPrincipalBeforePlatformFee(afterGas, feeBps);
-      const { grossAtomic } = grossUpForPlatformFee(maxPrincipal, feeBps);
-      assert.ok(
-        grossAtomic <= afterGas,
-        `grossAtomic (${grossAtomic}) exceeded afterGas (${afterGas}) for feeBps=${feeBps}`,
-      );
-      if (maxPrincipal > 0n) {
-        const gasCheck = checkNetworkGasBalance({
-          networkKey: "near-mainnet",
+
+  for (const c of cases) {
+    for (const balanceAtomic of c.balances) {
+      for (const feeBps of [0, CROSS_ASSET_SEND_FEE_BPS, CONVERT_BRIDGE_FEE_BPS]) {
+        const afterGas = computeMaxSendableAtomic({
+          networkKey: c.networkKey,
           sourceStandard: "NATIVE",
-          requestedAmountAtomic: grossAtomic,
-          nativeBalanceAtomic: balanceAtomic,
+          balanceAtomic,
         });
-        assert.equal(gasCheck.ok, true);
+        const maxPrincipal = maxPrincipalBeforePlatformFee(afterGas, feeBps);
+        const { grossAtomic } = grossUpForPlatformFee(maxPrincipal, feeBps);
+        assert.ok(
+          grossAtomic <= afterGas,
+          `${c.networkKey}: grossAtomic (${grossAtomic}) exceeded afterGas (${afterGas}) for feeBps=${feeBps}`,
+        );
+        if (maxPrincipal > 0n) {
+          assert.ok(
+            balanceAtomic - grossAtomic >= c.minReserve,
+            `${c.networkKey}: remaining (${balanceAtomic - grossAtomic}) fell below reserve (${c.minReserve})`,
+          );
+          const gasCheck = checkNetworkGasBalance({
+            networkKey: c.networkKey,
+            sourceStandard: "NATIVE",
+            requestedAmountAtomic: grossAtomic,
+            nativeBalanceAtomic: balanceAtomic,
+          });
+          assert.equal(gasCheck.ok, true);
+        }
       }
     }
   }

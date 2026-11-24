@@ -698,15 +698,15 @@ export const NETWORK_GAS_RESERVES: Record<string, NetworkGasReserve> = {
   "ethereum-mainnet": {
     symbol: "ETH",
     decimals: 18,
-    minAtomic: 500_000_000_000_000n,
-    minDisplay: "0.0005",
+    minAtomic: 1_500_000_000_000_000n,
+    minDisplay: "0.0015",
     networkLabel: "Ethereum",
   },
   "base-mainnet": {
     symbol: "ETH",
     decimals: 18,
-    minAtomic: 10_000_000_000_000n,
-    minDisplay: "0.00001",
+    minAtomic: 100_000_000_000_000n,
+    minDisplay: "0.0001",
     networkLabel: "Base",
   },
   "solana-mainnet": {
@@ -719,8 +719,8 @@ export const NETWORK_GAS_RESERVES: Record<string, NetworkGasReserve> = {
   "near-mainnet": {
     symbol: "NEAR",
     decimals: 24,
-    minAtomic: 10_000_000_000_000_000_000_000n,
-    minDisplay: "0.01",
+    minAtomic: 50_000_000_000_000_000_000_000n,
+    minDisplay: "0.05",
     networkLabel: "NEAR",
   },
 };
@@ -759,13 +759,15 @@ export function checkNetworkGasBalance(params: {
     return { ok: true };
   }
 
-  const isSolana = params.networkKey === "solana-mainnet";
+  const hasAccountRent =
+    params.networkKey === "solana-mainnet" ||
+    params.networkKey === "near-mainnet";
   const reason = isNative
-    ? isSolana
-      ? `Leave at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas and account rent.`
+    ? hasAccountRent
+      ? `Leave at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas and account storage.`
       : `Leave at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas.`
-    : isSolana
-      ? `You need at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas and account rent.`
+    : hasAccountRent
+      ? `You need at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} for network gas and account storage.`
       : `You need at least ${reserve.minDisplay} ${reserve.symbol} on ${reserve.networkLabel} to pay network gas for this transaction.`;
 
   return {
