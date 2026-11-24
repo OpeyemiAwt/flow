@@ -5,6 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { FlowIdPickerForm } from "../../components/flow-id-claim-modal.tsx";
 import { FlowLogo } from "../../components/flow-logo.tsx";
+import { parseDirectFlowIdParam } from "../../domain/flow-id.ts";
+import {
+  clearPendingSendFlowId,
+  readPendingSendFlowIdFromClient,
+} from "../[flowId]/flow-id-landing-client.tsx";
 import { describe, Feedback, send } from "../controls.tsx";
 
 type WalletStatus =
@@ -52,12 +57,14 @@ export function CompleteOnboarding({
   userName,
   initialAccount,
   initialFlowId,
+  pendingSendTo,
 }: {
   initialStep?: string;
   userEmail: string;
   userName: string;
   initialAccount?: OnboardingAccount | null;
   initialFlowId?: string | null;
+  pendingSendTo?: string | null;
 }) {
   const router = useRouter();
   const [account, setAccount] = useState<OnboardingAccount | null>(
@@ -136,8 +143,17 @@ export function CompleteOnboarding({
       !redirectedRef.current
     ) {
       redirectedRef.current = true;
+      const targetSendTo =
+        parseDirectFlowIdParam(pendingSendTo) ??
+        parseDirectFlowIdParam(readPendingSendFlowIdFromClient());
+      if (targetSendTo) {
+        clearPendingSendFlowId();
+      }
+      const destination = targetSendTo
+        ? `/app/send?to=${encodeURIComponent(targetSendTo)}`
+        : "/app";
       const timer = window.setTimeout(() => {
-        router.replace("/app");
+        router.replace(destination);
       }, 250);
       return () => window.clearTimeout(timer);
     }
@@ -146,6 +162,7 @@ export function CompleteOnboarding({
     account?.provisioningComplete,
     account?.walletStatus,
     flowId,
+    pendingSendTo,
     router,
   ]);
 

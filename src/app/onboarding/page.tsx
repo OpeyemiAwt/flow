@@ -1,5 +1,9 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import {
+  parseDirectFlowIdParam,
+  PENDING_SEND_FLOW_ID_COOKIE,
+} from "../../domain/flow-id.ts";
 import { runtime } from "../../foundation/prisma.ts";
 import { accessibleAccounts, principal } from "../../server/accounts.ts";
 import { readSession } from "../../server/auth/session.ts";
@@ -13,13 +17,27 @@ export const dynamic = "force-dynamic";
 export default async function Onboarding({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string }>;
+  searchParams: Promise<{ step?: string; to?: string }>;
 }) {
-  const requestHeaders = await headers();
+  const [{ step, to }, requestHeaders, cookieStore] = await Promise.all([
+    searchParams,
+    headers(),
+    cookies(),
+  ]);
+  const pendingSendTo =
+    parseDirectFlowIdParam(to) ??
+    parseDirectFlowIdParam(cookieStore.get(PENDING_SEND_FLOW_ID_COOKIE)?.value);
+
   const session = await pageData(() =>
     readSession(runtime().db, requestHeaders),
   );
-  if (!session) redirect("/sign-in");
+  if (!session) {
+    redirect(
+      pendingSendTo
+        ? `/sign-in?to=${encodeURIComponent(pendingSendTo)}`
+        : "/sign-in",
+    );
+  }
 
   const db = runtime().db;
   const [identity, existingUser] = await Promise.all([
@@ -72,11 +90,13 @@ export default async function Onboarding({
       );
     }
     if (account?.provisioningComplete && initialFlowId) {
-      redirect("/app");
+      redirect(
+        pendingSendTo
+          ? `/app/send?to=${encodeURIComponent(pendingSendTo)}`
+          : "/app",
+      );
     }
   }
-
-  const { step } = await searchParams;
 
   return (
     <CompleteOnboarding
@@ -85,6 +105,7 @@ export default async function Onboarding({
       userName={identity.name?.trim() || identity.email}
       initialAccount={account}
       initialFlowId={initialFlowId}
+      pendingSendTo={pendingSendTo}
     />
   );
 }

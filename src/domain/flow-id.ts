@@ -23,6 +23,8 @@ const RESERVED_FLOW_HANDLES = new Set([
   "wallet",
 ]);
 
+export const PENDING_SEND_FLOW_ID_COOKIE = "flow_pending_send_to";
+
 export function normalizeFlowIdHandle(raw: string): string {
   const trimmed = raw.trim().toLowerCase();
   return trimmed.endsWith("@flow") ? trimmed.slice(0, -5).trim() : trimmed;
@@ -34,6 +36,29 @@ export function formatFlowId(handle: string): string {
 
 export function isFlowIdInput(value: string): boolean {
   return value.trim().toLowerCase().endsWith("@flow");
+}
+
+export function buildDirectFlowLink(
+  flowId: string,
+  origin = "https://flow.devhub.forum",
+): string {
+  const cleanOrigin = origin.replace(/\/+$/, "");
+  return `${cleanOrigin}/${formatFlowId(flowId)}`;
+}
+
+export function parseDirectFlowIdParam(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    decoded = raw;
+  }
+  if (!isFlowIdInput(decoded)) return null;
+  const parsed = validateFlowIdHandle(decoded);
+  return parsed.valid ? parsed.flowId : null;
 }
 
 export function validateFlowIdHandle(

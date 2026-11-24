@@ -5,6 +5,7 @@ import { useEffect, useState, useRef, type FormEvent } from "react";
 import Link from "next/link";
 import { FlowLogo } from "../../components/flow-logo.tsx";
 import { triggerHaptic } from "../../components/haptics.ts";
+import { persistPendingSendFlowId } from "../[flowId]/flow-id-landing-client.tsx";
 import {
   describe,
   Feedback,
@@ -13,7 +14,15 @@ import {
   useResendClock,
 } from "../controls.tsx";
 
-export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
+export function SignIn({
+  issue,
+  notice,
+  pendingSendTo,
+}: {
+  issue?: string;
+  notice?: string;
+  pendingSendTo?: string | null;
+}) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [showEmailSignIn, setShowEmailSignIn] = useState(false);
@@ -27,6 +36,12 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
   const verifyingRef = useRef(false);
 
   useEffect(() => {
+    if (pendingSendTo) {
+      persistPendingSendFlowId(pendingSendTo);
+    }
+  }, [pendingSendTo]);
+
+  useEffect(() => {
     if (showEmailSignIn && !codeSent) {
       emailInputRef.current?.focus();
     }
@@ -34,6 +49,9 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
 
   async function google() {
     triggerHaptic("medium");
+    if (pendingSendTo) {
+      persistPendingSendFlowId(pendingSendTo);
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -73,7 +91,11 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
     try {
       await send("/api/auth/email/verify", { code: submittedCode });
       triggerHaptic("success");
-      window.location.replace("/onboarding");
+      window.location.replace(
+        pendingSendTo
+          ? `/onboarding?to=${encodeURIComponent(pendingSendTo)}`
+          : "/onboarding",
+      );
     } catch (error) {
       triggerHaptic("error");
       setMessage(describe(error));
@@ -273,6 +295,15 @@ export function SignIn({ issue, notice }: { issue?: string; notice?: string }) {
           <Link href="/" aria-label="FLOW Home" className="inline-block">
             <FlowLogo className="h-8 w-auto sm:h-9" />
           </Link>
+
+          {pendingSendTo && (
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span>
+                Sending to <strong className="font-mono">{pendingSendTo}</strong>
+              </span>
+            </div>
+          )}
 
           {showEmailSignIn ? (
             <>

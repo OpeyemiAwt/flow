@@ -8,7 +8,14 @@ import {
   type NavTabId,
 } from "../../../../components/floating-nav.tsx";
 import { FlowIdClaimModal } from "../../../../components/flow-id-claim-modal.tsx";
-import { isFlowIdInput } from "../../../../domain/flow-id.ts";
+import {
+  isFlowIdInput,
+  parseDirectFlowIdParam,
+} from "../../../../domain/flow-id.ts";
+import {
+  clearPendingSendFlowId,
+  readPendingSendFlowIdFromClient,
+} from "../../../[flowId]/flow-id-landing-client.tsx";
 import {
   getOperationPlatformFeeBps,
   grossUpForPlatformFee,
@@ -942,6 +949,7 @@ export function PortfolioView({
   initialPortfolio,
   account,
   initialView = "dashboard",
+  initialSendTo = null,
   userEmail,
   userAvatarUrl,
   initialDisplayName,
@@ -953,6 +961,7 @@ export function PortfolioView({
   account?: WorkspaceAccountSummary;
   allAccounts?: ReadonlyArray<WorkspaceAccountSummary>;
   initialView?: WorkspaceTab;
+  initialSendTo?: string | null;
   userEmail?: string;
   userAvatarUrl?: string | null;
   initialDisplayName?: string | null;
@@ -1196,9 +1205,10 @@ export function PortfolioView({
   const [carouselIndex, setCarouselIndex] = useState(0);
 
   // Send vs Convert state (Matches media_1794490079738_c27b1dd5.jpg)
+  const normalizedInitialSendTo = parseDirectFlowIdParam(initialSendTo);
   const [sendMode, setSendModeState] = useState<"SEND" | "CONVERT">("SEND");
   const [sendStep, setSendStep] = useState<1 | 2 | 3 | 4>(1);
-  const [sendHubOpen, setSendHubOpen] = useState(true);
+  const [sendHubOpen, setSendHubOpen] = useState(!normalizedInitialSendTo);
   const [receiveHubOpen, setReceiveHubOpen] = useState(true);
   const setSendMode = useCallback(
     (mode: "SEND" | "CONVERT") => {
@@ -1221,7 +1231,31 @@ export function PortfolioView({
   const [sendAmount, setSendAmount] = useState<string>("");
   const [sendInputMode, setSendInputMode] = useState<"ASSET" | "USD">("ASSET");
   const [sendUsdInput, setSendUsdInput] = useState<string>("");
-  const [sendRecipientAddress, setSendRecipientAddress] = useState<string>("");
+  const [sendRecipientAddress, setSendRecipientAddress] = useState<string>(
+    normalizedInitialSendTo ?? "",
+  );
+
+  // Consume direct payment link target (?to=yemi@flow or pending cookie) once
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = parseDirectFlowIdParam(params.get("to"));
+      const fromCookie = parseDirectFlowIdParam(
+        readPendingSendFlowIdFromClient(),
+      );
+      const targetFlowId = normalizedInitialSendTo ?? fromUrl ?? fromCookie;
+      if (targetFlowId) {
+        clearPendingSendFlowId();
+        setActiveTab("send");
+        setSendHubOpen(false);
+        setSendStep(1);
+        setSendRecipientAddress(targetFlowId);
+      }
+    } catch {
+      // ignore
+    }
+  }, [normalizedInitialSendTo]);
   const [sendMemo, setSendMemo] = useState<string>("");
   const [receiptActivity, setReceiptActivity] =
     useState<SerializedWalletActivityRecord | null>(null);
@@ -3559,6 +3593,17 @@ export function PortfolioView({
                     Send any asset in your wallet to any supported address or{" "}
                     <span className="font-mono">@flow</span> ID.
                   </p>
+                  {sendIsFlowId && sendRecipientAddress.trim() && (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <span>
+                        Direct payment to{" "}
+                        <strong className="font-mono">
+                          {sendRecipientAddress.trim()}
+                        </strong>
+                      </span>
+                    </div>
+                  )}
                   <div className="mt-2.5">
                     <NearIntentsBadge />
                   </div>

@@ -567,9 +567,14 @@ export function SecurityPanel({
                       )}
                     </div>
                     {flowId ? (
-                      <p className="mt-1 font-mono text-sm font-bold text-neutral-950 dark:text-white truncate">
-                        {flowId}
-                      </p>
+                      <div className="mt-1 space-y-0.5">
+                        <p className="font-mono text-sm font-bold text-neutral-950 dark:text-white truncate">
+                          {flowId}
+                        </p>
+                        <p className="font-mono text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+                          flow.devhub.forum/{flowId}
+                        </p>
+                      </div>
                     ) : (
                       <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
                         Pick a permanent <span className="font-mono">@flow</span> handle so anyone on Flow can send assets straight to your wallet.
@@ -577,17 +582,31 @@ export function SecurityPanel({
                     )}
                   </div>
                   {flowId ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard?.writeText(flowId).catch(() => {});
-                        setFlowIdCopied(true);
-                        window.setTimeout(() => setFlowIdCopied(false), 1800);
-                      }}
-                      className="shrink-0 px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-                    >
-                      {flowIdCopied ? "Copied" : "Copy ID"}
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const directUrl = `${window.location.origin}/${flowId}`;
+                          navigator.clipboard?.writeText(directUrl).catch(() => {});
+                          setFlowIdCopied(true);
+                          window.setTimeout(() => setFlowIdCopied(false), 1800);
+                        }}
+                        className="px-3.5 py-2 rounded-full text-xs font-semibold bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 hover:opacity-90 transition-opacity cursor-pointer"
+                      >
+                        {flowIdCopied ? "Copied!" : "Copy link"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(flowId).catch(() => {});
+                          setFlowIdCopied(true);
+                          window.setTimeout(() => setFlowIdCopied(false), 1800);
+                        }}
+                        className="px-3.5 py-2 rounded-full text-xs font-semibold border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                      >
+                        Copy ID
+                      </button>
+                    </div>
                   ) : (
                     <button
                       type="button"

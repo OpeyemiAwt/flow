@@ -22,7 +22,10 @@ export const VALID_APP_TABS: ReadonlySet<WorkspaceTab> = new Set([
   "activity",
 ]);
 
-export async function renderAppWorkspace(requestedTab?: string) {
+export async function renderAppWorkspace(
+  requestedTab?: string,
+  options?: { initialSendTo?: string | null },
+) {
   const actor = await pagePrincipal();
   const db = runtime().db;
   const allAccounts = await pageData(() => accessibleAccounts(db, actor));
@@ -83,6 +86,7 @@ export async function renderAppWorkspace(requestedTab?: string) {
         account={account}
         allAccounts={allAccounts}
         initialView={initialView}
+        initialSendTo={options?.initialSendTo ?? null}
         userEmail={actor.email}
         userAvatarUrl={actor.image}
         initialDisplayName={

@@ -106,6 +106,44 @@ export async function claimAccountFlowId(
   }
 }
 
+export interface PublicFlowIdProfile {
+  readonly flowId: string;
+  readonly accountName: string;
+  readonly hasActiveWallet: boolean;
+}
+
+export async function lookupPublicFlowIdProfile(
+  db: FlowDb,
+  rawFlowId: string,
+): Promise<PublicFlowIdProfile | null> {
+  await ensureFlowIdSchema(db);
+  const parsed = validateFlowIdHandle(rawFlowId);
+  if (!parsed.valid) return null;
+
+  const rows = await db.$queryRaw<
+    Array<{
+      flow_id: string;
+      name: string;
+      wallet_status: string | null;
+    }>
+  >`
+    SELECT a.flow_id, a.name, w.status AS wallet_status
+    FROM flow.accounts a
+    LEFT JOIN flow.wallets w
+      ON w.account_id = a.id AND w.environment = 'mainnet'
+    WHERE LOWER(a.flow_id) = LOWER(${parsed.flowId})
+    LIMIT 1
+  `;
+
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    flowId: row.flow_id,
+    accountName: row.name,
+    hasActiveWallet: row.wallet_status === "ACTIVE",
+  };
+}
+
 export async function resolveFlowIdForSend(
   db: FlowDb,
   params: {
