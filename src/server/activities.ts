@@ -9,6 +9,7 @@ import {
   serializeActivities,
 } from "../domain/activities.ts";
 import { Prisma } from "../generated/prisma/client.ts";
+import { log } from "../foundation/logger.ts";
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { access, principal } from "./accounts.ts";
 import { readAccountSync, requestAccountSync } from "./account-sync.ts";
@@ -492,8 +493,11 @@ export async function readActivities(
             });
           }
         }
-      } catch {
-        // Safe fallback while DB migration rolls out
+      } catch (err) {
+        log("error", "resolve_incoming_transfer_senders_failed", {
+          accountId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 

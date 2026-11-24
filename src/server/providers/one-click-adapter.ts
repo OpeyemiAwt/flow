@@ -816,41 +816,39 @@ export async function fetchOneClickExecutionStatus(params: {
 
     const swapDetails = data.swapDetails as Record<string, unknown> | undefined;
 
+    const extractFirstTxHash = (list: unknown): string | undefined => {
+      if (!Array.isArray(list)) return undefined;
+      for (const entry of list) {
+        if (typeof entry === "string" && entry.trim().length > 0) {
+          return entry.trim();
+        }
+        if (
+          entry &&
+          typeof entry === "object" &&
+          typeof (entry as Record<string, unknown>).hash === "string" &&
+          ((entry as Record<string, unknown>).hash as string).trim().length > 0
+        ) {
+          return ((entry as Record<string, unknown>).hash as string).trim();
+        }
+      }
+      return undefined;
+    };
+
     const sourceTx =
-      (data.sourceTxHash as string) ||
-      (data.depositTxHash as string) ||
-      (data.originTxHash as string) ||
-      (Array.isArray(swapDetails?.originChainTxHashes) &&
-      typeof (swapDetails.originChainTxHashes[0] as Record<string, unknown>)
-        ?.hash === "string"
-        ? ((swapDetails.originChainTxHashes[0] as Record<string, unknown>)
-            .hash as string)
-        : undefined) ||
-      (Array.isArray(data.originChainTxHashes) &&
-      typeof (data.originChainTxHashes[0] as Record<string, unknown>)?.hash ===
-        "string"
-        ? ((data.originChainTxHashes[0] as Record<string, unknown>)
-            .hash as string)
-        : undefined) ||
+      (typeof data.sourceTxHash === "string" && data.sourceTxHash.trim()) ||
+      (typeof data.depositTxHash === "string" && data.depositTxHash.trim()) ||
+      (typeof data.originTxHash === "string" && data.originTxHash.trim()) ||
+      extractFirstTxHash(swapDetails?.originChainTxHashes) ||
+      extractFirstTxHash(data.originChainTxHashes) ||
       undefined;
 
     const destTx =
-      (data.destinationTxHash as string) ||
-      (data.payoutTxHash as string) ||
-      (data.targetTxHash as string) ||
-      (Array.isArray(swapDetails?.destinationChainTxHashes) &&
-      typeof (
-        swapDetails.destinationChainTxHashes[0] as Record<string, unknown>
-      )?.hash === "string"
-        ? ((swapDetails.destinationChainTxHashes[0] as Record<string, unknown>)
-            .hash as string)
-        : undefined) ||
-      (Array.isArray(data.destinationChainTxHashes) &&
-      typeof (data.destinationChainTxHashes[0] as Record<string, unknown>)
-        ?.hash === "string"
-        ? ((data.destinationChainTxHashes[0] as Record<string, unknown>)
-            .hash as string)
-        : undefined) ||
+      (typeof data.destinationTxHash === "string" &&
+        data.destinationTxHash.trim()) ||
+      (typeof data.payoutTxHash === "string" && data.payoutTxHash.trim()) ||
+      (typeof data.targetTxHash === "string" && data.targetTxHash.trim()) ||
+      extractFirstTxHash(swapDetails?.destinationChainTxHashes) ||
+      extractFirstTxHash(data.destinationChainTxHashes) ||
       undefined;
 
     const refundTx = (data.refundTxHash as string) || undefined;

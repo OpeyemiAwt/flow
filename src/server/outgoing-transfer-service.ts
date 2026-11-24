@@ -461,25 +461,23 @@ export async function executeSendTransfer(
       : destDeployment.contractIdentifier;
   const publicId = `snd_${randomBytes(10).toString("hex")}`;
 
-  const senderFlowId = await getAccountFlowId(runtime().db, id).catch(
-    () => null,
-  );
-  const quotePayloadJson = JSON.stringify({
-    ...(userMemo ? { userMemo } : {}),
-    ...(recipientLabel ? { recipientLabel } : {}),
-    ...(senderFlowId ? { senderFlowId } : {}),
-    ...(sendFeeBps > 0
-      ? {
-          principalAtomicAmount: amountAtomic.toString(),
-          platformFeeAtomic: sendPlatformFeeAtomic.toString(),
-          platformFeeBps: sendFeeBps,
-        }
-      : {}),
-  });
-
   const created = await transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true),
       set_config('flow.current_account_id', ${id}, true)`;
+
+    const senderFlowId = await getAccountFlowId(tx, id).catch(() => null);
+    const quotePayloadJson = JSON.stringify({
+      ...(userMemo ? { userMemo } : {}),
+      ...(recipientLabel ? { recipientLabel } : {}),
+      ...(senderFlowId ? { senderFlowId } : {}),
+      ...(sendFeeBps > 0
+        ? {
+            principalAtomicAmount: amountAtomic.toString(),
+            platformFeeAtomic: sendPlatformFeeAtomic.toString(),
+            platformFeeBps: sendFeeBps,
+          }
+        : {}),
+    });
 
     const rows = await tx.$queryRaw<OutgoingTransferRow[]>`
       INSERT INTO flow.outgoing_transfer_jobs (
