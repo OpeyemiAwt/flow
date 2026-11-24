@@ -141,7 +141,7 @@ export function FlowIdLandingClient({
                   Cross-asset route
                 </div>
                 <div className="mt-0.5 text-xs font-bold text-neutral-900 dark:text-white">
-                  0.3% from balance
+                  0.3% FLOW fee
                 </div>
               </div>
             </div>

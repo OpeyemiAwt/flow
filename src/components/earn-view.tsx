@@ -1139,13 +1139,13 @@ export function EarnView({
                               <span>FLOW platform fee ({EARN_DEPOSIT_FEE_LABEL})</span>
                               <span className="font-mono font-medium text-neutral-700 dark:text-neutral-300">
                                 {hasAmt
-                                  ? `${feeVal.toFixed(dp)} ${activeModalProtocol.assetSymbol} · from balance`
-                                  : `${EARN_DEPOSIT_FEE_LABEL} from balance`}
+                                  ? `${feeVal.toFixed(dp)} ${activeModalProtocol.assetSymbol}`
+                                  : EARN_DEPOSIT_FEE_LABEL}
                               </span>
                             </div>
                             {hasAmt && (
                               <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-300 font-medium">
-                                <span>Total from balance</span>
+                                <span>Total</span>
                                 <span className="font-mono font-semibold text-neutral-950 dark:text-white">
                                   {grossVal.toFixed(dp)} {activeModalProtocol.assetSymbol}
                                 </span>

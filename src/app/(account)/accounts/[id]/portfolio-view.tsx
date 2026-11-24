@@ -872,12 +872,11 @@ function OutgoingQuoteDetails({
                     ? `${formatApproxDisplay(effectiveFeeDisplay)} ${effectiveFeeSymbol}`
                     : `${Number((effectiveFeeBps / 100).toFixed(2))}%`}
                 </div>
-                <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
-                  {effectiveFeeUsd
-                    ? `${formatApproxUsdLabel(effectiveFeeUsd)} · `
-                    : ""}
-                  from balance
-                </div>
+                {effectiveFeeUsd && (
+                  <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                    {formatApproxUsdLabel(effectiveFeeUsd)}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1231,6 +1230,7 @@ export function PortfolioView({
   const [sendAmount, setSendAmount] = useState<string>("");
   const [sendInputMode, setSendInputMode] = useState<"ASSET" | "USD">("ASSET");
   const [sendUsdInput, setSendUsdInput] = useState<string>("");
+  const [sendUsedMax, setSendUsedMax] = useState(false);
   const [sendRecipientAddress, setSendRecipientAddress] = useState<string>(
     normalizedInitialSendTo ?? "",
   );
@@ -1768,6 +1768,7 @@ export function PortfolioView({
     : 0;
 
   const handleSendUsdChange = (raw: string) => {
+    setSendUsedMax(false);
     const cleaned = sanitizeNonNegativeDecimal(raw);
     setSendUsdInput(cleaned);
     if (!cleaned || !sendSource || !sendSourcePriceUsd) {
@@ -1786,9 +1787,10 @@ export function PortfolioView({
     setSendAmount(nextAsset);
   };
 
-  const handleSendMaxClick = () => {
-    const maxAsset = getMaxAmountForSource(sendSource, sendFeeBps);
+  const applySendMaxForFee = (feeBpsOverride: number) => {
+    const maxAsset = getMaxAmountForSource(sendSource, feeBpsOverride);
     setSendAmount(maxAsset);
+    setSendUsedMax(true);
     if (sendInputMode === "USD" && sendSourcePriceUsd) {
       const maxNum = Number.parseFloat(maxAsset);
       if (Number.isFinite(maxNum) && maxNum > 0) {
@@ -1802,6 +1804,10 @@ export function PortfolioView({
         setSendUsdInput("0");
       }
     }
+  };
+
+  const handleSendMaxClick = () => {
+    applySendMaxForFee(sendFeeBps);
   };
 
   const toggleSendInputMode = () => {
@@ -3616,9 +3622,9 @@ export function PortfolioView({
                 >
                   <div className="grid grid-cols-4 gap-2">
                     {[
-                      { step: 1 as const, label: "Your Asset" },
-                      { step: 2 as const, label: "Recipient" },
-                      { step: 3 as const, label: "Amount" },
+                      { step: 1 as const, label: "Your asset" },
+                      { step: 2 as const, label: "Amount" },
+                      { step: 3 as const, label: "Recipient" },
                       { step: 4 as const, label: "Review & Pay" },
                     ].map((item) => {
                       const isCompleted = sendStep > item.step;
@@ -3657,7 +3663,7 @@ export function PortfolioView({
                                     : "text-neutral-400 dark:text-neutral-500"
                               }
                             >
-                              {item.step}. {item.label}
+                              {item.label}
                             </span>
                           </div>
                         </button>
@@ -3667,12 +3673,12 @@ export function PortfolioView({
                 </div>
 
                 <div className="rounded-[28px] border border-neutral-200/90 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-xs space-y-5">
-                  {/* STEP 1: Pick Your Asset */}
+                  {/* STEP 1: Your asset */}
                   {sendStep === 1 && (
                     <div className="space-y-4">
                       <div>
                         <h2 className="text-base font-bold text-neutral-950 dark:text-white">
-                          1. Pick the asset you want to send
+                          Your asset
                         </h2>
                         <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
                           Choose which balance in your wallet will fund this payment.
@@ -3703,8 +3709,10 @@ export function PortfolioView({
                                 type="button"
                                 onClick={() => {
                                   setSendSourceDeploymentId(asset.deployment.id);
+                                  setSendDestDeploymentId(asset.deployment.id);
                                   setSendAmount("");
                                   setSendUsdInput("");
+                                  setSendUsedMax(false);
                                   setSendInputMode("ASSET");
                                 }}
                                 className={`w-full flex items-center justify-between gap-3 p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
@@ -3754,16 +3762,264 @@ export function PortfolioView({
                     </div>
                   )}
 
-                  {/* STEP 2: Pick Recipient Receives Asset & Address */}
-                  {sendStep === 2 && (
+                  {/* STEP 2: Amount (Centered minimal layout) */}
+                  {sendStep === 2 &&
+                    (() => {
+                      const activeInputValue =
+                        sendInputMode === "USD" ? sendUsdInput : sendAmount;
+                      const parsedAmountAtomic = sendSource
+                        ? positiveQuoteAmount(
+                            sendAmount,
+                            sendSource.deployment.decimals,
+                          )
+                        : null;
+                      const sourceBalanceAtomic = sendSource?.balanceRecord
+                        ? BigInt(sendSource.balanceRecord.atomicBalance)
+                        : 0n;
+                      const isEmptyBalance = sourceBalanceAtomic <= 0n;
+                      const maxSendableStep2Atomic = getMaxAtomicForSource(
+                        sendSource,
+                        sendFeeBps,
+                      );
+                      const amountExceedsBalance = Boolean(
+                        parsedAmountAtomic &&
+                          BigInt(parsedAmountAtomic) > sourceBalanceAtomic,
+                      );
+                      const amountExceedsGas = Boolean(
+                        parsedAmountAtomic &&
+                          !amountExceedsBalance &&
+                          BigInt(parsedAmountAtomic) > maxSendableStep2Atomic,
+                      );
+                      const canContinueAmount = Boolean(
+                        sendSource &&
+                          parsedAmountAtomic &&
+                          !isEmptyBalance &&
+                          !amountExceedsBalance &&
+                          !amountExceedsGas,
+                      );
+                      const secondaryConversionText =
+                        sendInputMode === "USD"
+                          ? `${sendAmount ? truncateDisplayFloor(sendAmount, 4) : "0.00"} ${sendSource?.deployment.symbol ?? ""}`
+                          : sendSourcePriceUsd !== null
+                            ? `${
+                                formatApproxUsdLabel(
+                                  computeDisplayUsd(
+                                    sendAmount || "0",
+                                    sendSourcePriceUsd,
+                                  ) ?? "$0.00",
+                                ) ?? "$0.00"
+                              } USD`
+                            : `${sendSource?.deployment.symbol ?? ""} · ${sendSource?.deployment.networkName ?? ""}`;
+                      const walletPillValue = hideBalance
+                        ? "••••"
+                        : sendInputMode === "USD" && sendSourcePriceUsd !== null
+                          ? (computeDisplayUsd(
+                              sendSourceBalance,
+                              sendSourcePriceUsd,
+                            ) ?? "$0.00")
+                          : `${sendSourceBalance ? truncateDisplayFloor(sendSourceBalance, 4) : "0"} ${sendSource?.deployment.symbol ?? ""}`;
+                      const inputChWidth = Math.min(
+                        12,
+                        Math.max(1, (activeInputValue || "0").length) + 0.6,
+                      );
+
+                      return (
+                        <div className="py-3 sm:py-5 flex flex-col items-center text-center space-y-6">
+                          {/* Centered Currency Circle + Giant Numeric Input + Bare ⇅ Switcher */}
+                          <div className="w-full flex flex-col items-center space-y-2">
+                            <div className="inline-flex items-center justify-center gap-3 max-w-full">
+                              <button
+                                type="button"
+                                disabled={!sendSourcePriceUsd}
+                                onClick={toggleSendInputMode}
+                                aria-label={
+                                  sendInputMode === "USD"
+                                    ? `Switch to ${sendSource?.deployment.symbol ?? "asset"} input`
+                                    : "Switch to USD input"
+                                }
+                                className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.08] flex items-center justify-center shrink-0 text-neutral-900 dark:text-white cursor-pointer disabled:cursor-default transition-colors hover:bg-neutral-200/80 dark:hover:bg-white/[0.12]"
+                              >
+                                {sendInputMode === "USD" ? (
+                                  <span className="text-lg font-medium leading-none">
+                                    $
+                                  </span>
+                                ) : sendSource ? (
+                                  <AssetAvatar
+                                    symbol={sendSource.deployment.symbol}
+                                    size={24}
+                                  />
+                                ) : null}
+                              </button>
+
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                autoFocus
+                                aria-label={
+                                  sendInputMode === "USD"
+                                    ? "Send amount in USD"
+                                    : "Send amount"
+                                }
+                                value={activeInputValue}
+                                style={{ width: `${inputChWidth}ch` }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    if (canContinueAmount) setSendStep(3);
+                                    return;
+                                  }
+                                  blockNegativeKey(e);
+                                }}
+                                onChange={(e) => {
+                                  setSendUsedMax(false);
+                                  if (sendInputMode === "USD") {
+                                    handleSendUsdChange(e.target.value);
+                                  } else {
+                                    setSendAmount(
+                                      sanitizeNonNegativeDecimal(e.target.value),
+                                    );
+                                  }
+                                }}
+                                placeholder="0"
+                                className="max-w-[70%] text-5xl sm:text-6xl font-medium tracking-tight bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-950 dark:placeholder:text-white focus:outline-hidden text-center tabular-nums"
+                              />
+
+                              <button
+                                type="button"
+                                disabled={!sendSourcePriceUsd}
+                                onClick={toggleSendInputMode}
+                                aria-label={
+                                  sendInputMode === "USD"
+                                    ? `Switch to ${sendSource?.deployment.symbol ?? "asset"} input`
+                                    : "Switch to USD input"
+                                }
+                                title={
+                                  !sendSourcePriceUsd
+                                    ? "Live price unavailable"
+                                    : sendInputMode === "USD"
+                                      ? `Enter in ${sendSource?.deployment.symbol ?? "asset"}`
+                                      : "Enter in USD"
+                                }
+                                className="inline-flex items-center justify-center p-1 text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed shrink-0"
+                              >
+                                <svg
+                                  width="18"
+                                  height="18"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M8 19V5" />
+                                  <path d="m4 9 4-4 4 4" />
+                                  <path d="M16 5v14" />
+                                  <path d="m12 15 4 4 4-4" />
+                                </svg>
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={!sendSourcePriceUsd}
+                              onClick={toggleSendInputMode}
+                              className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors cursor-pointer disabled:cursor-default tabular-nums"
+                            >
+                              {secondaryConversionText}
+                            </button>
+                          </div>
+
+                          {/* Empty balance prompt matching reference */}
+                          {isEmptyBalance && (
+                            <div className="flex items-center justify-center gap-3 flex-wrap">
+                              <span className="text-sm text-neutral-500 dark:text-neutral-400">
+                                Your balance is empty.
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => changeTab("receive")}
+                                className="px-4 py-2 rounded-full border border-neutral-200 dark:border-white/[0.14] bg-white dark:bg-[#1A1A1A] text-sm font-semibold text-neutral-950 dark:text-white hover:bg-neutral-50 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
+                              >
+                                Add money
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Wallet Balance Pill + Max Pill */}
+                          <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                            <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 dark:bg-white/[0.08] px-4 py-2 text-xs sm:text-sm">
+                              <span className="text-neutral-500 dark:text-neutral-400">
+                                {sendSource?.deployment.symbol ?? "Main"} wallet
+                              </span>
+                              <span className="font-semibold text-neutral-950 dark:text-white tabular-nums">
+                                {walletPillValue}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={isEmptyBalance || !sendSourceBalance}
+                              onClick={handleSendMaxClick}
+                              className="rounded-full border border-neutral-200 dark:border-white/[0.14] bg-white dark:bg-[#141414] px-4 py-2 text-xs sm:text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/25 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              Max
+                            </button>
+                          </div>
+
+                          {/* Helper / Validation Copy */}
+                          <p
+                            className={`text-xs sm:text-sm ${
+                              amountExceedsBalance || amountExceedsGas
+                                ? "text-[#FF1A1A] dark:text-red-400 font-medium"
+                                : "text-neutral-500 dark:text-neutral-400"
+                            }`}
+                          >
+                            {amountExceedsBalance
+                              ? `Insufficient ${sendSource?.deployment.symbol ?? ""} balance. Tap Max to send your available balance.`
+                              : amountExceedsGas
+                                ? `Leave room for network gas and fees. Tap Max to adjust.`
+                                : "Type an amount, then press Enter to continue."}
+                          </p>
+
+                          {/* Big Continue Pill + Back Link */}
+                          <div className="w-full space-y-2.5 pt-1">
+                            <button
+                              type="button"
+                              disabled={!canContinueAmount}
+                              onClick={() => setSendStep(3)}
+                              className="flow-liquid-btn-primary w-full py-4 rounded-full text-sm font-semibold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                            >
+                              Continue
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSendStep(1)}
+                              className="w-full py-2 text-xs font-semibold text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                            >
+                              ← Change asset
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                  {/* STEP 3: Recipient, Memo & Live Quote */}
+                  {sendStep === 3 && (
                     <div className="space-y-4">
                       <div>
                         <h2 className="text-base font-bold text-neutral-950 dark:text-white">
-                          2. What should the recipient receive?
+                          Recipient
                         </h2>
                         <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                          Select the destination token &amp; network, then enter
-                          their address or <span className="font-mono">@flow</span> ID.
+                          Sending{" "}
+                          <span className="font-mono font-semibold text-neutral-800 dark:text-neutral-200">
+                            {sendAmount} {sendSource?.deployment.symbol}
+                          </span>{" "}
+                          ({sendSource?.deployment.networkName}). Select what
+                          the recipient receives and enter their address or{" "}
+                          <span className="font-mono">@flow</span> ID.
                         </p>
                       </div>
 
@@ -3780,9 +4036,20 @@ export function PortfolioView({
                           }
                           selectedId={sendDestDeploymentId}
                           onSelect={(dep) => {
-                            if (dep.networkKey !== sendDestDeployment.networkKey)
+                            if (
+                              dep.networkKey !== sendDestDeployment.networkKey &&
+                              !isFlowIdInput(sendRecipientAddress)
+                            ) {
                               setSendRecipientAddress("");
+                            }
                             setSendDestDeploymentId(dep.id);
+                            if (sendUsedMax && sendSource) {
+                              const nextFeeBps = getOperationPlatformFeeBps(
+                                "SEND",
+                                sendSource.deployment.id === dep.id,
+                              );
+                              applySendMaxForFee(nextFeeBps);
+                            }
                           }}
                         />
                       </div>
@@ -3852,192 +4119,6 @@ export function PortfolioView({
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setSendStep(1)}
-                          className="flow-liquid-btn px-5 py-3.5 rounded-full text-xs font-bold text-neutral-900 dark:text-neutral-100 cursor-pointer"
-                        >
-                          Back
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!sendAddressValidation.valid}
-                          onClick={() => setSendStep(3)}
-                          className="flow-liquid-btn-primary flex-1 py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                        >
-                          Continue
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* STEP 3: Enter Amount */}
-                  {sendStep === 3 && (
-                    <div className="space-y-4">
-                      <div>
-                        <h2 className="text-base font-bold text-neutral-950 dark:text-white">
-                          3. Enter amount to send
-                        </h2>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                          Sending {sendSource?.deployment.symbol} ({sendSource?.deployment.networkName}) →{" "}
-                          {sendDestDeployment.symbol} ({sendDestDeployment.networkName}).
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/50 dark:bg-[#1A1A1A] p-4 space-y-2.5">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
-                            You send
-                          </label>
-                          <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
-                            <span className="tabular-nums">
-                              Available:{" "}
-                              {hideBalance
-                                ? "••••••"
-                                : sendSourceBalance
-                                  ? truncateDisplayFloor(sendSourceBalance, 4)
-                                  : "Unavailable"}{" "}
-                              {sendSource?.deployment.symbol}
-                            </span>
-                            <button
-                              type="button"
-                              disabled={!sendSourceBalance}
-                              onClick={handleSendMaxClick}
-                              className="text-xs font-bold text-neutral-950 dark:text-white hover:underline cursor-pointer"
-                            >
-                              Max
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2.5">
-                          <div className="flex items-center min-w-0 flex-1 gap-1">
-                            {sendInputMode === "USD" && (
-                              <span className="text-2xl font-bold text-neutral-500 dark:text-neutral-400 font-mono select-none">
-                                $
-                              </span>
-                            )}
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              autoComplete="off"
-                              autoFocus
-                              aria-label={
-                                sendInputMode === "USD"
-                                  ? "Send amount in USD"
-                                  : "Send amount"
-                              }
-                              value={
-                                sendInputMode === "USD"
-                                  ? sendUsdInput
-                                  : sendAmount
-                              }
-                              onKeyDown={blockNegativeKey}
-                              onChange={(e) => {
-                                if (sendInputMode === "USD") {
-                                  handleSendUsdChange(e.target.value);
-                                } else {
-                                  setSendAmount(
-                                    sanitizeNonNegativeDecimal(e.target.value),
-                                  );
-                                }
-                              }}
-                              placeholder="0.00"
-                              className="min-w-0 flex-1 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden font-mono"
-                            />
-                          </div>
-
-                          <div className="shrink-0 flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              disabled={!sendSourcePriceUsd}
-                              onClick={toggleSendInputMode}
-                              aria-label={
-                                sendInputMode === "USD"
-                                  ? `Switch to ${sendSource?.deployment.symbol ?? "asset"} input`
-                                  : "Switch to USD input"
-                              }
-                              title={
-                                !sendSourcePriceUsd
-                                  ? "Live price unavailable"
-                                  : sendInputMode === "USD"
-                                    ? `Enter in ${sendSource?.deployment.symbol ?? "asset"}`
-                                    : "Enter in USD"
-                              }
-                              className="inline-flex items-center justify-center p-1 text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              <svg
-                                width="18"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden="true"
-                              >
-                                <path d="M8 19V5" />
-                                <path d="m4 9 4-4 4 4" />
-                                <path d="M16 5v14" />
-                                <path d="m12 15 4 4 4-4" />
-                              </svg>
-                            </button>
-
-                            {sendInputMode === "USD" ? (
-                              <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.08] text-xs font-bold text-neutral-950 dark:text-white">
-                                <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
-                                  $
-                                </span>
-                                <span>USD</span>
-                              </div>
-                            ) : (
-                              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.08] text-xs font-bold text-neutral-950 dark:text-white">
-                                {sendSource && (
-                                  <AssetAvatar
-                                    symbol={sendSource.deployment.symbol}
-                                    size={18}
-                                  />
-                                )}
-                                <span>{sendSource?.deployment.symbol}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {sendSourcePriceUsd !== null && (
-                          <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
-                            <button
-                              type="button"
-                              onClick={toggleSendInputMode}
-                              className="inline-flex items-center gap-1 hover:text-neutral-900 dark:hover:text-neutral-200 transition-colors cursor-pointer tabular-nums"
-                            >
-                              {sendInputMode === "USD" ? (
-                                <span>
-                                  ≈{" "}
-                                  {sendAmount
-                                    ? truncateDisplayFloor(sendAmount, 4)
-                                    : "0"}{" "}
-                                  {sendSource?.deployment.symbol}
-                                </span>
-                              ) : (
-                                <span>
-                                  ≈ $
-                                  {(() => {
-                                    const n = Number.parseFloat(sendAmount);
-                                    if (!Number.isFinite(n) || n <= 0)
-                                      return "0.00";
-                                    return (n * sendSourcePriceUsd).toFixed(2);
-                                  })()}{" "}
-                                  USD
-                                </span>
-                              )}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
                       <div className="space-y-1.5">
                         <label
                           htmlFor="send-memo-input"
@@ -4065,6 +4146,18 @@ export function PortfolioView({
                         receiveLabel="Recipient receives"
                       />
 
+                      {(sendPreview.insufficientBalance ||
+                        sendPreview.insufficientGas) &&
+                        sendSourceBalance && (
+                          <button
+                            type="button"
+                            onClick={handleSendMaxClick}
+                            className="w-full py-2.5 rounded-full border border-neutral-200 dark:border-white/[0.12] bg-neutral-50 dark:bg-white/[0.04] text-xs font-semibold text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                          >
+                            Adjust amount to Max for this route
+                          </button>
+                        )}
+
                       <div className="flex items-center gap-2.5 pt-1">
                         <button
                           type="button"
@@ -4077,6 +4170,7 @@ export function PortfolioView({
                           type="button"
                           disabled={
                             !sendSource ||
+                            !sendAddressValidation.valid ||
                             sendPreview.insufficientBalance ||
                             sendPreview.insufficientGas ||
                             !positiveQuoteAmount(
@@ -4089,18 +4183,18 @@ export function PortfolioView({
                           onClick={() => setSendStep(4)}
                           className="flow-liquid-btn-primary flex-1 py-4 rounded-full text-sm font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                         >
-                          {sendPreview.loading ? "Updating quote…" : "Review Payment"}
+                          {sendPreview.loading ? "Updating quote…" : "Review & Pay"}
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {/* STEP 4: Review & Slide to Pay */}
+                  {/* STEP 4: Review & Pay */}
                   {sendStep === 4 && (
                     <div className="space-y-4">
                       <div>
                         <h2 className="text-base font-bold text-neutral-950 dark:text-white">
-                          4. Review &amp; Slide to Pay
+                          Review &amp; Pay
                         </h2>
                         <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
                           Confirm the details below and slide to authorize this payment.
@@ -4177,12 +4271,11 @@ export function PortfolioView({
                                         ? `${formatApproxDisplay(feeDisplay)} ${sendSource?.deployment.symbol ?? ""}`
                                         : `${Number((sendFeeBps / 100).toFixed(2))}%`}
                                     </div>
-                                    <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
-                                      {feeUsd
-                                        ? `${formatApproxUsdLabel(feeUsd)} · `
-                                        : ""}
-                                      from balance
-                                    </div>
+                                    {feeUsd && (
+                                      <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                                        {formatApproxUsdLabel(feeUsd)}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -4192,7 +4285,7 @@ export function PortfolioView({
                                 totalDebitDisplay && (
                                   <div className="flex items-start justify-between gap-3">
                                     <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
-                                      Total from balance
+                                      Total
                                     </span>
                                     <div className="text-right min-w-0">
                                       <div className="font-mono font-semibold text-neutral-900 dark:text-neutral-200 whitespace-nowrap">
@@ -4308,7 +4401,7 @@ export function PortfolioView({
                         onClick={() => setSendStep(3)}
                         className="w-full py-2 text-xs font-semibold text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-40"
                       >
-                        ← Edit amount
+                        ← Edit recipient
                       </button>
 
                       {outgoingError && (

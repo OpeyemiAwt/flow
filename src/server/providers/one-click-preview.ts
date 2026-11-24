@@ -189,7 +189,7 @@ export async function quoteOneClickPreview(input: {
   const feeDescription = [
     appFeePercent
       ? platformFeeDisplay
-        ? `FLOW platform fee (${appFeePercent}: ${platformFeeDisplay} ${source.symbol}) charged from balance`
+        ? `FLOW platform fee (${appFeePercent}: ${platformFeeDisplay} ${source.symbol})`
         : `Includes ${appFeePercent} FLOW platform fee`
       : null,
     withdrawFeeDisplay === null
