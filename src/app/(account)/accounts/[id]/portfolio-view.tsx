@@ -2698,7 +2698,7 @@ export function PortfolioView({
       } catch {
         // Ignore transient poll errors
       }
-    }, 2000);
+    }, 1500);
     return () => window.clearInterval(timer);
   }, [accountId, activeOutgoingTransfer, changeTab, triggerPostSettlementSync]);
 

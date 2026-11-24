@@ -47,7 +47,10 @@ import { callJsonRpc } from "../assets/connectors/rpc-client.ts";
 import { SOLANA_PROGRAMS } from "../assets/connectors/solana-connector.ts";
 import { ingestWalletActivities } from "../assets/indexers/multi-chain-activity-ingester.ts";
 import { verifyOnChainTransfer } from "../payments/on-chain-verifier.ts";
-import { fetchOneClickExecutionStatus } from "../providers/one-click-adapter.ts";
+import {
+  fetchOneClickExecutionStatus,
+  submitOneClickDepositTx,
+} from "../providers/one-click-adapter.ts";
 import { DEFAULT_RPC_ENDPOINTS } from "./blockchain-connectivity.ts";
 import type { OutLayerAdapter } from "./outlayer-adapter.ts";
 
@@ -510,7 +513,7 @@ async function executeSolanaTransfer(
   const [blockhashRes, senderBalanceRes] = await Promise.all([
     callJsonRpc<{
       value?: { blockhash?: string; lastValidBlockHeight?: number };
-    }>(primary, "getLatestBlockhash", [{ commitment: "finalized" }], {
+    }>(primary, "getLatestBlockhash", [{ commitment: "confirmed" }], {
       fallbackEndpoint: fallback,
     }),
     callJsonRpc<{ value?: number }>(
@@ -776,8 +779,9 @@ async function pollOutLayerRequestForTxHash(
   if (initialTxHash) {
     return { txHash: initialTxHash, requestId };
   }
-  for (let i = 0; i < 6; i++) {
-    await new Promise((r) => setTimeout(r, 1500));
+  const pollDelaysMs = [350, 550, 800, 1100, 1400, 1500];
+  for (let i = 0; i < pollDelaysMs.length; i++) {
+    await new Promise((r) => setTimeout(r, pollDelaysMs[i]));
     const status = await outlayer.getRequestStatus(apiKey, requestId);
     const resultObj =
       status.result && typeof status.result === "object"
@@ -1211,7 +1215,7 @@ async function executeNearTransfer(
   return { ...polled, feeAtomic: "0" };
 }
 
-async function processNextQueuedOutgoingJob(
+export async function processNextQueuedOutgoingJob(
   db: FlowDb,
   outlayer: OutLayerAdapter,
   walletConfig: Pick<WalletConfig, "encryptionKey" | "keyId"> & {
@@ -1315,6 +1319,28 @@ async function processNextQueuedOutgoingJob(
         ${result.feeAtomic}::numeric
       )
     `;
+
+    if (
+      job.provider_deposit_address &&
+      result.txHash &&
+      !result.txHash.startsWith("outlayer-req:")
+    ) {
+      void submitOneClickDepositTx({
+        txHash: result.txHash,
+        depositAddress: job.provider_deposit_address,
+        depositMemo: job.provider_deposit_memo,
+        nearSenderAccount: job.source_network.startsWith("near-")
+          ? job.source_address
+          : null,
+      }).then((notifyRes) => {
+        log("info", "one_click_deposit_tx_submitted", {
+          workerId,
+          jobId: job.id,
+          ok: notifyRes.ok,
+          statusCode: notifyRes.statusCode ?? null,
+        });
+      });
+    }
 
     log("info", "outgoing_transfer_broadcast", {
       workerId,
@@ -1582,6 +1608,39 @@ async function confirmSingleOutgoingJob(
   `;
 }
 
+export async function processOutgoingConfirmations(
+  db: FlowDb,
+  workerId: string,
+): Promise<number> {
+  const confirming = await db.$queryRaw<ClaimedOutgoingConfirmationJob[]>`
+    SELECT * FROM flow.claim_outgoing_transfers_for_confirmation(
+      ${workerId}::text,
+      ${60}::integer,
+      ${10}::integer
+    )
+  `;
+
+  if (confirming.length === 0) {
+    return 0;
+  }
+
+  await Promise.allSettled(
+    confirming.map(async (job) => {
+      try {
+        await confirmSingleOutgoingJob(db, workerId, job);
+      } catch (error: unknown) {
+        log("error", "outgoing_transfer_confirmation_error", {
+          workerId,
+          jobId: job.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }),
+  );
+
+  return confirming.length;
+}
+
 export async function processOutgoingTransferCycle(
   db: FlowDb,
   outlayer: OutLayerAdapter,
@@ -1593,24 +1652,5 @@ export async function processOutgoingTransferCycle(
   if (!isFinancialExecutionDisabled()) {
     await processNextQueuedOutgoingJob(db, outlayer, walletConfig, workerId);
   }
-
-  const confirming = await db.$queryRaw<ClaimedOutgoingConfirmationJob[]>`
-    SELECT * FROM flow.claim_outgoing_transfers_for_confirmation(
-      ${workerId}::text,
-      ${60}::integer,
-      ${10}::integer
-    )
-  `;
-
-  for (const job of confirming) {
-    try {
-      await confirmSingleOutgoingJob(db, workerId, job);
-    } catch (error: unknown) {
-      log("error", "outgoing_transfer_confirmation_error", {
-        workerId,
-        jobId: job.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
+  await processOutgoingConfirmations(db, workerId);
 }

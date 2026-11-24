@@ -14,7 +14,10 @@ import {
 } from "../src/foundation/wallet-environment.ts";
 import { upgradeActiveWalletsToLiveExecutionPolicy } from "../src/server/custody/near-policy-sponsor.ts";
 import { OutLayerAdapter } from "../src/server/custody/outlayer-adapter.ts";
-import { processOutgoingTransferCycle } from "../src/server/custody/outgoing-executor.ts";
+import {
+  processNextQueuedOutgoingJob,
+  processOutgoingConfirmations,
+} from "../src/server/custody/outgoing-executor.ts";
 import { WalletProvisioningWorker } from "../src/server/custody/provisioning-worker.ts";
 
 const UUID_REGEX =
@@ -213,30 +216,66 @@ async function main(): Promise<void> {
     }
   }
 
-  let outgoingTimer: ReturnType<typeof setInterval> | null = null;
-  let outgoingInFlight = false;
+  let stopping = false;
+  let dispatchTimer: ReturnType<typeof setTimeout> | null = null;
+  let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+
   if (mode === "execute") {
-    outgoingTimer = setInterval(() => {
-      if (stopping || outgoingInFlight) return;
-      outgoingInFlight = true;
-      void processOutgoingTransferCycle(db, adapter, walletConfig, workerId)
-        .catch((error: unknown) => {
-          log("error", "custody_outgoing_cycle_failed", {
+    const dispatchIdleMs = Math.min(750, pollIntervalMs);
+    const confirmIdleMs = Math.min(2_000, pollIntervalMs);
+
+    const scheduleDispatch = (delayMs: number) => {
+      if (stopping) return;
+      dispatchTimer = setTimeout(async () => {
+        if (stopping) return;
+        let claimed = false;
+        try {
+          if (config.execution === "enabled") {
+            claimed = await processNextQueuedOutgoingJob(
+              db,
+              adapter,
+              walletConfig,
+              workerId,
+            );
+          }
+        } catch (error: unknown) {
+          log("error", "custody_outgoing_dispatch_failed", {
             workerId,
             reason: error instanceof Error ? error.message : "UNKNOWN_ERROR",
           });
-        })
-        .finally(() => {
-          outgoingInFlight = false;
-        });
-    }, pollIntervalMs);
+        } finally {
+          scheduleDispatch(claimed ? 150 : dispatchIdleMs);
+        }
+      }, delayMs);
+    };
+
+    const scheduleConfirm = (delayMs: number) => {
+      if (stopping) return;
+      confirmTimer = setTimeout(async () => {
+        if (stopping) return;
+        let count = 0;
+        try {
+          count = await processOutgoingConfirmations(db, workerId);
+        } catch (error: unknown) {
+          log("error", "custody_outgoing_confirm_failed", {
+            workerId,
+            reason: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+          });
+        } finally {
+          scheduleConfirm(count > 0 ? 1_200 : confirmIdleMs);
+        }
+      }, delayMs);
+    };
+
+    scheduleDispatch(100);
+    scheduleConfirm(500);
   }
 
-  let stopping = false;
   const shutdown = async (signal: string) => {
     if (stopping) return;
     stopping = true;
-    if (outgoingTimer) clearInterval(outgoingTimer);
+    if (dispatchTimer) clearTimeout(dispatchTimer);
+    if (confirmTimer) clearTimeout(confirmTimer);
     log("info", "custody_worker_shutdown", { workerId, signal, mode });
     await worker.stop();
     await disconnectPrismaClients();

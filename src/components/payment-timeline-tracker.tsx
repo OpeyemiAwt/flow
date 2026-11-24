@@ -35,6 +35,33 @@ const TIMELINE_STEPS: readonly TimelineStep[] = [
   { id: "completed", label: "Payment completed." },
 ];
 
+function formatTrackerAmount(
+  raw: string | null | undefined,
+  maxDecimals = 4,
+): string {
+  if (!raw) return "0";
+  const cleaned = raw.trim().replace(/,/g, "");
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) {
+    const parsed = Number.parseFloat(cleaned);
+    if (!Number.isFinite(parsed)) return raw;
+    if (parsed === 0) return "0";
+    const factor = 10 ** maxDecimals;
+    const floored = Math.floor(parsed * factor) / factor;
+    if (floored === 0 && parsed > 0) return `<0.${"0".repeat(maxDecimals - 1)}1`;
+    return floored.toFixed(maxDecimals).replace(/\.?0+$/, "");
+  }
+  const [intPart, fracPart = ""] = cleaned.split(".");
+  if (!fracPart) return intPart || "0";
+  const truncated = fracPart.slice(0, maxDecimals).replace(/0+$/, "");
+  if (!truncated) {
+    if ((intPart === "0" || intPart === "") && /[1-9]/.test(fracPart)) {
+      return `<0.${"0".repeat(maxDecimals - 1)}1`;
+    }
+    return intPart || "0";
+  }
+  return `${intPart || "0"}.${truncated}`;
+}
+
 function formatClockTime(iso: string | null | undefined): string {
   if (!iso) return "";
   const dt = new Date(iso);
@@ -216,8 +243,13 @@ export function PaymentTimelineTracker({
               : "Live Payment Tracker"}
           </p>
           <p className="text-sm font-semibold text-white mt-0.5 tabular-nums">
-            {transfer.sourceDisplayAmount} {transfer.sourceAssetSymbol} →{" "}
-            {transfer.quotedDestinationDisplayAmount ?? transfer.sourceDisplayAmount}{" "}
+            {formatTrackerAmount(transfer.sourceDisplayAmount, 4)}{" "}
+            {transfer.sourceAssetSymbol} →{" "}
+            {formatTrackerAmount(
+              transfer.quotedDestinationDisplayAmount ??
+                transfer.sourceDisplayAmount,
+              4,
+            )}{" "}
             {transfer.destinationAssetSymbol}
           </p>
         </div>

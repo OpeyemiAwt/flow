@@ -748,9 +748,7 @@ export async function fetchOneClickExecutionStatus(params: {
 
     const response = await fetch(url.toString(), {
       method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
+      headers: getOneClickHeaders(),
       signal: controller.signal,
     });
 
@@ -882,5 +880,47 @@ export async function fetchOneClickExecutionStatus(params: {
         ? "Provider status request timed out."
         : `Provider connection failure: ${err instanceof Error ? err.message : String(err)}`,
     };
+  }
+}
+
+/**
+ * Notifies 1Click immediately after broadcasting a deposit transaction hash
+ * (`POST /v0/deposit/submit`) so solvers verify and fill the swap right away
+ * instead of waiting for periodic background chain scanning.
+ */
+export async function submitOneClickDepositTx(params: {
+  readonly txHash: string;
+  readonly depositAddress: string;
+  readonly depositMemo?: string | null;
+  readonly nearSenderAccount?: string | null;
+  readonly apiBase?: string;
+}): Promise<{ ok: boolean; statusCode?: number }> {
+  const apiBase = params.apiBase ?? DEFAULT_ONE_CLICK_API_BASE;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5_000);
+
+  try {
+    const body: Record<string, string> = {
+      txHash: params.txHash,
+      depositAddress: params.depositAddress,
+    };
+    if (params.depositMemo) {
+      body.memo = params.depositMemo;
+    }
+    if (params.nearSenderAccount) {
+      body.nearSenderAccount = params.nearSenderAccount;
+    }
+
+    const response = await fetch(`${apiBase}/v0/deposit/submit`, {
+      method: "POST",
+      headers: getOneClickHeaders(),
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return { ok: response.ok, statusCode: response.status };
+  } catch {
+    clearTimeout(timeoutId);
+    return { ok: false };
   }
 }
