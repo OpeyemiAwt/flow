@@ -1004,8 +1004,77 @@ export function PortfolioView({
     [],
   );
 
+  const resetSendFlow = useCallback(() => {
+    setSendHubOpen(true);
+    setSendStep(1);
+    setSendAmount("");
+    setSendUsdInput("");
+    setSendInputMode("ASSET");
+    setSendUsedMax(false);
+    setSendRecipientAddress("");
+    setSendMemo("");
+    setFlowIdResolution({ status: "idle" });
+    setOutgoingError(null);
+    setOutgoingIdempotencyKey(crypto.randomUUID());
+    setActiveOutgoingTransfer((prev) => (prev?.jobKind === "SEND" ? null : prev));
+  }, []);
+
+  const resetConvertFlow = useCallback(() => {
+    setConvertAmount("");
+    setOutgoingError(null);
+    setOutgoingIdempotencyKey(crypto.randomUUID());
+    setActiveOutgoingTransfer((prev) =>
+      prev?.jobKind === "CONVERT" ? null : prev,
+    );
+  }, []);
+
+  const resetReceiveFlow = useCallback(() => {
+    setReceiveHubOpen(true);
+    setDepositModeState("DIRECT");
+    setAddMoneyIntent(null);
+    setAddMoneyError(null);
+    setAddMoneySecondsRemaining(0);
+    setCrossChainDepositAmount("10");
+    setCrossChainRefundAddress("");
+    try {
+      sessionStorage.removeItem(`flow-add-money-intent:${accountId}`);
+    } catch {}
+  }, [accountId]);
+
+  const resetRequestFlow = useCallback(() => {
+    setRequestView("LIST");
+    setPrTitle("");
+    setPrDescription("");
+    setPrAmount("");
+    setPrAmountMode("FIXED");
+    setPrMaxPaymentsMode("UNLIMITED");
+    setPrMaxPayments("1");
+    setPrFeePayer("PAYER");
+    setPrSuccessUrl(null);
+  }, []);
+
+  const resetAllTransactionFlows = useCallback(() => {
+    resetSendFlow();
+    resetConvertFlow();
+    resetReceiveFlow();
+    resetRequestFlow();
+  }, [resetConvertFlow, resetReceiveFlow, resetRequestFlow, resetSendFlow]);
+
   const changeTab = useCallback(
     (tab: NavTabId) => {
+      if (tab === "dashboard") {
+        resetAllTransactionFlows();
+      } else if (tab !== activeTab) {
+        if (activeTab === "send") resetSendFlow();
+        if (activeTab === "convert") resetConvertFlow();
+        if (activeTab === "receive") resetReceiveFlow();
+        if (activeTab === "request") resetRequestFlow();
+      } else {
+        if (tab === "send") resetSendFlow();
+        if (tab === "convert") resetConvertFlow();
+        if (tab === "receive") resetReceiveFlow();
+        if (tab === "request") resetRequestFlow();
+      }
       if (tab !== activeTab) {
         if (tabTimerRef.current) {
           window.clearTimeout(tabTimerRef.current);
@@ -1026,11 +1095,20 @@ export function PortfolioView({
           view: null,
           sendMode: null,
           depositMode: null,
+          to: null,
         },
         nextPathname,
       );
     },
-    [activeTab, syncUrlParams],
+    [
+      activeTab,
+      resetAllTransactionFlows,
+      resetConvertFlow,
+      resetReceiveFlow,
+      resetRequestFlow,
+      resetSendFlow,
+      syncUrlParams,
+    ],
   );
 
   useEffect(() => {
@@ -1057,8 +1135,10 @@ export function PortfolioView({
           )
         ) {
           setActiveTab(viewParam as NavTabId);
+          if (viewParam === "dashboard") resetAllTransactionFlows();
         } else {
           setActiveTab("dashboard");
+          resetAllTransactionFlows();
         }
       } catch {
         // ignore
