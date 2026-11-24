@@ -8,6 +8,7 @@ export async function sendMail(
   subject: string,
   text: string,
   diagnosticId?: string,
+  html?: string,
 ): Promise<boolean> {
   let status: number | undefined;
   let providerMessageId: string | undefined;
@@ -21,7 +22,13 @@ export async function sendMail(
         Authorization: `Bearer ${config.mailKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from: config.mailFrom, to: [to], subject, text }),
+      body: JSON.stringify({
+        from: config.mailFrom,
+        to: [to],
+        subject,
+        text,
+        ...(html ? { html } : {}),
+      }),
     });
     status = res.status;
     if (res.ok) {

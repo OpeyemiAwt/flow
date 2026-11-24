@@ -10,6 +10,8 @@ export interface NotificationPreferenceSnapshot {
   readonly incomingPayments: boolean;
   readonly paymentLinkActivity: boolean;
   readonly securityAlerts: boolean;
+  readonly emailTransactions: boolean;
+  readonly emailNewsletter: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSnapshot =
@@ -17,6 +19,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSnapshot =
     incomingPayments: true,
     paymentLinkActivity: true,
     securityAlerts: true,
+    emailTransactions: true,
+    emailNewsletter: false,
   };
 
 export async function getUserProfilePreference(
@@ -75,26 +79,61 @@ export async function getAccountNotificationPreferences(
   accountId: string,
   flowUserId: string,
 ): Promise<NotificationPreferenceSnapshot> {
-  const rows = await db.$queryRaw<
-    Array<{
-      incoming_payments: boolean;
-      payment_link_activity: boolean;
-      security_alerts: boolean;
-    }>
-  >`
-    SELECT incoming_payments, payment_link_activity, security_alerts
-    FROM flow.account_notification_preferences
-    WHERE account_id = ${accountId}::uuid
-      AND user_id = ${flowUserId}::uuid
-    LIMIT 1
-  `;
-  const row = rows[0];
-  if (!row) return { ...DEFAULT_NOTIFICATION_PREFERENCES };
-  return {
-    incomingPayments: row.incoming_payments,
-    paymentLinkActivity: row.payment_link_activity,
-    securityAlerts: row.security_alerts,
-  };
+  try {
+    const rows = await db.$queryRaw<
+      Array<{
+        incoming_payments: boolean;
+        payment_link_activity: boolean;
+        security_alerts: boolean;
+        email_transactions: boolean;
+        email_newsletter: boolean;
+      }>
+    >`
+      SELECT
+        incoming_payments,
+        payment_link_activity,
+        security_alerts,
+        email_transactions,
+        email_newsletter
+      FROM flow.account_notification_preferences
+      WHERE account_id = ${accountId}::uuid
+        AND user_id = ${flowUserId}::uuid
+      LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) return { ...DEFAULT_NOTIFICATION_PREFERENCES };
+    return {
+      incomingPayments: row.incoming_payments,
+      paymentLinkActivity: row.payment_link_activity,
+      securityAlerts: row.security_alerts,
+      emailTransactions: row.email_transactions,
+      emailNewsletter: row.email_newsletter,
+    };
+  } catch {
+    // Graceful fallback while email_transactions / email_newsletter migration rolls out
+    const rows = await db.$queryRaw<
+      Array<{
+        incoming_payments: boolean;
+        payment_link_activity: boolean;
+        security_alerts: boolean;
+      }>
+    >`
+      SELECT incoming_payments, payment_link_activity, security_alerts
+      FROM flow.account_notification_preferences
+      WHERE account_id = ${accountId}::uuid
+        AND user_id = ${flowUserId}::uuid
+      LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) return { ...DEFAULT_NOTIFICATION_PREFERENCES };
+    return {
+      incomingPayments: row.incoming_payments,
+      paymentLinkActivity: row.payment_link_activity,
+      securityAlerts: row.security_alerts,
+      emailTransactions: DEFAULT_NOTIFICATION_PREFERENCES.emailTransactions,
+      emailNewsletter: DEFAULT_NOTIFICATION_PREFERENCES.emailNewsletter,
+    };
+  }
 }
 
 export async function upsertAccountNotificationPreferences(
@@ -113,11 +152,20 @@ export async function upsertAccountNotificationPreferences(
     paymentLinkActivity:
       input.paymentLinkActivity ?? current.paymentLinkActivity,
     securityAlerts: input.securityAlerts ?? current.securityAlerts,
+    emailTransactions: input.emailTransactions ?? current.emailTransactions,
+    emailNewsletter: input.emailNewsletter ?? current.emailNewsletter,
   };
 
   await db.$executeRaw`
     INSERT INTO flow.account_notification_preferences (
-      account_id, user_id, incoming_payments, payment_link_activity, security_alerts, updated_at
+      account_id,
+      user_id,
+      incoming_payments,
+      payment_link_activity,
+      security_alerts,
+      email_transactions,
+      email_newsletter,
+      updated_at
     )
     VALUES (
       ${accountId}::uuid,
@@ -125,6 +173,8 @@ export async function upsertAccountNotificationPreferences(
       ${next.incomingPayments},
       ${next.paymentLinkActivity},
       ${next.securityAlerts},
+      ${next.emailTransactions},
+      ${next.emailNewsletter},
       now()
     )
     ON CONFLICT (account_id, user_id)
@@ -132,6 +182,8 @@ export async function upsertAccountNotificationPreferences(
       incoming_payments = EXCLUDED.incoming_payments,
       payment_link_activity = EXCLUDED.payment_link_activity,
       security_alerts = EXCLUDED.security_alerts,
+      email_transactions = EXCLUDED.email_transactions,
+      email_newsletter = EXCLUDED.email_newsletter,
       updated_at = now()
   `;
 

@@ -838,12 +838,30 @@ model AccountNotificationPreference {
   incomingPayments    Boolean     @default(true) @map("incoming_payments")
   paymentLinkActivity Boolean     @default(true) @map("payment_link_activity")
   securityAlerts      Boolean     @default(true) @map("security_alerts")
+  emailTransactions   Boolean     @default(true) @map("email_transactions")
+  emailNewsletter     Boolean     @default(false) @map("email_newsletter")
   updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   account             FlowAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   user                FlowUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([accountId, userId])
   @@map("account_notification_preferences")
+  @@schema("flow")
+}
+
+model EmailDelivery {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String?      @map("user_id") @db.Uuid
+  accountId         String?      @map("account_id") @db.Uuid
+  kind              String       @db.VarChar(32)
+  dedupeKey         String       @unique @map("dedupe_key") @db.VarChar(191)
+  recipientEmail    String       @map("recipient_email") @db.VarChar(320)
+  subject           String       @db.VarChar(240)
+  providerMessageId String?      @map("provider_message_id") @db.VarChar(128)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId, kind, createdAt(sort: Desc)], map: "email_deliveries_user_kind_idx")
+  @@map("email_deliveries")
   @@schema("flow")
 }
 

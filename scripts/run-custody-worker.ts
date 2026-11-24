@@ -19,6 +19,7 @@ import {
   processOutgoingConfirmations,
 } from "../src/server/custody/outgoing-executor.ts";
 import { WalletProvisioningWorker } from "../src/server/custody/provisioning-worker.ts";
+import { dispatchBlogNewsletterToSubscribers } from "../src/server/email/flow-email.ts";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -316,6 +317,27 @@ async function main(): Promise<void> {
         reason: error instanceof Error ? error.message : "UNKNOWN_ERROR",
       });
     });
+  }
+
+  if (mode === "execute" && config.execution === "enabled") {
+    // Dispatch latest FLOW Blog post once to any subscribed users who haven't received it yet
+    void dispatchBlogNewsletterToSubscribers(db)
+      .then((res) => {
+        if (res.sent > 0) {
+          log("info", "blog_newsletter_dispatched", {
+            workerId,
+            postSlug: res.postSlug,
+            attempted: res.attempted,
+            sent: res.sent,
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        log("error", "blog_newsletter_dispatch_failed", {
+          workerId,
+          reason: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+        });
+      });
   }
 }
 

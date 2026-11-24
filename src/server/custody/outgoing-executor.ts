@@ -46,6 +46,7 @@ import { reconcileWalletBalances } from "../assets/connectors/multi-chain-reconc
 import { callJsonRpc } from "../assets/connectors/rpc-client.ts";
 import { SOLANA_PROGRAMS } from "../assets/connectors/solana-connector.ts";
 import { ingestWalletActivities } from "../assets/indexers/multi-chain-activity-ingester.ts";
+import { sendSettledOutgoingReceiptEmail } from "../email/flow-email.ts";
 import { verifyOnChainTransfer } from "../payments/on-chain-verifier.ts";
 import {
   fetchOneClickExecutionStatus,
@@ -1503,6 +1504,7 @@ async function confirmSingleOutgoingJob(
               ? [job.source_tx_hash]
               : undefined,
         }),
+        sendSettledOutgoingReceiptEmail(db, job.id),
       ]);
     }
     return;
@@ -1577,6 +1579,7 @@ async function confirmSingleOutgoingJob(
             ? [destTx]
             : undefined,
       }),
+      sendSettledOutgoingReceiptEmail(db, job.id),
     ]);
     return;
   }

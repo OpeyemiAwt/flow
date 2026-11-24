@@ -55,6 +55,8 @@ export interface SecurityPanelProps {
     readonly incomingPayments: boolean;
     readonly paymentLinkActivity: boolean;
     readonly securityAlerts: boolean;
+    readonly emailTransactions: boolean;
+    readonly emailNewsletter: boolean;
   };
   readonly initialFlowId?: string | null;
 }
@@ -119,9 +121,17 @@ export function SecurityPanel({
     paymentLinkActivity:
       initialNotificationPreferences?.paymentLinkActivity ?? true,
     securityAlerts: initialNotificationPreferences?.securityAlerts ?? true,
+    emailTransactions:
+      initialNotificationPreferences?.emailTransactions ?? true,
+    emailNewsletter: initialNotificationPreferences?.emailNewsletter ?? false,
   });
-  const { incomingPayments, paymentLinkActivity, securityAlerts } =
-    notificationPreferences;
+  const {
+    incomingPayments,
+    paymentLinkActivity,
+    securityAlerts,
+    emailTransactions,
+    emailNewsletter,
+  } = notificationPreferences;
 
   // Profile Customization state
   const primaryAccount = accounts[0];
@@ -203,6 +213,16 @@ export function SecurityPanel({
           "securityAlerts",
           String(initialNotificationPreferences.securityAlerts),
         );
+        writeProfilePreference(
+          profileId,
+          "emailTransactions",
+          String(initialNotificationPreferences.emailTransactions),
+        );
+        writeProfilePreference(
+          profileId,
+          "emailNewsletter",
+          String(initialNotificationPreferences.emailNewsletter),
+        );
       }
       const hydratedName =
         readProfilePreference(profileId, "name")?.trim() || defaultName;
@@ -218,6 +238,12 @@ export function SecurityPanel({
         securityAlerts:
           initialNotificationPreferences?.securityAlerts ??
           readProfilePreference(profileId, "securityAlerts") !== "false",
+        emailTransactions:
+          initialNotificationPreferences?.emailTransactions ??
+          readProfilePreference(profileId, "emailTransactions") !== "false",
+        emailNewsletter:
+          initialNotificationPreferences?.emailNewsletter ??
+          readProfilePreference(profileId, "emailNewsletter") === "true",
       });
     });
     return () => window.cancelAnimationFrame(frame);
@@ -770,6 +796,75 @@ export function SecurityPanel({
                       <span
                         className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
                           securityAlerts ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Email Preferences Divider */}
+                  <div className="pt-5 pb-3 border-t border-neutral-100 dark:border-neutral-800 mt-5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                      Email &amp; Newsletter ({email})
+                    </p>
+                  </div>
+
+                  {/* Toggle 4: Transaction receipts in email */}
+                  <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30 transition-colors mb-3">
+                    <div>
+                      <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
+                        Transaction receipts in email
+                      </p>
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                        Receive a designed receipt email whenever your sends or
+                        conversions succeed.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={emailTransactions}
+                      aria-label="Transaction receipts in email"
+                      onClick={() => toggleNotification("emailTransactions")}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                        emailTransactions
+                          ? "bg-[#FF1A1A]"
+                          : "bg-neutral-200 dark:bg-neutral-700"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                          emailTransactions ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Toggle 5: Subscribe to FLOW Blog newsletter */}
+                  <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30 transition-colors">
+                    <div>
+                      <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
+                        FLOW Blog newsletter
+                      </p>
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                        Subscribe to receive new FLOW blog posts, product
+                        releases, and weekly shipping updates in your inbox.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={emailNewsletter}
+                      aria-label="FLOW Blog newsletter"
+                      onClick={() => toggleNotification("emailNewsletter")}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                        emailNewsletter
+                          ? "bg-[#FF1A1A]"
+                          : "bg-neutral-200 dark:bg-neutral-700"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                          emailNewsletter ? "translate-x-5" : "translate-x-0"
                         }`}
                       />
                     </button>

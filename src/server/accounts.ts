@@ -5,6 +5,7 @@ import { audit } from "./audit.ts";
 import { digest } from "./auth/provider.ts";
 import { forwardCookies, requireSession } from "./auth/session.ts";
 import { ensureProvisioningJobForAccount } from "./custody/job-repository.ts";
+import { sendWelcomeEmailIfEligible } from "./email/flow-email.ts";
 import {
   ApiFailure,
   canonicalHost,
@@ -239,6 +240,13 @@ export async function lockedAccess(db: FlowDb, actor: Principal, id: string) {
 
 export async function onboard(request: Request): Promise<Response> {
   await input(request, emptyBody);
+  let welcomeTarget: {
+    userId: string;
+    accountId: string;
+    email: string;
+    displayName: string;
+  } | null = null;
+
   const account = await transaction(async (tx) => {
     const session = await requireSession(tx, request.headers, true);
     const existing = await tx.flowUser.findUnique({
@@ -267,7 +275,7 @@ export async function onboard(request: Request): Promise<Response> {
     }
     const auth = await tx.authUser.findUniqueOrThrow({
       where: { id: session.userId },
-      select: { name: true },
+      select: { name: true, email: true, emailVerified: true, mailboxPaused: true },
     });
     const created = await tx.flowAccount.create({
       data: {
@@ -282,8 +290,22 @@ export async function onboard(request: Request): Promise<Response> {
       accountProvisioningKey(created.id),
     );
     await audit(tx, "personal-created", session.userId, created.id);
+    if (auth.email && auth.emailVerified && !auth.mailboxPaused) {
+      welcomeTarget = {
+        userId: user.id,
+        accountId: created.id,
+        email: auth.email,
+        displayName: auth.name,
+      };
+    }
     return summary({ ...created, wallet: null, business: null });
   });
+
+  if (welcomeTarget) {
+    const { db } = runtime();
+    void sendWelcomeEmailIfEligible(db, welcomeTarget).catch(() => {});
+  }
+
   return reply(200, { account });
 }
 

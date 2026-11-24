@@ -49,7 +49,9 @@ export type ProfilePreference =
   | "avatar"
   | "incomingPayments"
   | "paymentLinkActivity"
-  | "securityAlerts";
+  | "securityAlerts"
+  | "emailTransactions"
+  | "emailNewsletter";
 
 export function readProfilePreference(
   profileId: string | undefined,
