@@ -179,51 +179,77 @@ function wrapFlowEmailShell(options: {
   const settingsUrl = `${APP_BASE_URL}/security`;
   const logoUrl = `${APP_BASE_URL}/assets/flow-symbol-white.png`;
   return `<!doctype html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
   <title>FLOW</title>
+  <style>
+    :root { color-scheme: light only; supported-color-schemes: light only; }
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+    @media only screen and (max-width: 600px) {
+      .flow-header-pad { padding: 20px 18px !important; }
+      .flow-body-pad { padding: 28px 18px 30px !important; }
+      .flow-footer-pad { padding: 22px 18px 28px !important; }
+      .flow-hero-amt { font-size: 30px !important; }
+      .flow-h1 { font-size: 24px !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background-color:#F5F5F4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif;color:#0B0C0E;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;width:100%;background-color:#FFFFFF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif;color:#0B0C0E;-webkit-font-smoothing:antialiased;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(options.preheader)}</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#F5F5F4;padding:28px 14px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0;padding:0;background-color:#FFFFFF;">
+    <!-- Full-Bleed Edge-to-Edge Black Brand Header (gradient prevents Gmail iOS dark-mode white inversion) -->
     <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;background-color:#FFFFFF;border-radius:22px;overflow:hidden;border:1px solid #E6E4DF;">
-          <!-- Brand Header -->
+      <td align="center" style="background-color:#0B0C0E;background-image:linear-gradient(#0B0C0E,#0B0C0E);padding:0;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;margin:0 auto;">
           <tr>
-            <td style="background-color:#0B0C0E;padding:22px 28px;">
+            <td class="flow-header-pad" style="padding:22px 28px;background-color:#0B0C0E;background-image:linear-gradient(#0B0C0E,#0B0C0E);">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td align="left" style="vertical-align:middle;">
                     <a href="${APP_BASE_URL}" style="text-decoration:none;display:inline-flex;align-items:center;">
-                      <img src="${logoUrl}" alt="FLOW" width="24" height="24" style="display:inline-block;vertical-align:middle;border:0;" />
-                      <span style="margin-left:9px;font-size:16px;font-weight:700;letter-spacing:-0.02em;color:#FFFFFF;vertical-align:middle;">FLOW</span>
+                      <img src="${logoUrl}" alt="FLOW" width="26" height="26" style="display:inline-block;vertical-align:middle;border:0;" />
+                      <span style="margin-left:10px;font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#FFFFFF;vertical-align:middle;">FLOW</span>
                     </a>
                   </td>
                   <td align="right" style="vertical-align:middle;">
-                    <span style="display:inline-block;padding:4px 10px;border-radius:999px;background-color:rgba(255,255,255,0.10);color:#E5E7EB;font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">${escapeHtml(options.headerBadge)}</span>
+                    <span style="display:inline-block;padding:5px 12px;border-radius:999px;background-color:#1F2126;background-image:linear-gradient(#1F2126,#1F2126);color:#F3F4F6;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">${escapeHtml(options.headerBadge)}</span>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
+        </table>
+      </td>
+    </tr>
 
-          <!-- Main Body -->
+    <!-- Open, Full-Width Main Body -->
+    <tr>
+      <td align="center" style="background-color:#FFFFFF;padding:0;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;margin:0 auto;">
           <tr>
-            <td style="padding:30px 28px 28px;">
+            <td class="flow-body-pad" style="padding:36px 28px 34px;background-color:#FFFFFF;">
               ${options.bodyHtml}
             </td>
           </tr>
+        </table>
+      </td>
+    </tr>
 
-          <!-- Footer -->
+    <!-- Full-Bleed Footer -->
+    <tr>
+      <td align="center" style="background-color:#FAFAFA;border-top:1px solid #ECEAE4;padding:0;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;margin:0 auto;">
           <tr>
-            <td style="padding:18px 28px 24px;border-top:1px solid #EFECE6;background-color:#FAFAFA;">
-              <p style="margin:0;font-size:12px;line-height:1.6;color:#6B7280;">
+            <td class="flow-footer-pad" style="padding:24px 28px 32px;">
+              <p style="margin:0;font-size:12.5px;line-height:1.6;color:#6B7280;">
                 FLOW · Multi-chain money across NEAR, Solana, Base, and Ethereum.
               </p>
-              <p style="margin:6px 0 0;font-size:12px;line-height:1.6;color:#9CA3AF;">
+              <p style="margin:8px 0 0;font-size:12.5px;line-height:1.6;color:#9CA3AF;">
                 <a href="${settingsUrl}" style="color:#4B5563;text-decoration:underline;">Manage email settings</a>
                 ${
                   options.unsubscribeUrl
@@ -248,50 +274,48 @@ export function buildWelcomeEmail(params: {
   const firstName =
     params.displayName?.trim().split(/\s+/)[0] || "there";
   const openFlowUrl = `${APP_BASE_URL}/app`;
-  const subject = "Welcome to FLOW — your multi-chain wallet is ready";
+  const subject = "Welcome to FLOW: your multi-chain wallet is ready";
 
   const bodyHtml = `
-    <h1 style="margin:0 0 10px;font-size:26px;font-weight:600;letter-spacing:-0.025em;line-height:1.2;color:#0B0C0E;">
+    <h1 class="flow-h1" style="margin:0 0 12px;font-size:28px;font-weight:600;letter-spacing:-0.025em;line-height:1.2;color:#0B0C0E;">
       Welcome to FLOW, ${escapeHtml(firstName)}.
     </h1>
-    <p style="margin:0 0 22px;font-size:15px;line-height:1.65;color:#4B5563;">
-      Your non-custodial multi-chain account is set up and ready to go. One sign-in gives you real mainnet wallets across <strong>NEAR, Solana, Base, and Ethereum</strong> with zero seed phrases to juggle.
+    <p style="margin:0 0 28px;font-size:15.5px;line-height:1.68;color:#4B5563;">
+      Your non-custodial multi-chain account is set up and ready to go. One sign-in gives you real mainnet wallets across <strong style="color:#0B0C0E;">NEAR, Solana, Base, and Ethereum</strong> with zero seed phrases to juggle.
     </p>
 
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;background-color:#F7F7F5;border-radius:16px;border:1px solid #ECEAE4;">
+    <p style="margin:0 0 14px;font-size:11.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">What you can do on FLOW</p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 30px;border-top:1px solid #ECEAE4;">
       <tr>
-        <td style="padding:18px 20px;">
-          <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">What you can do on FLOW</p>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-            <tr>
-              <td style="padding:0 0 11px;font-size:14px;line-height:1.55;color:#1F2937;">
-                <strong style="color:#0B0C0E;">Send with @flow IDs</strong> — Claim your handle and share <span style="color:#FF1A1A;font-weight:600;">flow.devhub.forum/name@flow</span> so anyone can pay you without copying long wallet addresses.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 0 11px;font-size:14px;line-height:1.55;color:#1F2937;">
-                <strong style="color:#0B0C0E;">Move across chains</strong> — Send, receive, and convert between NEAR, Solana, Base, and Ethereum powered by NEAR Intents.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 0 11px;font-size:14px;line-height:1.55;color:#1F2937;">
-                <strong style="color:#0B0C0E;">Payment Links &amp; Receipts</strong> — Create shareable payment links for anything, attach memos, and get clean verified receipts automatically.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0;font-size:14px;line-height:1.55;color:#1F2937;">
-                <strong style="color:#0B0C0E;">Native Earn</strong> — Put idle NEAR and USDC to work directly on LiNEAR and Burrow from your own wallet.
-              </td>
-            </tr>
-          </table>
+        <td style="padding:15px 0;border-bottom:1px solid #ECEAE4;font-size:14.5px;line-height:1.6;color:#374151;">
+          <strong style="color:#0B0C0E;display:block;margin-bottom:3px;">Send with @flow IDs</strong>
+          Claim your handle and share <span style="color:#FF1A1A;font-weight:600;">flow.devhub.forum/name@flow</span> so anyone can pay you without copying long wallet addresses.
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:15px 0;border-bottom:1px solid #ECEAE4;font-size:14.5px;line-height:1.6;color:#374151;">
+          <strong style="color:#0B0C0E;display:block;margin-bottom:3px;">Move across chains</strong>
+          Send, receive, and convert between NEAR, Solana, Base, and Ethereum powered by NEAR Intents.
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:15px 0;border-bottom:1px solid #ECEAE4;font-size:14.5px;line-height:1.6;color:#374151;">
+          <strong style="color:#0B0C0E;display:block;margin-bottom:3px;">Payment Links &amp; Receipts</strong>
+          Create shareable payment links for anything, attach memos, and get clean verified receipts automatically.
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:15px 0;border-bottom:1px solid #ECEAE4;font-size:14.5px;line-height:1.6;color:#374151;">
+          <strong style="color:#0B0C0E;display:block;margin-bottom:3px;">Native Earn</strong>
+          Put idle NEAR and USDC to work directly on LiNEAR and Burrow from your own wallet.
         </td>
       </tr>
     </table>
 
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;">
       <tr>
-        <td style="border-radius:999px;background-color:#0B0C0E;">
-          <a href="${openFlowUrl}" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:999px;">
+        <td style="border-radius:999px;background-color:#0B0C0E;background-image:linear-gradient(#0B0C0E,#0B0C0E);">
+          <a href="${openFlowUrl}" style="display:inline-block;padding:14px 28px;font-size:14.5px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:999px;">
             Open FLOW →
           </a>
         </td>
@@ -299,7 +323,7 @@ export function buildWelcomeEmail(params: {
     </table>
 
     <p style="margin:0;font-size:13px;line-height:1.6;color:#6B7280;">
-      Tip: Visit <strong>Settings → Notifications</strong> anytime to customize transaction receipt emails or subscribe to the FLOW Blog newsletter.
+      Tip: Visit <strong style="color:#374151;">Settings → Notifications</strong> anytime to customize transaction receipt emails or subscribe to the FLOW Blog newsletter.
     </p>
   `;
 
@@ -373,7 +397,7 @@ export function buildTransactionReceiptEmail(
         month: "short",
         day: "numeric",
         year: "numeric",
-        hour: "2-digit",
+        hour: "numeric",
         minute: "2-digit",
         timeZone: "UTC",
         timeZoneName: "short",
@@ -411,55 +435,49 @@ export function buildTransactionReceiptEmail(
 
   const rowsHtml = rows
     .map(
-      ([label, val], idx) => `
+      ([label, val]) => `
       <tr>
-        <td style="padding:10px 0;${idx > 0 ? "border-top:1px solid #ECEAE4;" : ""}font-size:13px;color:#6B7280;vertical-align:top;width:36%;">${escapeHtml(label)}</td>
-        <td align="right" style="padding:10px 0;${idx > 0 ? "border-top:1px solid #ECEAE4;" : ""}font-size:13px;font-weight:600;color:#0B0C0E;vertical-align:top;word-break:break-word;">${escapeHtml(val)}</td>
+        <td style="padding:14px 12px 14px 0;border-bottom:1px solid #ECEAE4;font-size:13.5px;color:#6B7280;vertical-align:top;white-space:nowrap;">${escapeHtml(label)}</td>
+        <td align="right" style="padding:14px 0;border-bottom:1px solid #ECEAE4;font-size:14px;font-weight:600;color:#0B0C0E;vertical-align:top;word-break:break-word;">${escapeHtml(val)}</td>
       </tr>`,
     )
     .join("");
 
   const bodyHtml = `
-    <div style="margin:0 0 14px;">
-      <span style="display:inline-block;padding:5px 11px;border-radius:999px;background-color:#ECFDF5;border:1px solid #A7F3D0;color:#047857;font-size:11.5px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;">
+    <div style="margin:0 0 18px;">
+      <span style="display:inline-block;padding:5px 12px;border-radius:999px;background-color:#ECFDF5;border:1px solid #A7F3D0;color:#047857;font-size:11.5px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;">
         Completed ✓
       </span>
     </div>
 
-    <p style="margin:0 0 4px;font-size:13px;font-weight:500;color:#6B7280;">
+    <p style="margin:0 0 6px;font-size:13.5px;font-weight:500;color:#6B7280;">
       ${isConvert ? "Amount converted" : "Amount sent"}
     </p>
-    <h1 style="margin:0 0 6px;font-size:34px;font-weight:600;letter-spacing:-0.03em;line-height:1.1;color:#0B0C0E;">
+    <h1 class="flow-hero-amt" style="margin:0 0 8px;font-size:36px;font-weight:600;letter-spacing:-0.03em;line-height:1.1;color:#0B0C0E;">
       ${escapeHtml(srcAmt)} ${escapeHtml(params.sourceSymbol)}
     </h1>
     ${
       isCrossChain
-        ? `<p style="margin:0 0 22px;font-size:14px;color:#4B5563;">Delivered <strong style="color:#0B0C0E;">${escapeHtml(dstAmt)} ${escapeHtml(params.destinationSymbol)}</strong> via NEAR Intents</p>`
-        : `<p style="margin:0 0 22px;font-size:14px;color:#4B5563;">Confirmed on ${escapeHtml(formatNetworkLabel(params.sourceNetwork))}</p>`
+        ? `<p style="margin:0 0 28px;font-size:15px;color:#4B5563;">Delivered <strong style="color:#0B0C0E;">${escapeHtml(dstAmt)} ${escapeHtml(params.destinationSymbol)}</strong> via NEAR Intents</p>`
+        : `<p style="margin:0 0 28px;font-size:15px;color:#4B5563;">Confirmed on ${escapeHtml(formatNetworkLabel(params.sourceNetwork))}</p>`
     }
 
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;background-color:#F7F7F5;border-radius:16px;border:1px solid #ECEAE4;">
-      <tr>
-        <td style="padding:8px 18px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-            ${rowsHtml}
-          </table>
-        </td>
-      </tr>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 30px;border-top:1px solid #ECEAE4;">
+      ${rowsHtml}
     </table>
 
     <table role="presentation" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td style="border-radius:999px;background-color:#0B0C0E;">
-          <a href="${APP_BASE_URL}/app" style="display:inline-block;padding:12px 22px;font-size:13.5px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:999px;">
+        <td style="border-radius:999px;background-color:#0B0C0E;background-image:linear-gradient(#0B0C0E,#0B0C0E);">
+          <a href="${APP_BASE_URL}/app" style="display:inline-block;padding:13px 24px;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:999px;">
             Open FLOW
           </a>
         </td>
         ${
           explorerLink
-            ? `<td style="width:10px;"></td>
+            ? `<td style="width:12px;"></td>
                <td style="border-radius:999px;border:1px solid #D6D3CD;background-color:#FFFFFF;">
-                 <a href="${explorerLink}" style="display:inline-block;padding:11px 20px;font-size:13.5px;font-weight:600;color:#0B0C0E;text-decoration:none;border-radius:999px;">
+                 <a href="${explorerLink}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:600;color:#0B0C0E;text-decoration:none;border-radius:999px;">
                    View on explorer →
                  </a>
                </td>`
@@ -506,57 +524,37 @@ export function buildBlogNewsletterEmail(params: {
   });
   const subject = `FLOW Blog: ${post.title}`;
 
-  const highlightsHtml = post.highlights
-    .map(
-      (item, idx) => `
-      <tr>
-        <td style="padding:9px 0;${idx > 0 ? "border-top:1px solid #ECEAE4;" : ""}font-size:12.5px;color:#6B7280;width:38%;">${escapeHtml(item.label)}</td>
-        <td align="right" style="padding:9px 0;${idx > 0 ? "border-top:1px solid #ECEAE4;" : ""}font-size:13px;font-weight:600;color:#0B0C0E;word-break:break-word;">${escapeHtml(item.value)}</td>
-      </tr>`,
-    )
-    .join("");
-
   const leadParagraph = post.sections[0]?.paragraphs[0] ?? "";
 
   const bodyHtml = `
-    <p style="margin:0 0 12px;font-size:12px;font-weight:600;color:#6B7280;">
+    <p style="margin:0 0 14px;font-size:12.5px;font-weight:600;color:#6B7280;">
       <span style="color:#FF1A1A;text-transform:uppercase;letter-spacing:0.06em;">${escapeHtml(post.category)}</span>
       &nbsp;·&nbsp; ${escapeHtml(formatBlogDate(post.publishedAt))}
       &nbsp;·&nbsp; ${escapeHtml(post.readTime)}
     </p>
 
-    <h1 style="margin:0 0 12px;font-size:25px;font-weight:600;letter-spacing:-0.025em;line-height:1.2;color:#0B0C0E;">
+    <h1 class="flow-h1" style="margin:0 0 14px;font-size:27px;font-weight:600;letter-spacing:-0.025em;line-height:1.2;color:#0B0C0E;">
       ${escapeHtml(post.title)}
     </h1>
 
-    <p style="margin:0 0 20px;font-size:15px;line-height:1.65;color:#4B5563;">
+    <p style="margin:0 0 24px;font-size:15.5px;line-height:1.68;color:#4B5563;">
       ${escapeHtml(post.summary)}
     </p>
 
-    <a href="${articleUrl}" style="display:block;margin:0 0 22px;border-radius:14px;overflow:hidden;border:1px solid #E6E4DF;text-decoration:none;">
-      <img src="${bannerUrl}" alt="${escapeHtml(post.title)}" width="524" style="display:block;width:100%;height:auto;border:0;" />
+    <a href="${articleUrl}" style="display:block;margin:0 0 26px;border-radius:14px;overflow:hidden;border:1px solid #ECEAE4;text-decoration:none;">
+      <img src="${bannerUrl}" alt="${escapeHtml(post.title)}" width="584" style="display:block;width:100%;height:auto;border:0;" />
     </a>
-
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#F7F7F5;border-radius:14px;border:1px solid #ECEAE4;">
-      <tr>
-        <td style="padding:6px 16px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-            ${highlightsHtml}
-          </table>
-        </td>
-      </tr>
-    </table>
 
     ${
       leadParagraph
-        ? `<p style="margin:0 0 24px;font-size:14.5px;line-height:1.65;color:#374151;">${escapeHtml(leadParagraph)}</p>`
+        ? `<p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#374151;">${escapeHtml(leadParagraph)}</p>`
         : ""
     }
 
     <table role="presentation" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td style="border-radius:999px;background-color:#0B0C0E;">
-          <a href="${articleUrl}" style="display:inline-block;padding:13px 24px;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:999px;">
+        <td style="border-radius:999px;background-color:#0B0C0E;background-image:linear-gradient(#0B0C0E,#0B0C0E);">
+          <a href="${articleUrl}" style="display:inline-block;padding:14px 26px;font-size:14.5px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:999px;">
             Read full article →
           </a>
         </td>
@@ -579,8 +577,7 @@ export function buildBlogNewsletterEmail(params: {
     "",
     post.summary,
     "",
-    ...post.highlights.map((h) => `${h.label}: ${h.value}`),
-    "",
+    ...(leadParagraph ? [leadParagraph, ""] : []),
     `Read full article: ${articleUrl}`,
     ...(unsubscribeUrl ? [`Unsubscribe: ${unsubscribeUrl}`] : []),
   ].join("\n");

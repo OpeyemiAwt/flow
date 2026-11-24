@@ -127,25 +127,6 @@ export function FlowIdLandingClient({
               across NEAR, Solana, Base, or Ethereum.
             </p>
 
-            <div className="grid grid-cols-2 gap-2.5 text-left">
-              <div className="rounded-2xl border border-neutral-200/70 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-white/[0.03] px-3.5 py-2.5">
-                <div className="text-[10.5px] font-medium text-neutral-500 dark:text-neutral-400">
-                  Direct same-asset
-                </div>
-                <div className="mt-0.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                  0% FLOW fee
-                </div>
-              </div>
-              <div className="rounded-2xl border border-neutral-200/70 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-white/[0.03] px-3.5 py-2.5">
-                <div className="text-[10.5px] font-medium text-neutral-500 dark:text-neutral-400">
-                  Cross-asset route
-                </div>
-                <div className="mt-0.5 text-xs font-bold text-neutral-900 dark:text-white">
-                  0.3% FLOW fee
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-2.5 pt-1">
               <button
                 type="button"

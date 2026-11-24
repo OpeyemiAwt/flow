@@ -181,16 +181,6 @@ export default async function BlogPostPage({
               {post.readTime}
             </dd>
           </div>
-          {post.highlights.map((item) => (
-            <div key={item.label} className="min-w-0">
-              <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b6f76] dark:text-neutral-500">
-                {item.label}
-              </dt>
-              <dd className="mt-1 text-[14.5px] leading-snug text-[#0b0c0e] dark:text-white [overflow-wrap:anywhere]">
-                {item.value}
-              </dd>
-            </div>
-          ))}
         </dl>
 
         {/* Tags */}
