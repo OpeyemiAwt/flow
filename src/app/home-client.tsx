@@ -1043,7 +1043,7 @@ export function HomePageClient() {
                 </li>
                 <li>
                   <a
-                    href="mailto:support@flow.devhub.forum"
+                    href="mailto:flow@devhub.forum"
                     className="hover:text-[#0B0B0B] dark:hover:text-white"
                   >
                     Contact

@@ -3,7 +3,7 @@ import type { AuthConfig } from "../../foundation/auth-environment.ts";
 import { log } from "../../foundation/logger.ts";
 
 const SUPPORT_REPLY_TO =
-  process.env.FLOW_SUPPORT_EMAIL?.trim() || "support@flow.devhub.forum";
+  process.env.FLOW_SUPPORT_EMAIL?.trim() || "flow@devhub.forum";
 
 export async function sendMail(
   config: AuthConfig,

@@ -1070,7 +1070,7 @@ export function SecurityPanel({
 
                     <div className="space-y-2">
                       <a
-                        href="mailto:support@flow.devhub.forum?subject=FLOW%20Support"
+                        href="mailto:flow@devhub.forum?subject=FLOW%20Support"
                         className="group flex items-center justify-between gap-3 p-3.5 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/40 dark:bg-neutral-900/20 hover:bg-neutral-100/70 dark:hover:bg-neutral-900/60 hover:border-neutral-200 dark:hover:border-neutral-700 transition-colors"
                       >
                         <div className="min-w-0">
@@ -1080,7 +1080,7 @@ export function SecurityPanel({
                           <p className="text-[11px] text-neutral-500">
                             Need help or have feedback? Email{" "}
                             <span className="font-medium text-neutral-700 dark:text-neutral-300">
-                              support@flow.devhub.forum
+                              flow@devhub.forum
                             </span>
                           </p>
                         </div>

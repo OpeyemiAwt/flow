@@ -173,7 +173,7 @@ export function PrivacyPage() {
             <span className="font-mono text-xs">/pay/[id]</span> links, and
             visitors to our documentation, whitepaper, and support pages. For
             privacy inquiries or data rights requests, contact{" "}
-            <span className="font-mono text-xs">privacy@flow.devhub.forum</span>.
+            <span className="font-mono text-xs">flow@devhub.forum</span>.
           </p>
         </>
       ),
@@ -418,7 +418,7 @@ export function PrivacyPage() {
             wallet addresses, and smart-contract events recorded on public
             blockchains (NEAR, Solana, Base, Ethereum) are immutable and cannot
             be edited or deleted by FLOW. To submit a privacy request, email{" "}
-            <span className="font-mono text-xs">privacy@flow.devhub.forum</span>.
+            <span className="font-mono text-xs">flow@devhub.forum</span>.
             We aim to respond within 30 days.
           </p>
         </>
@@ -564,7 +564,7 @@ export function TermsPage() {
           </li>
           <li>
             <strong>Security Notice:</strong> Notify us immediately at{" "}
-            <span className="font-mono text-xs">legal@flow.devhub.forum</span> if
+            <span className="font-mono text-xs">flow@devhub.forum</span> if
             you suspect unauthorized access to your account.
           </li>
         </ul>
@@ -693,7 +693,7 @@ export function TermsPage() {
       body: (
         <p>
           Before initiating any formal claim, you agree to contact us at{" "}
-          <span className="font-mono text-xs">legal@flow.devhub.forum</span> and
+          <span className="font-mono text-xs">flow@devhub.forum</span> and
           attempt to resolve the dispute informally for at least 30 days. To
           the fullest extent permitted by applicable law, unresolved disputes
           shall be resolved through individual binding arbitration rather than
@@ -713,7 +713,7 @@ export function TermsPage() {
           network outages, natural disasters, or regulatory actions). These
           Terms constitute the entire agreement between you and FLOW regarding
           use of the Service. Contact:{" "}
-          <span className="font-mono text-xs">legal@flow.devhub.forum</span>.
+          <span className="font-mono text-xs">flow@devhub.forum</span>.
         </p>
       ),
     },

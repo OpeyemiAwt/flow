@@ -308,10 +308,10 @@ export default function TermsPage() {
             We may update these terms as FLOW grows. Continued use after updates
             means you agree to the latest version. Questions? Reach us at{" "}
             <a
-              href="mailto:support@flow.devhub.forum"
+              href="mailto:flow@devhub.forum"
               className="text-[#0b0c0e] dark:text-white underline decoration-[#cfd2d6] dark:decoration-white/30 underline-offset-4"
             >
-              support@flow.devhub.forum
+              flow@devhub.forum
             </a>
             .
           </p>

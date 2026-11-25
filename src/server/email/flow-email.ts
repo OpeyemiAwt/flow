@@ -13,7 +13,7 @@ const APP_BASE_URL = (
 ).replace(/\/+$/, "");
 
 const SUPPORT_EMAIL =
-  process.env.FLOW_SUPPORT_EMAIL?.trim() || "support@flow.devhub.forum";
+  process.env.FLOW_SUPPORT_EMAIL?.trim() || "flow@devhub.forum";
 
 function resolveMailerConfig(): { apiKey: string; from: string } | null {
   const apiKey = process.env.FLOW_MAIL_API_KEY?.trim();
