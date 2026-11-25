@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { LanguageProvider } from "../components/language-provider.tsx";
 import { RouteSkeletonTransition } from "../components/route-skeleton-transition.tsx";
-import { ToastProvider } from "../components/toast-provider.tsx";
 
 export const metadata: Metadata = {
   title: "FLOW",
@@ -29,9 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-[var(--surface-canvas)] font-sans text-[var(--text-primary)] antialiased">
         <LanguageProvider>
-          <ToastProvider>
-            <RouteSkeletonTransition>{children}</RouteSkeletonTransition>
-          </ToastProvider>
+          <RouteSkeletonTransition>{children}</RouteSkeletonTransition>
         </LanguageProvider>
       </body>
     </html>

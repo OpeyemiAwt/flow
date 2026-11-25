@@ -417,7 +417,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
           "Nothing is worse than seeing your balance update while your activity feed and notifications lag behind. Our indexer worker triggers immediate activity ingestion and notification creation the moment a wallet's balance changes on NEAR, Solana, Base, or Ethereum.",
         ],
         bullets: [
-          "Real-time toast alerts and a dedicated Notifications center with Payments and System filters.",
+          "A dedicated Notifications center with Payments and System filters.",
           "Monthly inflow, outflow, and net movement summaries on your dashboard plus full analytics in Insights.",
           "Offline-resilient price caching so your balances and monthly summaries stay readable even if your connection drops.",
         ],

@@ -23,7 +23,6 @@ import {
 import type { CatalogTokenDeployment } from "../domain/supported-assets-catalog.ts";
 import type { NavTabId } from "./floating-nav.tsx";
 import { PaymentTimelineTracker } from "./payment-timeline-tracker.tsx";
-import type { ToastVariant } from "./toast-provider.tsx";
 
 export interface EarnViewProps {
   accountId: string;
@@ -39,12 +38,6 @@ export interface EarnViewProps {
   onSelectDeposit: (deploymentId?: string) => void;
   onSyncPortfolio?: () => void;
   onSettled?: () => void;
-  pushToast: (toast: {
-    title: string;
-    description?: string;
-    variant?: ToastVariant;
-    durationMs?: number;
-  }) => void;
 }
 
 interface ProtocolEarnConfig {
@@ -161,7 +154,6 @@ export function EarnView({
   onSelectDeposit,
   onSyncPortfolio,
   onSettled,
-  pushToast,
 }: EarnViewProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -198,6 +190,8 @@ export function EarnView({
   const [activeModalProtocol, setActiveModalProtocol] =
     useState<ProtocolEarnConfig | null>(null);
   const [modalAction, setModalAction] = useState<"DEPOSIT" | "WITHDRAW">("DEPOSIT");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [unstakeType, setUnstakeType] = useState<"INSTANT" | "DELAYED">("DELAYED");
@@ -431,6 +425,7 @@ export function EarnView({
     setActiveModalProtocol(protocol);
     setModalAction("DEPOSIT");
     setAmountInput("");
+    setActionError(null);
   };
 
   // Open Withdraw Modal
@@ -439,20 +434,20 @@ export function EarnView({
     setActiveModalProtocol(protocol);
     setModalAction("WITHDRAW");
     setAmountInput("");
+    setActionError(null);
   };
 
   // Execute Deposit
   const handleExecuteDeposit = async () => {
     if (!activeModalProtocol) return;
+    setActionError(null);
     const trimmed = amountInput.replace(/,/g, "").trim();
     const parsed = parseFloat(trimmed);
 
     if (isNaN(parsed) || parsed <= 0) {
-      pushToast({
-        title: "Enter an amount",
-        description: `Please enter how much ${activeModalProtocol.assetSymbol} to deposit.`,
-        variant: "error",
-      });
+      setActionError(
+        `Please enter how much ${activeModalProtocol.assetSymbol} to deposit.`,
+      );
       return;
     }
 
@@ -462,14 +457,11 @@ export function EarnView({
         : availableStablesNum;
 
     if (parsed > available) {
-      pushToast({
-        title: "Insufficient balance",
-        description:
-          activeModalProtocol.assetSymbol === "NEAR"
-            ? `You can deposit up to ${available.toFixed(4)} NEAR (${EARN_GAS_RESERVE_NEAR.toFixed(2)} NEAR is reserved for gas).`
-            : `You only have ${available.toFixed(4)} ${activeModalProtocol.assetSymbol} available on NEAR Mainnet.`,
-        variant: "error",
-      });
+      setActionError(
+        activeModalProtocol.assetSymbol === "NEAR"
+          ? `You can deposit up to ${available.toFixed(4)} NEAR (${EARN_GAS_RESERVE_NEAR.toFixed(2)} NEAR is reserved for gas).`
+          : `You only have ${available.toFixed(4)} ${activeModalProtocol.assetSymbol} available on NEAR Mainnet.`,
+      );
       return;
     }
 
@@ -514,11 +506,7 @@ export function EarnView({
         err instanceof Error
           ? err.message
           : "Could not complete deposit transaction.";
-      pushToast({
-        title: "Deposit Failed",
-        description: message,
-        variant: "error",
-      });
+      setActionError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -527,26 +515,23 @@ export function EarnView({
   // Execute Withdraw
   const handleExecuteWithdraw = async () => {
     if (!activeModalProtocol) return;
+    setActionError(null);
     const currentPos = positions[activeModalProtocol.protocolKey];
     if (!currentPos || currentPos.depositedAmount <= 0) return;
 
     const trimmed = amountInput.replace(/,/g, "").trim();
     const parsed = parseFloat(trimmed);
     if (isNaN(parsed) || parsed <= 0) {
-      pushToast({
-        title: "Enter an amount",
-        description: `Please enter how much ${activeModalProtocol.assetSymbol} to withdraw.`,
-        variant: "error",
-      });
+      setActionError(
+        `Please enter how much ${activeModalProtocol.assetSymbol} to withdraw.`,
+      );
       return;
     }
 
     if (parsed > currentPos.depositedAmount * 1.0001) {
-      pushToast({
-        title: "Exceeds deposited balance",
-        description: `You only have ${currentPos.depositedAmount.toFixed(4)} ${activeModalProtocol.assetSymbol} deposited.`,
-        variant: "error",
-      });
+      setActionError(
+        `You only have ${currentPos.depositedAmount.toFixed(4)} ${activeModalProtocol.assetSymbol} deposited.`,
+      );
       return;
     }
 
@@ -593,11 +578,7 @@ export function EarnView({
         err instanceof Error
           ? err.message
           : "Could not complete withdrawal transaction.";
-      pushToast({
-        title: "Withdrawal Failed",
-        description: message,
-        variant: "error",
-      });
+      setActionError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -605,6 +586,7 @@ export function EarnView({
 
   const handleClaimLinearUnstaked = async () => {
     if (!linearUnstaked.canWithdraw || linearUnstaked.amount <= 0) return;
+    setClaimError(null);
     triggerHaptic("medium");
     setIsSubmitting(true);
     try {
@@ -637,12 +619,9 @@ export function EarnView({
       onSyncPortfolio?.();
       triggerHaptic("success");
     } catch (err: unknown) {
-      pushToast({
-        title: "Claim Failed",
-        description:
-          err instanceof Error ? err.message : "Could not claim unstaked NEAR.",
-        variant: "error",
-      });
+      setClaimError(
+        err instanceof Error ? err.message : "Could not claim unstaked NEAR.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -719,6 +698,12 @@ export function EarnView({
           </div>
         </div>
       </MotionReveal>
+
+      {claimError && (
+        <div className="rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-700 dark:text-red-300">
+          {claimError}
+        </div>
+      )}
 
       {/* -------------------------------------------------------------
           MAIN PROTOCOLS CARD (Exact match to screenshot)
@@ -1214,6 +1199,12 @@ export function EarnView({
                     <strong className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                       +{projectedYearlyYield.toFixed(2)} {activeModalProtocol.assetSymbol} / yr
                     </strong>
+                  </div>
+                )}
+
+                {actionError && (
+                  <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3.5 py-2.5 text-xs text-red-700 dark:text-red-300">
+                    {actionError}
                   </div>
                 )}
 

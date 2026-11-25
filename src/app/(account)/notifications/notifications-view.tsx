@@ -11,7 +11,6 @@ import {
   isInAppNotificationEnabled,
   PROFILE_PREFERENCE_EVENT,
 } from "../../../components/profile-preferences.ts";
-import { useToast } from "../../../components/toast-provider.tsx";
 import type { AccountNotification } from "../../../server/notifications-service.ts";
 
 export interface NotificationsViewProps {
@@ -30,7 +29,6 @@ export function NotificationsView({
   profileId,
 }: NotificationsViewProps) {
   const router = useRouter();
-  const { pushToast } = useToast();
   const [notifications, setNotifications] = useState<AccountNotification[]>([]);
   const [filter, setFilter] = useState<"ALL" | "PAYMENTS" | "SYSTEM">("ALL");
   const [loading, setLoading] = useState(true);
@@ -399,14 +397,9 @@ export function NotificationsView({
           isOpen={isFlowIdModalOpen}
           onClose={() => setIsFlowIdModalOpen(false)}
           accountId={accountId}
-          onClaimed={(claimedFlowId) => {
+          onClaimed={() => {
             setIsFlowIdModalOpen(false);
             void loadNotifications();
-            pushToast({
-              title: "Flow ID claimed",
-              description: `${claimedFlowId} is now active on your account.`,
-              variant: "success",
-            });
           }}
         />
       )}

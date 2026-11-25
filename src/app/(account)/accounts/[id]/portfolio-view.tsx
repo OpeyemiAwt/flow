@@ -21,7 +21,6 @@ import {
   grossUpForPlatformFee,
   maxPrincipalBeforePlatformFee,
 } from "../../../../domain/platform-fees.ts";
-import { useToast } from "../../../../components/toast-provider.tsx";
 import { useTranslation } from "../../../../components/language-provider.tsx";
 import { TabContentSkeleton } from "../../../../components/page-skeletons.tsx";
 import { PaymentTimelineTracker } from "../../../../components/payment-timeline-tracker.tsx";
@@ -1160,46 +1159,8 @@ export function PortfolioView({
   const router = useRouter();
   const [isHeldAssetsOpen, setIsHeldAssetsOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const { pushToast } = useToast();
-  const setMessage = useCallback(
-    (text: string) => {
-      if (!text) return;
-      const lower = text.toLowerCase();
-      const isError =
-        lower.includes("fail") ||
-        lower.includes("error") ||
-        lower.includes("unable") ||
-        lower.includes("invalid") ||
-        lower.includes("insufficient");
-      pushToast({
-        title: text,
-        variant: isError ? "error" : "info",
-        durationMs: 4500,
-      });
-    },
-    [pushToast],
-  );
-  const seenNotifIdsRef = useRef<Set<string>>(new Set());
-  const initialNotifPollDoneRef = useRef(false);
 
-  useEffect(() => {
-    initialNotifPollDoneRef.current = false;
-    try {
-      const saved = localStorage.getItem(`flow_toasted_notifs_${accountId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved) as unknown;
-        if (Array.isArray(parsed)) {
-          seenNotifIdsRef.current = new Set(
-            parsed.filter((v): v is string => typeof v === "string"),
-          );
-          return;
-        }
-      }
-    } catch {}
-    seenNotifIdsRef.current = new Set();
-  }, [accountId]);
-
-  // Live notification polling & pop-up toasts
+  // Live notification badge polling
   const pollNotifications = useCallback(async () => {
     try {
       const res = await fetch(
@@ -1210,9 +1171,6 @@ export function PortfolioView({
       const data = (await res.json()) as {
         notifications?: Array<{
           id: string;
-          title: string;
-          description?: string;
-          message?: string;
           isRead: boolean;
         }>;
         unreadCount?: number;
@@ -1223,39 +1181,10 @@ export function PortfolioView({
           ? data.unreadCount
           : list.filter((n) => !n.isRead).length;
       setUnreadNotifications(unread);
-
-      const isInitial = !initialNotifPollDoneRef.current;
-      initialNotifPollDoneRef.current = true;
-      let added = false;
-
-      for (const item of list) {
-        if (!seenNotifIdsRef.current.has(item.id)) {
-          seenNotifIdsRef.current.add(item.id);
-          added = true;
-          if (!isInitial && !item.isRead) {
-            pushToast({
-              id: `notif_${item.id}`,
-              title: item.title,
-              description: item.description ?? item.message,
-              variant: "info",
-              durationMs: 6500,
-            });
-          }
-        }
-      }
-
-      if (added) {
-        try {
-          localStorage.setItem(
-            `flow_toasted_notifs_${accountId}`,
-            JSON.stringify([...seenNotifIdsRef.current].slice(-100)),
-          );
-        } catch {}
-      }
     } catch {
       // Non-fatal background notification poll
     }
-  }, [accountId, pushToast]);
+  }, [accountId]);
 
   useEffect(() => {
     void pollNotifications();
@@ -1570,6 +1499,7 @@ export function PortfolioView({
     );
   const [prCreating, setPrCreating] = useState<boolean>(false);
   const [prSuccessUrl, setPrSuccessUrl] = useState<string | null>(null);
+  const [prError, setPrError] = useState<string | null>(null);
 
   // Activity state
   const [activities, setActivities] = useState<
@@ -2343,7 +2273,6 @@ export function PortfolioView({
   const handleRefresh = useCallback(async () => {
     if (refreshing || cooldown > 0) return;
     setRefreshing(true);
-    setMessage("");
     try {
       const updated = await send<SerializedAccountPortfolio>(
         `/api/accounts/${accountId}/portfolio/refresh`,
@@ -2352,13 +2281,8 @@ export function PortfolioView({
       );
       setPortfolio(updated);
       setCooldown(updated.cooldownRemainingSeconds ?? 15);
-      setMessage(
-        updated.syncStatus === "complete"
-          ? "Balances refreshed from verified network data."
-          : "Balance refresh queued. Current balances remain unchanged until verified network data arrives.",
-      );
-    } catch (err) {
-      setMessage(describe(err));
+    } catch {
+      // Refresh errors are non-blocking
     } finally {
       setRefreshing(false);
     }
@@ -2367,7 +2291,6 @@ export function PortfolioView({
   // Sync on-chain activities
   const handleSyncActivities = useCallback(async () => {
     setActivityLoading(true);
-    setMessage("");
     try {
       const res = await send<ActivityFeedResponse>(
         `/api/accounts/${accountId}/activities/sync`,
@@ -2375,15 +2298,8 @@ export function PortfolioView({
         "POST",
       );
       setActivities(res.activities);
-      setMessage(
-        res.syncStatus === "complete"
-          ? "On-chain activity synchronized."
-          : res.syncStatus === "unavailable"
-            ? "Activity sync is unavailable until a wallet is ready."
-            : "Activity sync started. New transactions will appear shortly.",
-      );
-    } catch (err) {
-      setMessage(describe(err));
+    } catch {
+      // Activity sync errors are non-blocking
     } finally {
       setActivityLoading(false);
     }
@@ -2392,20 +2308,20 @@ export function PortfolioView({
   // Create payment request
   const handleCreatePaymentRequest = useCallback(async () => {
     if (!prTitle.trim()) {
-      setMessage("Please enter a title for the payment link.");
+      setPrError("Please enter a title for the payment link.");
       return;
     }
     let maxPaymentsPayload: number | null = null;
     if (prMaxPaymentsMode === "LIMITED") {
       const parsed = Number.parseInt(prMaxPayments.trim(), 10);
       if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10000) {
-        setMessage("Please enter a valid payer limit between 1 and 10,000.");
+        setPrError("Please enter a valid payer limit between 1 and 10,000.");
         return;
       }
       maxPaymentsPayload = parsed;
     }
     setPrCreating(true);
-    setMessage("");
+    setPrError(null);
     setPrSuccessUrl(null);
     try {
       const created = await send<SerializedPaymentRequest>(
@@ -2425,20 +2341,8 @@ export function PortfolioView({
       );
       setPaymentRequests((prev) => [created, ...prev]);
       setPrSuccessUrl(created.shareUrl);
-      setMessage(`Payment link created: ${created.shareUrl}`);
-      pushToast({
-        title: "Payment link created",
-        description: created.shareUrl,
-        variant: "success",
-      });
     } catch (err) {
-      const msg = describe(err);
-      setMessage(msg);
-      pushToast({
-        title: "Could not create payment link",
-        description: msg,
-        variant: "error",
-      });
+      setPrError(describe(err));
     } finally {
       setPrCreating(false);
     }
@@ -2452,12 +2356,12 @@ export function PortfolioView({
     prMaxPaymentsMode,
     prMaxPayments,
     prFeePayer,
-    pushToast,
   ]);
 
   const handleDeletePaymentRequest = useCallback(
     async (req: SerializedPaymentRequest) => {
       setDeletingPaymentRequestId(req.id);
+      setPrError(null);
       try {
         await send<{ deleted: boolean; id: string }>(
           `/api/accounts/${accountId}/payment-requests/${req.id}`,
@@ -2466,22 +2370,13 @@ export function PortfolioView({
         );
         setPaymentRequests((prev) => prev.filter((item) => item.id !== req.id));
         setDeleteLinkConfirmTarget(null);
-        pushToast({
-          title: "Payment link deleted",
-          description: `"${req.title}" has been deleted.`,
-          variant: "success",
-        });
       } catch (err) {
-        pushToast({
-          title: "Could not delete payment link",
-          description: describe(err),
-          variant: "error",
-        });
+        setPrError(describe(err));
       } finally {
         setDeletingPaymentRequestId(null);
       }
     },
-    [accountId, pushToast],
+    [accountId],
   );
 
   const handleReviewCrossChainQuote = () => {
@@ -2886,19 +2781,8 @@ export function PortfolioView({
       }
       setActiveOutgoingTransfer(data.transfer);
       setOutgoingIdempotencyKey(crypto.randomUUID());
-      pushToast({
-        title: "Transfer submitted",
-        description: `Transfer ${data.transfer.publicId ?? ""} is being processed.`,
-        variant: "success",
-      });
     } catch (error) {
-      const msg = describe(error);
-      setOutgoingError(msg);
-      pushToast({
-        title: "Transfer failed",
-        description: msg,
-        variant: "error",
-      });
+      setOutgoingError(describe(error));
     } finally {
       setOutgoingExecuting(false);
     }
@@ -2909,6 +2793,7 @@ export function PortfolioView({
     nextStatus: "DISABLED" | "ACTIVE",
   ) => {
     setTogglingPaymentRequestId(req.id);
+    setPrError(null);
     try {
       const updated = await send<SerializedPaymentRequest>(
         `/api/accounts/${accountId}/payment-requests/${req.id}`,
@@ -2918,25 +2803,8 @@ export function PortfolioView({
       setPaymentRequests((prev) =>
         prev.map((item) => (item.id === updated.id ? updated : item)),
       );
-      pushToast({
-        title:
-          nextStatus === "DISABLED"
-            ? "Payment link paused"
-            : "Payment link resumed",
-        description:
-          nextStatus === "DISABLED"
-            ? `${req.title} is now paused and won't accept payments.`
-            : `${req.title} is active again.`,
-        variant: nextStatus === "DISABLED" ? "warning" : "success",
-      });
     } catch (error) {
-      const msg = describe(error);
-      setMessage(msg);
-      pushToast({
-        title: "Action failed",
-        description: msg,
-        variant: "error",
-      });
+      setPrError(describe(error));
     } finally {
       setTogglingPaymentRequestId(null);
     }
@@ -5339,19 +5207,8 @@ export function PortfolioView({
                           );
                         }
                         setAddMoneyIntent(data.intent);
-                        pushToast({
-                          title: "Deposit quote ready",
-                          description: "Send your deposit before the quote timer expires.",
-                          variant: "success",
-                        });
                       } catch (err) {
-                        const msg = describe(err);
-                        setAddMoneyError(msg);
-                        pushToast({
-                          title: "Deposit quote failed",
-                          description: msg,
-                          variant: "error",
-                        });
+                        setAddMoneyError(describe(err));
                       } finally {
                         setAddMoneyCommitting(false);
                       }
@@ -5991,6 +5848,12 @@ export function PortfolioView({
                     </button>
                   </div>
 
+                  {prError && (
+                    <div className="p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-xs text-red-700 dark:text-red-300">
+                      {prError}
+                    </div>
+                  )}
+
                   {prSuccessUrl && (
                     <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
                       <div className="truncate">
@@ -6056,7 +5919,6 @@ export function PortfolioView({
                 changeTab("receive");
                 setReceiveHubOpen(false);
               }}
-              pushToast={pushToast}
             />
           </MotionTabPanel>
         )}
@@ -6320,13 +6182,9 @@ export function PortfolioView({
         isOpen={isFlowIdModalOpen}
         onClose={() => setIsFlowIdModalOpen(false)}
         accountId={accountId}
-        onClaimed={(claimedFlowId) => {
+        onClaimed={() => {
           setIsFlowIdModalOpen(false);
           setUnreadNotifications((count) => Math.max(0, count - 1));
-          pushToast({
-            title: `Your unique Flow ID ${claimedFlowId} is now active!`,
-            variant: "success",
-          });
         }}
       />
 

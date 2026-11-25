@@ -10,7 +10,6 @@ import type {
 import { FlowLogo } from "../../../components/flow-logo.tsx";
 import { PaymentTimelineTracker } from "../../../components/payment-timeline-tracker.tsx";
 import { QrCode } from "../../../components/qr-code.tsx";
-import { useToast } from "../../../components/toast-provider.tsx";
 import {
   AssetAvatar,
   ChainBadge,
@@ -184,24 +183,12 @@ export function CheckoutView({
   // Copy Feedback State
   const [copiedRecipientAddress, setCopiedRecipientAddress] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
-  const { pushToast } = useToast();
-
-  useEffect(() => {
-    if (commitError) {
-      pushToast({
-        title: "Payment quote error",
-        description: commitError,
-        variant: "error",
-      });
-    }
-  }, [commitError, pushToast]);
 
   const handleCopyLink = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       void navigator.clipboard.writeText(request.shareUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
-      pushToast({ title: "Payment link copied", variant: "success", durationMs: 2500 });
     }
   };
 
@@ -216,7 +203,6 @@ export function CheckoutView({
       void navigator.clipboard.writeText(request.recipientAddress);
       setCopiedRecipientAddress(true);
       setTimeout(() => setCopiedRecipientAddress(false), 2000);
-      pushToast({ title: "Recipient address copied", variant: "success", durationMs: 2500 });
     }
   };
 
@@ -231,7 +217,6 @@ export function CheckoutView({
       void navigator.clipboard.writeText(amt);
       setCopiedAmount(true);
       setTimeout(() => setCopiedAmount(false), 2000);
-      pushToast({ title: "Amount copied", variant: "success", durationMs: 2500 });
     }
   };
 
