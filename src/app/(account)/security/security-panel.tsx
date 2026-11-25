@@ -649,14 +649,9 @@ export function SecurityPanel({
                       )}
                     </div>
                     {flowId ? (
-                      <div className="mt-1 space-y-0.5">
-                        <p className="font-mono text-sm font-bold text-neutral-950 dark:text-white truncate">
-                          {flowId}
-                        </p>
-                        <p className="font-mono text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
-                          flow.devhub.forum/{flowId}
-                        </p>
-                      </div>
+                      <p className="mt-1 font-mono text-sm font-bold text-neutral-950 dark:text-white truncate">
+                        {flowId}
+                      </p>
                     ) : (
                       <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
                         Pick a permanent <span className="font-mono">@flow</span> handle so anyone on Flow can send assets straight to your wallet.
