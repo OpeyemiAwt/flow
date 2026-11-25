@@ -621,6 +621,7 @@ export function DocsShell({
                   <ul className="space-y-2 text-white/70">
                     <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
                     <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
+                    <li><a href="mailto:support@flow.devhub.forum" className="hover:text-white transition-colors">Support</a></li>
                   </ul>
                 </div>
               </div>

@@ -1042,12 +1042,12 @@ export function HomePageClient() {
                   </a>
                 </li>
                 <li>
-                  <Link
-                    href="/sign-in"
+                  <a
+                    href="mailto:support@flow.devhub.forum"
                     className="hover:text-[#0B0B0B] dark:hover:text-white"
                   >
                     Contact
-                  </Link>
+                  </a>
                 </li>
                 <li>
                   <Link

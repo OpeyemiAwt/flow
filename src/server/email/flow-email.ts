@@ -12,6 +12,9 @@ const APP_BASE_URL = (
   process.env.FLOW_APP_ORIGIN?.trim() || "https://flow.devhub.forum"
 ).replace(/\/+$/, "");
 
+const SUPPORT_EMAIL =
+  process.env.FLOW_SUPPORT_EMAIL?.trim() || "support@flow.devhub.forum";
+
 function resolveMailerConfig(): { apiKey: string; from: string } | null {
   const apiKey = process.env.FLOW_MAIL_API_KEY?.trim();
   const from = process.env.FLOW_MAIL_FROM?.trim();
@@ -257,6 +260,7 @@ function wrapFlowEmailShell(options: {
                     : ""
                 }
                 &nbsp;·&nbsp; <a href="${APP_BASE_URL}/blog" style="color:#4B5563;text-decoration:underline;">FLOW Blog</a>
+                &nbsp;·&nbsp; <a href="mailto:${escapeHtml(SUPPORT_EMAIL)}" style="color:#4B5563;text-decoration:underline;">Support</a>
               </p>
             </td>
           </tr>
@@ -604,6 +608,7 @@ async function deliverViaResend(params: {
     const body: Record<string, unknown> = {
       from: cfg.from,
       to: [params.to],
+      reply_to: SUPPORT_EMAIL,
       subject: params.subject,
       html: params.html,
       text: params.text,

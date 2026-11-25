@@ -2,6 +2,9 @@ import "server-only";
 import type { AuthConfig } from "../../foundation/auth-environment.ts";
 import { log } from "../../foundation/logger.ts";
 
+const SUPPORT_REPLY_TO =
+  process.env.FLOW_SUPPORT_EMAIL?.trim() || "support@flow.devhub.forum";
+
 export async function sendMail(
   config: AuthConfig,
   to: string,
@@ -25,6 +28,7 @@ export async function sendMail(
       body: JSON.stringify({
         from: config.mailFrom,
         to: [to],
+        reply_to: SUPPORT_REPLY_TO,
         subject,
         text,
         ...(html ? { html } : {}),
