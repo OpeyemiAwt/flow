@@ -254,6 +254,62 @@ export function SecurityPanel({
     profileId,
   ]);
 
+  const inAppNotifications =
+    incomingPayments || paymentLinkActivity || securityAlerts;
+
+  async function toggleInAppNotifications() {
+    const prev = {
+      incomingPayments: notificationPreferences.incomingPayments,
+      paymentLinkActivity: notificationPreferences.paymentLinkActivity,
+      securityAlerts: notificationPreferences.securityAlerts,
+    };
+    const next = !inAppNotifications;
+    setNotificationPreferences({
+      ...notificationPreferences,
+      incomingPayments: next,
+      paymentLinkActivity: next,
+      securityAlerts: next,
+    });
+    try {
+      writeProfilePreference(profileId, "incomingPayments", String(next));
+      writeProfilePreference(profileId, "paymentLinkActivity", String(next));
+      writeProfilePreference(profileId, "securityAlerts", String(next));
+      if (primaryAccount) {
+        await send(
+          `/api/accounts/${primaryAccount.id}/notification-preferences`,
+          {
+            incomingPayments: next,
+            paymentLinkActivity: next,
+            securityAlerts: next,
+          },
+          "PATCH",
+        );
+      }
+      setMessage("");
+    } catch (err) {
+      setNotificationPreferences({
+        ...notificationPreferences,
+        ...prev,
+      });
+      writeProfilePreference(
+        profileId,
+        "incomingPayments",
+        String(prev.incomingPayments),
+      );
+      writeProfilePreference(
+        profileId,
+        "paymentLinkActivity",
+        String(prev.paymentLinkActivity),
+      );
+      writeProfilePreference(
+        profileId,
+        "securityAlerts",
+        String(prev.securityAlerts),
+      );
+      setMessage(describe(err));
+    }
+  }
+
   async function toggleNotification(key: keyof typeof notificationPreferences) {
     const next = !notificationPreferences[key];
     setNotificationPreferences({ ...notificationPreferences, [key]: next });
@@ -709,93 +765,32 @@ export function SecurityPanel({
                     </div>
                   </div>
 
-                  {/* Toggle 1: Incoming payments */}
-                  <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30 transition-colors mb-3">
+                  {/* Unified In-App Notifications Toggle */}
+                  <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30 transition-colors">
                     <div>
                       <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
-                        Incoming payments
+                        In-app notifications
                       </p>
                       <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Show received payments in your notification drawer.
+                        Show incoming payments, payment link activity, and
+                        security alerts in your notification drawer.
                       </p>
                     </div>
                     <button
                       type="button"
                       role="switch"
-                      aria-checked={incomingPayments}
-                      aria-label="Incoming payments"
-                      onClick={() => toggleNotification("incomingPayments")}
+                      aria-checked={inAppNotifications}
+                      aria-label="In-app notifications"
+                      onClick={() => void toggleInAppNotifications()}
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        incomingPayments
+                        inAppNotifications
                           ? "bg-[#FF1A1A]"
                           : "bg-neutral-200 dark:bg-neutral-700"
                       }`}
                     >
                       <span
                         className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                          incomingPayments ? "translate-x-5" : "translate-x-0"
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Toggle 2: Payment link activity */}
-                  <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30 transition-colors mb-3">
-                    <div>
-                      <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
-                        Payment link activity
-                      </p>
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Show payment link activity in your notification drawer.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={paymentLinkActivity}
-                      aria-label="Payment link activity"
-                      onClick={() => toggleNotification("paymentLinkActivity")}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        paymentLinkActivity
-                          ? "bg-[#FF1A1A]"
-                          : "bg-neutral-200 dark:bg-neutral-700"
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                          paymentLinkActivity
-                            ? "translate-x-5"
-                            : "translate-x-0"
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Toggle 3: Security alerts */}
-                  <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30 transition-colors">
-                    <div>
-                      <p className="font-display font-semibold text-xs text-neutral-950 dark:text-white">
-                        Security alerts
-                      </p>
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                        Show security notices in your notification drawer.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={securityAlerts}
-                      aria-label="Security alerts"
-                      onClick={() => toggleNotification("securityAlerts")}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        securityAlerts
-                          ? "bg-[#FF1A1A]"
-                          : "bg-neutral-200 dark:bg-neutral-700"
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                          securityAlerts ? "translate-x-5" : "translate-x-0"
+                          inAppNotifications ? "translate-x-5" : "translate-x-0"
                         }`}
                       />
                     </button>
