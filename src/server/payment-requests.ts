@@ -373,6 +373,7 @@ export async function listPaymentRequests(
       FROM flow.payment_requests pr
       WHERE pr.account_id = ${accountId}::uuid
         AND COALESCE((pr.metadata->>'deleted')::boolean, false) = false
+        AND COALESCE((pr.metadata->>'directFlowExternalCheckout')::boolean, false) = false
         AND (${statusParam}::text IS NULL OR pr.status::text = ${statusParam})
     `;
     const total = Number(countRows[0]?.count ?? 0n);
@@ -413,6 +414,7 @@ export async function listPaymentRequests(
       FROM flow.payment_requests pr
       WHERE pr.account_id = ${accountId}::uuid
         AND COALESCE((pr.metadata->>'deleted')::boolean, false) = false
+        AND COALESCE((pr.metadata->>'directFlowExternalCheckout')::boolean, false) = false
         AND (${statusParam}::text IS NULL OR pr.status::text = ${statusParam})
       ORDER BY pr.created_at DESC
       LIMIT ${limit}

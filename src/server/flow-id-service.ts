@@ -110,6 +110,7 @@ export interface PublicFlowIdProfile {
   readonly flowId: string;
   readonly accountName: string;
   readonly hasActiveWallet: boolean;
+  readonly hasNearAddress?: boolean;
 }
 
 export async function lookupPublicFlowIdProfile(
@@ -119,6 +120,31 @@ export async function lookupPublicFlowIdProfile(
   await ensureFlowIdSchema(db);
   const parsed = validateFlowIdHandle(rawFlowId);
   if (!parsed.valid) return null;
+
+  try {
+    const definerRows = await db.$queryRaw<
+      Array<{
+        flow_id: string;
+        display_name: string;
+        has_active_wallet: boolean;
+        has_near_address: boolean;
+      }>
+    >`
+      SELECT flow_id, display_name, has_active_wallet, has_near_address
+      FROM flow.lookup_public_flow_id_display(${parsed.flowId}::text)
+    `;
+    const definerRow = definerRows[0];
+    if (definerRow) {
+      return {
+        flowId: definerRow.flow_id,
+        accountName: definerRow.display_name,
+        hasActiveWallet: Boolean(definerRow.has_active_wallet),
+        hasNearAddress: Boolean(definerRow.has_near_address),
+      };
+    }
+  } catch {
+    // Fallback while migration deploys
+  }
 
   const rows = await db.$queryRaw<
     Array<{
@@ -137,11 +163,33 @@ export async function lookupPublicFlowIdProfile(
 
   const row = rows[0];
   if (!row) return null;
+  const normalizedName =
+    row.name &&
+    !["personal", "personal account", "default", "main account"].includes(
+      row.name.trim().toLowerCase(),
+    )
+      ? row.name.trim()
+      : row.flow_id.split("@")[0] || row.flow_id;
   return {
     flowId: row.flow_id,
-    accountName: row.name,
+    accountName: normalizedName,
     hasActiveWallet: row.wallet_status === "ACTIVE",
+    hasNearAddress: row.wallet_status === "ACTIVE",
   };
+}
+
+export async function getOrCreateDirectFlowExternalCheckout(
+  db: FlowDb,
+  rawFlowId: string,
+): Promise<string | null> {
+  const parsed = validateFlowIdHandle(rawFlowId);
+  if (!parsed.valid) return null;
+
+  const rows = await db.$queryRaw<Array<{ public_id: string }>>`
+    SELECT public_id
+    FROM flow.get_or_create_direct_flow_external_checkout(${parsed.flowId}::text)
+  `;
+  return rows[0]?.public_id ?? null;
 }
 
 export async function resolveFlowIdForSend(

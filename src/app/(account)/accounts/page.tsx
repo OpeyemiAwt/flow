@@ -181,7 +181,7 @@ export default async function AccountsPage() {
                                 <strong className="font-display text-base font-bold text-neutral-950 dark:text-white">
                                   {account.name}
                                 </strong>
-                                <span className="rounded-full bg-red-50 dark:bg-red-950/40 px-2.5 py-0.5 text-[10px] font-bold uppercase text-[#FF1A1A]">
+                                <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#FF1A1A]">
                                   Personal account
                                 </span>
                               </div>
@@ -238,7 +238,7 @@ export default async function AccountsPage() {
                                   <strong className="font-display text-base font-bold text-neutral-950 dark:text-white">
                                     {account.name}
                                   </strong>
-                                  <span className="rounded-full bg-neutral-100 dark:bg-neutral-800 px-2.5 py-0.5 text-[10px] font-bold uppercase text-neutral-800 dark:text-neutral-200">
+                                  <span className="text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                                     Workspace
                                   </span>
                                 </div>

@@ -114,10 +114,9 @@ export function AnalyticsView({
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">
         <MotionReveal className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 text-white dark:bg-white dark:text-black text-[11px] font-semibold tracking-wide uppercase mb-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-neutral-500 dark:text-neutral-400 mb-2">
               Platform Totals Only
-            </div>
+            </p>
             <h1 className="text-3xl font-bold tracking-tight">
               FLOW Analytics
             </h1>

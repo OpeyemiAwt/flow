@@ -780,13 +780,13 @@ export function InsightsView({
                 <div className="flex items-center gap-2.5">
                   <span className="text-sm font-bold">{activePoint.fullLabel}</span>
                   {summary.peakInflow?.monthKey === activePoint.monthKey && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                      Peak Inflow
+                    <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      · Peak Inflow
                     </span>
                   )}
                   {summary.peakOutflow?.monthKey === activePoint.monthKey && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-700 dark:text-rose-300">
-                      Peak Outflow
+                    <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-400">
+                      · Peak Outflow
                     </span>
                   )}
                 </div>

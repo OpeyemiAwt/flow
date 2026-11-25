@@ -638,15 +638,6 @@ export function SecurityPanel({
                       <p className="font-display text-xs font-bold text-neutral-950 dark:text-white">
                         Unique Flow ID
                       </p>
-                      {!flowId ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FF1A1A] text-white">
-                          NEW
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                          Permanent
-                        </span>
-                      )}
                     </div>
                     {flowId ? (
                       <p className="mt-1 font-mono text-sm font-bold text-neutral-950 dark:text-white truncate">
@@ -962,10 +953,10 @@ export function SecurityPanel({
                             Email OTP
                           </span>
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            className={`text-[11px] font-semibold ${
                               emailEnrolled
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
-                                : "bg-neutral-100 text-neutral-700 border-neutral-200/60"
+                                ? "text-emerald-700 dark:text-emerald-400"
+                                : "text-neutral-500 dark:text-neutral-400"
                             }`}
                           >
                             {emailEnrolled ? "Enrolled" : "Available"}
@@ -1008,10 +999,10 @@ export function SecurityPanel({
                             Google SSO
                           </span>
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            className={`text-[11px] font-semibold ${
                               googleLinked
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-neutral-100 text-neutral-600"
+                                ? "text-emerald-700 dark:text-emerald-400"
+                                : "text-neutral-500 dark:text-neutral-400"
                             }`}
                           >
                             {googleLinked ? "Connected" : "Not connected"}
@@ -1185,8 +1176,8 @@ export function SecurityPanel({
                                   Authorized Browser Session
                                 </span>
                                 {sess.current && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                                    Current
+                                  <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                    · Current
                                   </span>
                                 )}
                               </div>

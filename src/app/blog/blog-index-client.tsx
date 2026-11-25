@@ -12,13 +12,13 @@ import {
 function categoryBadgeClass(category: BlogCategory): string {
   switch (category) {
     case "Product":
-      return "bg-[#FF1A1A]/10 text-[#CC1414] dark:bg-[#FF1A1A]/15 dark:text-[#FF6B6B]";
+      return "text-[#CC1414] dark:text-[#FF6B6B]";
     case "Shipping":
-      return "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300";
+      return "text-emerald-700 dark:text-emerald-400";
     case "Engineering":
-      return "bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300";
+      return "text-violet-700 dark:text-violet-400";
     case "Weekly Update":
-      return "bg-amber-500/12 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300";
+      return "text-amber-700 dark:text-amber-400";
   }
 }
 
@@ -180,7 +180,7 @@ export function BlogIndexClient({ posts }: { posts: readonly BlogPost[] }) {
             <div className="p-5 sm:p-6 space-y-4">
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12px]">
                 <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-medium ${categoryBadgeClass(featuredPost.category)}`}
+                  className={`text-[11px] font-semibold uppercase tracking-[0.06em] ${categoryBadgeClass(featuredPost.category)}`}
                 >
                   {featuredPost.category}
                 </span>
@@ -264,7 +264,7 @@ export function BlogIndexClient({ posts }: { posts: readonly BlogPost[] }) {
                   <div className="p-4 sm:p-5 space-y-2.5">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px]">
                       <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${categoryBadgeClass(post.category)}`}
+                        className={`text-[11px] font-semibold uppercase tracking-[0.06em] ${categoryBadgeClass(post.category)}`}
                       >
                         {post.category}
                       </span>

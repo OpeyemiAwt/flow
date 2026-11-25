@@ -179,7 +179,7 @@ export function NotificationsView({
                 Notifications
               </h1>
               {unreadCount > 0 && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#FF1A1A] text-white">
+                <span className="text-xs font-semibold text-[#FF1A1A]">
                   {unreadCount} new
                 </span>
               )}
@@ -379,7 +379,7 @@ export function NotificationsView({
                         {formattedDescription}
                       </p>
                       {isClaim && (
-                        <span className="mt-2 inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-[#FF1A1A] text-white">
+                        <span className="mt-2 inline-block text-xs font-semibold text-[#FF1A1A]">
                           Claim @flow ID →
                         </span>
                       )}

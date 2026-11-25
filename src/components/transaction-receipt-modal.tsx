@@ -131,22 +131,19 @@ function resolveReceiptFields(activity: SerializedWalletActivityRecord) {
   const statusColors =
     statusTone === "completed"
       ? {
-          pillClass:
-            "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
-          bgHex: "rgba(16, 185, 129, 0.14)",
+          pillClass: "text-emerald-700 dark:text-emerald-400",
+          bgHex: "transparent",
           textHex: "#047857",
         }
       : statusTone === "failed"
         ? {
-            pillClass:
-              "bg-red-500/15 text-red-700 dark:bg-red-500/20 dark:text-red-400",
-            bgHex: "rgba(239, 68, 68, 0.14)",
+            pillClass: "text-red-700 dark:text-red-400",
+            bgHex: "transparent",
             textHex: "#B91C1C",
           }
         : {
-            pillClass:
-              "bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
-            bgHex: "rgba(245, 158, 11, 0.16)",
+            pillClass: "text-amber-700 dark:text-amber-400",
+            bgHex: "transparent",
             textHex: "#B45309",
           };
 
@@ -287,21 +284,12 @@ async function renderReceiptPngBlob(
   ctx.textAlign = "left";
   ctx.fillText("FLOW", px + 88, paperTop + 69);
 
-  // Top-right colored status pill
+  // Top-right colored status text (no pill box)
   const pillText = fields.statusLabel.toUpperCase();
   ctx.font = '700 18px -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
-  const pillTextW = ctx.measureText(pillText).width;
-  const pillW = pillTextW + 32;
-  const pillH = 34;
-  const pillX = px + pw - 44 - pillW;
-  const pillY = paperTop + 42;
-  ctx.fillStyle = fields.statusColors.bgHex;
-  ctx.beginPath();
-  ctx.roundRect(pillX, pillY, pillW, pillH, 17);
-  ctx.fill();
   ctx.fillStyle = fields.statusColors.textHex;
-  ctx.textAlign = "center";
-  ctx.fillText(pillText, pillX + pillW / 2, pillY + 23);
+  ctx.textAlign = "right";
+  ctx.fillText(pillText, px + pw - 44, paperTop + 66);
 
   // Centered Hero Amount
   ctx.fillStyle = fields.isIncoming ? "#059669" : "#0B0C0E";
@@ -456,7 +444,7 @@ export function TransactionReceiptModal({
     .paper { margin: -4px 12px 0; background:#EBEDF0; padding:24px 24px 28px; border-radius:0 0 12px 12px; }
     .brand-row { display:flex; align-items:center; justify-content:space-between; }
     .brand { font-size:16px; font-weight:700; color:#0b0c0e; letter-spacing:-0.02em; }
-    .pill { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:3px 9px; border-radius:999px; background:${fields.statusColors.bgHex}; color:${fields.statusColors.textHex}; }
+    .pill { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:${fields.statusColors.textHex}; }
     .hero { text-align:center; margin:20px 0 22px; }
     .amt { font-size:30px; font-weight:700; color:${fields.isIncoming ? "#059669" : "#0b0c0e"}; letter-spacing:-0.02em; }
     .date { font-size:12px; color:#5f636a; margin-top:4px; }
@@ -536,7 +524,7 @@ export function TransactionReceiptModal({
               <div className="flex items-center justify-between">
                 <FlowLogo className="h-5 w-auto" />
                 <span
-                  className={`text-[10.5px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${fields.statusColors.pillClass}`}
+                  className={`text-[10.5px] font-semibold uppercase tracking-[0.08em] ${fields.statusColors.pillClass}`}
                 >
                   {fields.statusLabel}
                 </span>

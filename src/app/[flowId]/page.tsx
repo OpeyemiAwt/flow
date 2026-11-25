@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import {
   buildDirectFlowLink,
   parseDirectFlowIdParam,
@@ -27,7 +27,7 @@ export async function generateMetadata({
   }
   const canonical = buildDirectFlowLink(parsedFlowId);
   const title = `Pay ${parsedFlowId} · FLOW`;
-  const description = `Send crypto directly to ${parsedFlowId} across NEAR, Solana, Base, and Ethereum on FLOW.`;
+  const description = `Send crypto directly to ${parsedFlowId} with FLOW or any external wallet.`;
   return {
     title,
     description,
@@ -75,29 +75,21 @@ export default async function DirectFlowIdPage({
     readSession(db, reqHeaders).catch(() => null),
   ]);
 
-  if (session && profile?.hasActiveWallet) {
-    let targetAccountId: string | null = null;
-    let needsOnboarding = false;
+  let isSignedIn = false;
+  let needsOnboarding = false;
+
+  if (session) {
     try {
       const actor = await principal(db, reqHeaders);
       const accounts = await accessibleAccounts(db, actor);
       const entryPath = authenticatedEntryPath(accounts);
-      if (entryPath.startsWith("/accounts/")) {
-        targetAccountId = entryPath.slice("/accounts/".length);
-      } else {
-        needsOnboarding = true;
-      }
+      isSignedIn = true;
+      needsOnboarding = !entryPath.startsWith("/accounts/");
     } catch (error) {
       if (error instanceof ApiFailure && error.code === "ONBOARDING_REQUIRED") {
+        isSignedIn = true;
         needsOnboarding = true;
       }
-    }
-
-    if (targetAccountId) {
-      redirect(`/app/send?to=${encodeURIComponent(profile.flowId)}`);
-    }
-    if (needsOnboarding) {
-      redirect(`/onboarding?to=${encodeURIComponent(profile.flowId)}`);
     }
   }
 
@@ -107,6 +99,8 @@ export default async function DirectFlowIdPage({
       accountName={profile?.accountName ?? null}
       exists={Boolean(profile)}
       hasActiveWallet={Boolean(profile?.hasActiveWallet)}
+      isSignedIn={isSignedIn}
+      needsOnboarding={needsOnboarding}
     />
   );
 }

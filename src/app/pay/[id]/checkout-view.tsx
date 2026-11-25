@@ -727,7 +727,7 @@ export function CheckoutView({
           {request.maxPayments !== null &&
             !isCompletedReceipt &&
             !request.isDeleted && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-neutral-200/80 dark:border-white/[0.1] bg-white dark:bg-[#141414] px-3.5 py-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-200 shadow-2xs tabular-nums">
+            <div className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-neutral-600 dark:text-neutral-300 tabular-nums">
               <span
                 className={`h-2 w-2 rounded-full ${
                   (request.remainingPayments ?? 0) === 0

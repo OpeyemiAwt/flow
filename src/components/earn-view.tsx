@@ -678,25 +678,21 @@ export function EarnView({
           )}
         </h1>
 
-        {/* Pill Badge: dynamic max live APY */}
-        <div className="pt-0.5">
-          <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-neutral-200/50 dark:bg-neutral-800/60 text-xs text-neutral-600 dark:text-neutral-300 font-medium border border-neutral-300/40 dark:border-white/[0.06] select-none">
-            <span className="inline-flex items-center gap-1">
-              Up to{" "}
-              {apysLoaded ? (
-                <strong className="font-bold text-neutral-950 dark:text-white">
-                  {Math.max(...protocols.map((p) => p.apy)).toFixed(2)}% APY
-                </strong>
-              ) : (
-                <span
-                  aria-label="Loading live APY"
-                  className="inline-block h-3.5 w-16 rounded-full bg-neutral-300/80 dark:bg-white/15 animate-pulse"
-                />
-              )}{" "}
-              on your dollars
-            </span>
-          </div>
-        </div>
+        {/* Subtle dynamic max live APY readout */}
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
+          Up to{" "}
+          {apysLoaded ? (
+            <strong className="font-bold text-neutral-950 dark:text-white">
+              {Math.max(...protocols.map((p) => p.apy)).toFixed(2)}% APY
+            </strong>
+          ) : (
+            <span
+              aria-label="Loading live APY"
+              className="inline-block h-3.5 w-16 rounded-full bg-neutral-300/80 dark:bg-white/15 animate-pulse align-middle"
+            />
+          )}{" "}
+          on your dollars
+        </p>
       </MotionReveal>
 
       {claimError && (
@@ -877,7 +873,7 @@ export function EarnView({
                         Claim {linearUnstaked.amount.toFixed(4)} NEAR
                       </button>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-neutral-100 dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300">
+                      <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
                         Unstaking (~48h)
                       </span>
                     )

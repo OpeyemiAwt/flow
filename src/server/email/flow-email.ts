@@ -220,7 +220,7 @@ function wrapFlowEmailShell(options: {
                     </a>
                   </td>
                   <td align="right" style="vertical-align:middle;">
-                    <span style="display:inline-block;padding:5px 12px;border-radius:999px;background-color:#1F2126;background-image:linear-gradient(#1F2126,#1F2126);color:#F3F4F6;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">${escapeHtml(options.headerBadge)}</span>
+                    <span style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;">${escapeHtml(options.headerBadge)}</span>
                   </td>
                 </tr>
               </table>
@@ -448,11 +448,9 @@ export function buildTransactionReceiptEmail(
     .join("");
 
   const bodyHtml = `
-    <div style="margin:0 0 18px;">
-      <span style="display:inline-block;padding:5px 12px;border-radius:999px;background-color:#ECFDF5;border:1px solid #A7F3D0;color:#047857;font-size:11.5px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;">
-        Completed ✓
-      </span>
-    </div>
+    <p style="margin:0 0 12px;font-size:11.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#047857;">
+      Completed ✓
+    </p>
 
     <p style="margin:0 0 6px;font-size:13.5px;font-weight:500;color:#6B7280;">
       ${isConvert ? "Amount converted" : "Amount sent"}

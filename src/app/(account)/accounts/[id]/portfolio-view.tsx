@@ -3874,11 +3874,11 @@ export function PortfolioView({
                             </div>
                           )}
 
-                          {/* Wallet Balance Pill + Max Pill */}
-                          <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                            <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 dark:bg-white/[0.08] px-4 py-2 text-xs sm:text-sm">
+                          {/* Wallet Balance + Max */}
+                          <div className="flex items-center justify-center gap-3 flex-wrap">
+                            <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm">
                               <span className="text-neutral-500 dark:text-neutral-400">
-                                {sendSource?.deployment.symbol ?? "Main"} wallet
+                                {sendSource?.deployment.symbol ?? "Main"} wallet:
                               </span>
                               <span className="font-semibold text-neutral-950 dark:text-white tabular-nums">
                                 {walletPillValue}
@@ -3888,7 +3888,7 @@ export function PortfolioView({
                               type="button"
                               disabled={isEmptyBalance || !sendSourceBalance}
                               onClick={handleSendMaxClick}
-                              className="rounded-full border border-neutral-200 dark:border-white/[0.14] bg-white dark:bg-[#141414] px-4 py-2 text-xs sm:text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/25 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="text-xs sm:text-sm font-semibold text-[#FF1A1A] hover:opacity-80 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Max
                             </button>
@@ -5237,7 +5237,7 @@ export function PortfolioView({
                         <span className="font-bold text-neutral-950 dark:text-white">
                           Send exact amount
                         </span>
-                        <span className="rounded-full bg-neutral-200/80 dark:bg-white/[0.08] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-200">
+                        <span className="text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                           {addMoneyIntent.status.replace(/_/g, " ")}
                         </span>
                       </div>
@@ -5509,10 +5509,10 @@ export function PortfolioView({
                                 <span aria-hidden="true">•</span>
                                 {req.maxPayments !== null ? (
                                   <span
-                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${
+                                    className={`text-[11px] font-semibold tabular-nums ${
                                       (req.remainingPayments ?? 0) === 0
-                                        ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
-                                        : "bg-neutral-100 dark:bg-white/[0.06] text-neutral-700 dark:text-neutral-200"
+                                        ? "text-emerald-700 dark:text-emerald-400"
+                                        : "text-neutral-600 dark:text-neutral-300"
                                     }`}
                                   >
                                     {req.paidCount}/{req.maxPayments} paid ·{" "}
@@ -5521,14 +5521,14 @@ export function PortfolioView({
                                       : `${req.remainingPayments} left`}
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium tabular-nums bg-neutral-100 dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300">
+                                  <span className="text-[11px] font-medium tabular-nums text-neutral-500 dark:text-neutral-400">
                                     {req.paidCount} paid · Unlimited
                                   </span>
                                 )}
                                 {req.amountMode === "FIXED" &&
                                   req.feePayer === "MERCHANT" && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">
-                                      You pay fees
+                                    <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                                      · You pay fees
                                     </span>
                                   )}
                               </div>

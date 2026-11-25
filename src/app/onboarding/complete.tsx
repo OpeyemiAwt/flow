@@ -294,9 +294,9 @@ export function CompleteOnboarding({
             !flowId ? (
               <div className="space-y-5">
                 <div>
-                  <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-emerald-600 dark:text-emerald-400">
                     Step 2 of 2 · Wallet Ready
-                  </span>
+                  </p>
                   <h1 className="mt-2 font-serif text-3xl leading-tight dark:text-white">
                     Claim your unique @flow ID
                   </h1>

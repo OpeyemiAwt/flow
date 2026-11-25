@@ -297,12 +297,9 @@ export function SignIn({
           </Link>
 
           {pendingSendTo && (
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span>
-                Sending to <strong className="font-mono">{pendingSendTo}</strong>
-              </span>
-            </div>
+            <p className="mt-4 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              Sending to <strong className="font-mono">{pendingSendTo}</strong>
+            </p>
           )}
 
           {showEmailSignIn ? (
