@@ -712,6 +712,26 @@ html.dark .flow-liquid-btn-primary::before {
   will-change: transform, opacity;
 }
 
+/* Flow AI thinking dots wave */
+@keyframes flowAiThinkDot {
+  0%,
+  72%,
+  100% {
+    opacity: 0.25;
+    transform: translate3d(0, 0, 0) scale(0.82);
+  }
+  36% {
+    opacity: 1;
+    transform: translate3d(0, -4px, 0) scale(1.08);
+  }
+}
+
+.flow-ai-think-dot {
+  display: inline-block;
+  animation: flowAiThinkDot 1.15s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  will-change: transform, opacity;
+}
+
 input[type="text"],
 input[type="email"],
 input[type="search"],
@@ -734,7 +754,11 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .flow-type-char-field,
-  .flow-type-char-hero {
+  .flow-type-char-hero,
+  .flow-ai-think-dot {
     animation: none !important;
+  }
+  .flow-ai-think-dot {
+    opacity: 0.65 !important;
   }
 }

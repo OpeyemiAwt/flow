@@ -629,6 +629,16 @@ export function AssistantView({
       }
 
       setLoading(true);
+      const startedAt = Date.now();
+      const ensureMinimumThinking = async () => {
+        const remaining = 550 - (Date.now() - startedAt);
+        if (remaining > 0) {
+          await new Promise<void>((resolve) =>
+            window.setTimeout(resolve, remaining),
+          );
+        }
+      };
+
       try {
         const res = await fetch(`/api/accounts/${accountId}/ai-assistant`, {
           method: "POST",
@@ -649,6 +659,8 @@ export function AssistantView({
           conversationTitle?: string | null;
           error?: string;
         };
+
+        await ensureMinimumThinking();
 
         if (data.ok && data.message) {
           if (data.conversationId) {
@@ -1973,13 +1985,28 @@ export function AssistantView({
             })}
 
             {loading && (
-              <div className="flex items-start gap-3">
-                <div className="hidden sm:flex h-8 w-8 shrink-0 rounded-full bg-white dark:bg-[#161618] border border-neutral-200/80 dark:border-white/[0.1] items-center justify-center text-neutral-900 dark:text-white mt-0.5">
+              <div
+                role="status"
+                aria-live="polite"
+                aria-label="Flow AI is thinking"
+                className="flow-anim-fade-up flex items-start gap-3"
+              >
+                <div className="hidden sm:flex h-8 w-8 shrink-0 rounded-full bg-white dark:bg-[#161618] border border-neutral-200/80 dark:border-white/[0.1] items-center justify-center text-neutral-900 dark:text-white mt-0.5 shadow-2xs">
                   <FlowAiMascot size={15} />
                 </div>
-                <div className="w-64 rounded-[22px] rounded-tl-md bg-white dark:bg-[#141414] border border-neutral-200/75 dark:border-white/[0.08] p-4 space-y-2.5 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-                  <Skeleton className="h-3.5 w-44 rounded-md" />
-                  <Skeleton className="h-3.5 w-32 rounded-md" />
+                <div className="inline-flex items-center gap-1.5 rounded-[22px] rounded-tl-md bg-white dark:bg-[#141414] border border-neutral-200/75 dark:border-white/[0.08] px-4 py-3.5 shadow-[0_2px_14px_rgba(0,0,0,0.03)]">
+                  <span
+                    className="flow-ai-think-dot h-2 w-2 rounded-full bg-neutral-800 dark:bg-neutral-200"
+                    style={{ animationDelay: "0ms" }}
+                  />
+                  <span
+                    className="flow-ai-think-dot h-2 w-2 rounded-full bg-neutral-800 dark:bg-neutral-200"
+                    style={{ animationDelay: "180ms" }}
+                  />
+                  <span
+                    className="flow-ai-think-dot h-2 w-2 rounded-full bg-neutral-800 dark:bg-neutral-200"
+                    style={{ animationDelay: "360ms" }}
+                  />
                 </div>
               </div>
             )}
