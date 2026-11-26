@@ -237,6 +237,7 @@ async function main(): Promise<void> {
               adapter,
               walletConfig,
               workerId,
+              policySponsorConfig,
             );
           }
         } catch (error: unknown) {

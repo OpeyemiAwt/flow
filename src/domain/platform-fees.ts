@@ -31,6 +31,38 @@ export function resolveFeeTreasuryAccount(): string {
   return DEFAULT_FEE_TREASURY_ACCOUNT;
 }
 
+export function resolveNearGasSponsorAccountId(): string {
+  if (typeof process !== "undefined" && process.env) {
+    const sponsor = process.env.FLOW_NEAR_SPONSOR_ACCOUNT_ID?.trim();
+    if (sponsor) return sponsor.toLowerCase();
+    const explicit = process.env.FLOW_FEE_TREASURY_ACCOUNT?.trim();
+    if (explicit) return explicit.toLowerCase();
+  }
+  return DEFAULT_FEE_TREASURY_ACCOUNT;
+}
+
+export interface FeeRouteContext {
+  readonly sourceNetwork?: string | null;
+  readonly destinationNetwork?: string | null;
+}
+
+/**
+ * Returns true when both the source and destination networks are NEAR Mainnet.
+ * Within FLOW, NEAR-to-NEAR Send and Convert transactions are gas-sponsored by
+ * FLOW and carry a 0% FLOW platform fee (Earn deposits keep their own fee).
+ */
+export function isNearToNearFlow(
+  sourceNetwork: string | null | undefined,
+  destinationNetwork: string | null | undefined,
+): boolean {
+  const src = (sourceNetwork ?? "").trim().toLowerCase();
+  const dst = (destinationNetwork ?? "").trim().toLowerCase();
+  return (
+    (src === "near-mainnet" || src === "near") &&
+    (dst === "near-mainnet" || dst === "near")
+  );
+}
+
 export function getCrossAssetSendAppFees(): readonly OneClickAppFee[] {
   const recipient = resolveFeeTreasuryAccount();
   if (!recipient || CROSS_ASSET_SEND_FEE_BPS <= 0) {
@@ -50,7 +82,14 @@ export function getConvertBridgeAppFees(): readonly OneClickAppFee[] {
 export function getOperationPlatformFeeBps(
   operation: "SEND" | "CONVERT" | "ADD_MONEY",
   isSameAsset: boolean,
+  route?: FeeRouteContext,
 ): number {
+  if (
+    (operation === "SEND" || operation === "CONVERT") &&
+    isNearToNearFlow(route?.sourceNetwork, route?.destinationNetwork)
+  ) {
+    return 0;
+  }
   if (operation === "CONVERT") {
     return isSameAsset ? 0 : CONVERT_BRIDGE_FEE_BPS;
   }
@@ -63,8 +102,9 @@ export function getOperationPlatformFeeBps(
 export function getOperationAppFees(
   operation: "SEND" | "CONVERT" | "ADD_MONEY",
   isSameAsset: boolean,
+  route?: FeeRouteContext,
 ): readonly OneClickAppFee[] {
-  const feeBps = getOperationPlatformFeeBps(operation, isSameAsset);
+  const feeBps = getOperationPlatformFeeBps(operation, isSameAsset, route);
   const recipient = resolveFeeTreasuryAccount();
   if (!recipient || feeBps <= 0) {
     return [];

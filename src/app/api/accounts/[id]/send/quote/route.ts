@@ -128,8 +128,20 @@ export async function POST(
     }
 
     const isSameAsset = source.id === destination.id;
-    const feeBps = getOperationPlatformFeeBps(body.operation, isSameAsset);
-    const appFees = getOperationAppFees(body.operation, isSameAsset);
+    const feeRoute = {
+      sourceNetwork: source.networkKey,
+      destinationNetwork: destination.networkKey,
+    };
+    const feeBps = getOperationPlatformFeeBps(
+      body.operation,
+      isSameAsset,
+      feeRoute,
+    );
+    const appFees = getOperationAppFees(
+      body.operation,
+      isSameAsset,
+      feeRoute,
+    );
     const { feeAtomic: platformFeeAtomic, grossAtomic: totalDebitAtomic } =
       grossUpForPlatformFee(amount, feeBps);
 

@@ -19,6 +19,7 @@ import {
 import {
   getOperationPlatformFeeBps,
   grossUpForPlatformFee,
+  isNearToNearFlow,
   maxPrincipalBeforePlatformFee,
 } from "../../../../domain/platform-fees.ts";
 import { useTranslation } from "../../../../components/language-provider.tsx";
@@ -587,8 +588,16 @@ function useOutgoingPreview(input: {
   const samePair = Boolean(
     sourceDeployment && sourceDeployment.id === destination.id,
   );
+  const gasSponsored = Boolean(
+    sourceDeployment &&
+      (operation === "SEND" || operation === "CONVERT") &&
+      isNearToNearFlow(sourceDeployment.networkKey, destination.networkKey),
+  );
   const feeBps = sourceDeployment
-    ? getOperationPlatformFeeBps(operation, samePair)
+    ? getOperationPlatformFeeBps(operation, samePair, {
+        sourceNetwork: sourceDeployment.networkKey,
+        destinationNetwork: destination.networkKey,
+      })
     : 0;
   const feeBreakdown = amountAtomic
     ? grossUpForPlatformFee(BigInt(amountAtomic), feeBps)
@@ -641,6 +650,7 @@ function useOutgoingPreview(input: {
           nativeBalanceAtomic: nativeGasRecord
             ? BigInt(nativeGasRecord.atomicBalance)
             : 0n,
+          gasSponsored,
         })
       : { ok: true as const };
   const insufficientGas = !gasCheck.ok;
@@ -756,6 +766,7 @@ function useOutgoingPreview(input: {
     canReview: Boolean(body),
     insufficientBalance,
     insufficientGas,
+    gasSponsored,
     samePair,
     directTransfer,
     unavailableReason,
@@ -790,6 +801,7 @@ function OutgoingQuoteDetails({
     review,
     feeBps,
     platformFeeDisplay,
+    gasSponsored,
   } = preview;
   const quoteReceiveUsd = quote
     ? computeDisplayUsd(
@@ -863,7 +875,7 @@ function OutgoingQuoteDetails({
             </div>
           </div>
 
-          {effectiveFeeBps > 0 && (
+          {effectiveFeeBps > 0 ? (
             <div className="flex items-start justify-between gap-3 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px]">
               <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
                 Platform fee ({Number((effectiveFeeBps / 100).toFixed(2))}%)
@@ -881,7 +893,16 @@ function OutgoingQuoteDetails({
                 )}
               </div>
             </div>
-          )}
+          ) : gasSponsored ? (
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px]">
+              <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
+                FLOW fee &amp; NEAR gas
+              </span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                Free (Sponsored by FLOW)
+              </span>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px] text-neutral-500 dark:text-neutral-400">
             <span className="font-medium text-neutral-700 dark:text-neutral-300">
@@ -922,7 +943,7 @@ function OutgoingQuoteDetails({
               Direct 1:1 transfer on {directTransfer.networkName}
             </span>
             <span className="font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-              Platform fee: Free
+              {gasSponsored ? "Gas & fee: Free (Sponsored)" : "Platform fee: Free"}
             </span>
           </div>
         </div>
@@ -1713,6 +1734,7 @@ export function PortfolioView({
   const getMaxAtomicForSource = (
     source: typeof sendSource,
     feeBps = 0,
+    gasSponsored = false,
   ): bigint => {
     if (!source) return 0n;
     try {
@@ -1726,6 +1748,7 @@ export function PortfolioView({
         networkKey: source.deployment.networkKey,
         sourceStandard: source.deployment.standard,
         balanceAtomic: atomic,
+        gasSponsored,
       });
       return maxPrincipalBeforePlatformFee(afterGas, feeBps);
     } catch {
@@ -1736,10 +1759,11 @@ export function PortfolioView({
   const getMaxAmountForSource = (
     source: typeof sendSource,
     feeBps = 0,
+    gasSponsored = false,
   ): string => {
     if (!source?.displayBalance) return "";
     try {
-      const maxAtomic = getMaxAtomicForSource(source, feeBps);
+      const maxAtomic = getMaxAtomicForSource(source, feeBps, gasSponsored);
       if (maxAtomic <= 0n) return "0";
       const exactMax = formatAtomicToDisplay(
         maxAtomic,
@@ -1778,10 +1802,22 @@ export function PortfolioView({
     [resolveTokenPriceUsd, sendDestDeployment],
   );
 
+  const sendIsNearGasless = Boolean(
+    sendSource &&
+      isNearToNearFlow(
+        sendSource.deployment.networkKey,
+        sendDestDeployment.networkKey,
+      ),
+  );
+
   const sendFeeBps = sendSource
     ? getOperationPlatformFeeBps(
         "SEND",
         sendSource.deployment.id === sendDestDeployment.id,
+        {
+          sourceNetwork: sendSource.deployment.networkKey,
+          destinationNetwork: sendDestDeployment.networkKey,
+        },
       )
     : 0;
 
@@ -1805,8 +1841,15 @@ export function PortfolioView({
     setSendAmount(nextAsset);
   };
 
-  const applySendMaxForFee = (feeBpsOverride: number) => {
-    const maxAsset = getMaxAmountForSource(sendSource, feeBpsOverride);
+  const applySendMaxForFee = (
+    feeBpsOverride: number,
+    gasSponsoredOverride = sendIsNearGasless,
+  ) => {
+    const maxAsset = getMaxAmountForSource(
+      sendSource,
+      feeBpsOverride,
+      gasSponsoredOverride,
+    );
     setSendAmount(maxAsset);
     setSendUsedMax(true);
     if (sendInputMode === "USD" && sendSourcePriceUsd) {
@@ -1825,7 +1868,7 @@ export function PortfolioView({
   };
 
   const handleSendMaxClick = () => {
-    applySendMaxForFee(sendFeeBps);
+    applySendMaxForFee(sendFeeBps, sendIsNearGasless);
   };
 
   const toggleSendInputMode = () => {
@@ -1871,10 +1914,22 @@ export function PortfolioView({
     [resolveTokenPriceUsd, convertDestDeployment],
   );
 
+  const convertIsNearGasless = Boolean(
+    convertSource &&
+      isNearToNearFlow(
+        convertSource.deployment.networkKey,
+        convertDestDeployment.networkKey,
+      ),
+  );
+
   const convertFeeBps = convertSource
     ? getOperationPlatformFeeBps(
         "CONVERT",
         convertSource.deployment.id === convertDestDeployment.id,
+        {
+          sourceNetwork: convertSource.deployment.networkKey,
+          destinationNetwork: convertDestDeployment.networkKey,
+        },
       )
     : 0;
 
@@ -3708,6 +3763,7 @@ export function PortfolioView({
                       const maxSendableStep2Atomic = getMaxAtomicForSource(
                         sendSource,
                         sendFeeBps,
+                        sendIsNearGasless,
                       );
                       const amountExceedsBalance = Boolean(
                         parsedAmountAtomic &&
@@ -3903,7 +3959,8 @@ export function PortfolioView({
                           {/* Helper / Validation Copy */}
                           {(() => {
                             const nativeReserve =
-                              sendSource?.deployment.standard === "NATIVE"
+                              sendSource?.deployment.standard === "NATIVE" &&
+                              !sendIsNearGasless
                                 ? NETWORK_GAS_RESERVES[
                                     sendSource.deployment.networkKey
                                   ]
@@ -3934,7 +3991,9 @@ export function PortfolioView({
                                         ? "Leave room for network gas and fees. Tap Max to adjust."
                                         : sendUsedMax && nativeReserve
                                           ? `${nativeReserve.minDisplay} ${nativeReserve.symbol} reserved for ${nativeReserve.networkLabel} network gas${nativeReserve.networkLabel === "Solana" || nativeReserve.networkLabel === "NEAR" ? " & rent" : ""}.`
-                                          : "Type an amount, then press Enter to continue."}
+                                          : sendIsNearGasless
+                                            ? "Gas sponsored by FLOW · 0% FLOW fee on NEAR."
+                                            : "Type an amount, then press Enter to continue."}
                               </p>
                             );
                           })()}
@@ -4000,11 +4059,19 @@ export function PortfolioView({
                             }
                             setSendDestDeploymentId(dep.id);
                             if (sendUsedMax && sendSource) {
+                              const nextGasSponsored = isNearToNearFlow(
+                                sendSource.deployment.networkKey,
+                                dep.networkKey,
+                              );
                               const nextFeeBps = getOperationPlatformFeeBps(
                                 "SEND",
                                 sendSource.deployment.id === dep.id,
+                                {
+                                  sourceNetwork: sendSource.deployment.networkKey,
+                                  destinationNetwork: dep.networkKey,
+                                },
                               );
-                              applySendMaxForFee(nextFeeBps);
+                              applySendMaxForFee(nextFeeBps, nextGasSponsored);
                             }
                           }}
                         />
@@ -4244,6 +4311,17 @@ export function PortfolioView({
                                 )}
                               </div>
 
+                              {sendIsNearGasless && (
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
+                                    Network gas
+                                  </span>
+                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                    Free (Sponsored by FLOW)
+                                  </span>
+                                </div>
+                              )}
+
                               {!isSameAsset &&
                                 sendFeeBps > 0 &&
                                 totalDebitDisplay && (
@@ -4453,6 +4531,7 @@ export function PortfolioView({
                               getMaxAmountForSource(
                                 convertSource,
                                 convertFeeBps,
+                                convertIsNearGasless,
                               ),
                             )
                           }

@@ -10,8 +10,8 @@ import {
 import { runtime, type FlowDb } from "../foundation/prisma.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import {
-  CONVERT_BRIDGE_FEE_BPS,
-  getConvertBridgeAppFees,
+  getOperationAppFees,
+  getOperationPlatformFeeBps,
   grossUpForPlatformFee,
 } from "../domain/platform-fees.ts";
 import { quoteOneClickPreview } from "./providers/one-click-preview.ts";
@@ -50,13 +50,13 @@ const FLOW_PRODUCT_KNOWLEDGE = [
   "- What FLOW is: FLOW (https://flow.devhub.forum) is a non-custodial multi-chain payments and money app that lets users send, receive, convert, request payments, and earn native yield across 4 mainnets (NEAR Mainnet, Solana Mainnet, Base Mainnet, and Ethereum Mainnet) from a single account, with no seed phrases and no manual network switching.",
   "- Onboarding & Custody: Users sign in with Google or an email one-time code (OTP). FLOW automatically provisions real non-custodial mainnet wallet addresses on NEAR, Solana, Base, and Ethereum backed by OutLayer MPC key management and on-chain wallet policies. Supports both Personal and Business/Team accounts (with team invites and role-based access).",
   "- @flow ID & Direct Links: Users can claim a human-readable handle like name@flow (e.g. flow.devhub.forum/name@flow). Sharing a direct @flow link opens a receipt-style landing page where anyone can either Pay with FLOW (lands directly in Send pre-filled with that @flow ID) or Pay with external wallet (opens an open-amount checkout page where they can pay in any supported token or chain via NEAR Intents and it settles on NEAR into the recipient's FLOW wallet).",
-  "- Send: Send supported assets to a @flow ID or a raw blockchain address (NEAR .near/implicit, Solana, Base/Ethereum 0x...). Same-asset direct sends have a 0% FLOW platform fee (network gas only). Cross-asset sends (sending one asset while the recipient receives another) route via NEAR Intents (1Click) with a 0.3% FLOW platform fee charged from the sender's wallet balance, with live estimated output shown before confirming.",
+  "- Send: Send supported assets to a @flow ID or a raw blockchain address (NEAR .near/implicit, Solana, Base/Ethereum 0x...). NEAR-to-NEAR sends (both native NEAR and NEAR tokens like USDC/USDT on NEAR) are completely gas-less (FLOW sponsors gas and token storage deposits) with 0% FLOW platform fee. Same-asset direct sends on other chains also have 0% FLOW fee (network gas only). Cross-chain / cross-asset sends involving non-NEAR chains route via NEAR Intents (1Click) with a 0.3% FLOW platform fee charged from the sender's wallet balance, with live estimated output shown before confirming.",
   "- Receive & Payment Links: Users can receive directly to their NEAR, Solana, Base, or Ethereum addresses (or QR codes), or create shareable Payment Links (Request tab -> New request). Payers do not need a FLOW account and can pay from any of 200+ supported tokens across chains via NEAR Intents. Payment Links support fixed or open amounts, choice of who pays routing fees (payer or creator), optional max payer limits, auto-refreshing quotes when expired links are reopened, and pause/delete controls. FLOW platform fee on Payment Links is 0%.",
-  "- Convert & Bridge: Swap or bridge between assets across the user's own FLOW wallets (e.g., SOL on Solana to USDC on Base or NEAR on NEAR Mainnet) using live NEAR Intents (1Click) quotes. FLOW platform fee is 1.5% charged from wallet balance, shown up front before confirming.",
-  "- Earn (Native Yield on NEAR): Users can earn yield directly from their own non-custodial NEAR wallet via LiNEAR Protocol (liquid stake NEAR for $LiNEAR with auto-compounding staking rewards; standard unstaking takes ~48 hours / ~4 NEAR epochs before claiming) and Burrow Finance (supply USDC on NEAR Mainnet for variable lending yield). FLOW charges a one-shot 0.3% deposit fee on Earn deposits and 0% on withdrawals and claims.",
+  "- Convert & Bridge: Swap or bridge between assets across the user's own FLOW wallets using live NEAR Intents (1Click) quotes. NEAR-to-NEAR conversions (e.g. NEAR <-> USDC on NEAR) are gas-less (gas sponsored by FLOW) with 0% FLOW platform fee. Cross-chain Convert & Bridge (involving Solana, Base, or Ethereum) carries a 1.5% FLOW platform fee charged from wallet balance, shown up front before confirming.",
+  "- Earn (Native Yield on NEAR): Users can earn yield directly from their own non-custodial NEAR wallet via LiNEAR Protocol (liquid stake NEAR for $LiNEAR with auto-compounding staking rewards; standard unstaking takes ~48 hours / ~4 NEAR epochs before claiming) and Burrow Finance (supply USDC on NEAR Mainnet for variable lending yield). FLOW charges a one-shot 0.3% deposit fee on Earn deposits and 0% on withdrawals and claims (standard NEAR gas applies on Earn).",
   "- Flow AI Assistant: Built right into FLOW. Can answer any question about FLOW, check live portfolio balances and USD values, draft and confirm sends to @flow IDs or raw addresses, preview and run cross-chain conversions, draft and publish payment links, share deposit addresses, check settlement status, take voice notes (tap the mic, including spoken 'name at flow' handles), sync conversation history across devices (History button), and draft/send support dispute emails straight to flow@devhub.forum. Every fund-moving action or dispute email always requires the user's explicit tap to confirm.",
   "- App Sections & Tools: Home/Portfolio (balances, Send, Receive, Convert, Request, Earn, Activity), Flow AI Assistant (/assistant), Activity timeline with tx hashes, Analytics (/analytics), Market Insights (/insights), Notifications (/notifications), Security & Settings (/security: profile, @flow ID, active sessions & device revocation, Google sign-in, light/dark mode, language selector, account deletion), plus public Docs (/docs), Whitepaper (/whitepaper), Blog (/blog), Terms (/terms), Privacy (/privacy), and Support (flow@devhub.forum).",
-  "- Fee Summary: Direct same-asset send = 0% | Cross-asset send = 0.3% | Payment Link checkout = 0% | Convert & Bridge = 1.5% | Earn deposit = 0.3% | Earn withdraw/claim = 0%.",
+  "- Fee Summary: NEAR-to-NEAR Send & Convert = 0% FLOW fee + gas sponsored by FLOW | Direct same-asset send (other chains) = 0% | Cross-chain send = 0.3% | Payment Link checkout = 0% | Cross-chain Convert & Bridge = 1.5% | Earn deposit = 0.3% | Earn withdraw/claim = 0%.",
 ].join("\n");
 
 function answerFlowProductQuestion(
@@ -111,10 +111,11 @@ function answerFlowProductQuestion(
   ) {
     return [
       "Here is the **FLOW fee schedule** (shown up front before you confirm):",
-      "- **Direct sends (same asset):** 0% FLOW fee (network gas only)",
-      "- **Cross-asset sends:** 0.3% FLOW fee (charged from wallet balance via NEAR Intents)",
+      "- **NEAR-to-NEAR Send & Convert:** 0% FLOW fee + **gas sponsored by FLOW** (free)",
+      "- **Direct sends (same asset, other chains):** 0% FLOW fee (network gas only)",
+      "- **Cross-chain sends:** 0.3% FLOW fee (charged from wallet balance via NEAR Intents)",
       "- **Payment Link checkouts:** 0% FLOW fee (creator chooses whether payer or creator covers routing fees)",
-      "- **Convert & Bridge:** 1.5% FLOW fee (charged from wallet balance)",
+      "- **Cross-chain Convert & Bridge:** 1.5% FLOW fee (charged from wallet balance)",
       "- **Earn deposits (LiNEAR / Burrow):** 0.3% one-shot FLOW deposit fee",
       "- **Earn withdrawals & claims:** 0% FLOW fee",
     ].join("\n");
@@ -1491,9 +1492,19 @@ export async function processAssistantQuery(params: {
           ]);
           const atomic = parseDisplayToAtomic(requestedAmount, srcDep.decimals);
           if (srcAsset && dstAsset && atomic > 0n) {
+            const feeRoute = {
+              sourceNetwork: srcDep.networkKey,
+              destinationNetwork: dstDep.networkKey,
+            };
+            const feeBps = getOperationPlatformFeeBps(
+              "CONVERT",
+              false,
+              feeRoute,
+            );
+            const appFees = getOperationAppFees("CONVERT", false, feeRoute);
             const { feeAtomic, grossAtomic } = grossUpForPlatformFee(
               atomic,
-              CONVERT_BRIDGE_FEE_BPS,
+              feeBps,
             );
             const preview = await quoteOneClickPreview({
               source: srcAsset,
@@ -1505,7 +1516,7 @@ export async function processAssistantQuery(params: {
               swapType: "EXACT_INPUT",
               recipient,
               refundTo,
-              appFees: getConvertBridgeAppFees(),
+              ...(appFees.length > 0 ? { appFees } : {}),
             });
             if (preview.ok) {
               const estOut = formatAiDisplayAmount(

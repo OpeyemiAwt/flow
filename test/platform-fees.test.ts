@@ -8,6 +8,7 @@ import {
   getOperationAppFees,
   getOperationPlatformFeeBps,
   grossUpForPlatformFee,
+  isNearToNearFlow,
   maxPrincipalBeforePlatformFee,
   splitPlatformFee,
 } from "../src/domain/platform-fees.ts";
@@ -15,6 +16,12 @@ import {
   checkNetworkGasBalance,
   computeMaxSendableAtomic,
 } from "../src/domain/supported-assets-catalog.ts";
+import {
+  buildSponsorGasTopupTransactionBytes,
+  buildSponsorStorageDepositTransactionBytes,
+  computeNearGasTopupYocto,
+  MAX_SINGLE_GAS_TOPUP_YOCTO,
+} from "../src/server/custody/near-gas-sponsor.ts";
 
 test("direct same-asset send is free, cross-asset send & earn charge 0.3% (30 bps), and convert charges 1.5% (150 bps)", () => {
   assert.equal(DIRECT_SEND_FEE_BPS, 0);
@@ -153,4 +160,100 @@ test("Solana native Max send leaves enough lamports for rent exemption plus base
     nativeBalanceAtomic: balanceAtomic,
   });
   assert.equal(tooClose.ok, false);
+});
+
+test("NEAR-to-NEAR Send and Convert waive FLOW platform fees & gas reserves, while cross-chain keeps fees", () => {
+  assert.equal(isNearToNearFlow("near-mainnet", "near-mainnet"), true);
+  assert.equal(isNearToNearFlow("near-mainnet", "base-mainnet"), false);
+  assert.equal(isNearToNearFlow("solana-mainnet", "near-mainnet"), false);
+
+  const nearToNear = {
+    sourceNetwork: "near-mainnet",
+    destinationNetwork: "near-mainnet",
+  };
+  const nearToBase = {
+    sourceNetwork: "near-mainnet",
+    destinationNetwork: "base-mainnet",
+  };
+
+  assert.equal(getOperationPlatformFeeBps("SEND", false, nearToNear), 0);
+  assert.deepEqual(getOperationAppFees("SEND", false, nearToNear), []);
+  assert.equal(getOperationPlatformFeeBps("CONVERT", false, nearToNear), 0);
+  assert.deepEqual(getOperationAppFees("CONVERT", false, nearToNear), []);
+
+  // Cross-chain still carries platform fee
+  assert.equal(getOperationPlatformFeeBps("SEND", false, nearToBase), 30);
+  assert.equal(getOperationAppFees("SEND", false, nearToBase)[0]?.fee, 30);
+  assert.equal(getOperationPlatformFeeBps("CONVERT", false, nearToBase), 150);
+  assert.equal(getOperationAppFees("CONVERT", false, nearToBase)[0]?.fee, 150);
+
+  // Gas-sponsored NEAR-to-NEAR allows 0 NEAR gas check & 100% Max sendable
+  const zeroNearFtCheck = checkNetworkGasBalance({
+    networkKey: "near-mainnet",
+    sourceStandard: "NEP141",
+    requestedAmountAtomic: 10_000_000n,
+    nativeBalanceAtomic: 0n,
+    gasSponsored: true,
+  });
+  assert.equal(zeroNearFtCheck.ok, true);
+
+  const fullBalance = 1_500_000_000_000_000_000_000_000n; // 1.5 NEAR
+  assert.equal(
+    computeMaxSendableAtomic({
+      networkKey: "near-mainnet",
+      sourceStandard: "NATIVE",
+      balanceAtomic: fullBalance,
+      gasSponsored: true,
+    }),
+    fullBalance,
+  );
+});
+
+test("NEAR gas sponsor top-up calculation and Borsh tx builders enforce safety bounds", () => {
+  // Brand-new 0-NEAR wallet sending USDC on NEAR gets storage lock + FT gas buffer (~0.012 NEAR)
+  const freshFtTopup = computeNearGasTopupYocto({
+    isNativeTransfer: false,
+    transferAmountYocto: 0n,
+    senderAccount: { exists: false, balanceYocto: 0n, storageUsageBytes: 0n },
+  });
+  assert.equal(freshFtTopup, 12_000_000_000_000_000_000_001n); // 0.012 NEAR + 1 yocto ft_transfer deposit
+
+  // Sending 100% Max of 2 NEAR gets exact deficit (~0.007 NEAR)
+  const maxNativeTopup = computeNearGasTopupYocto({
+    isNativeTransfer: true,
+    transferAmountYocto: 2_000_000_000_000_000_000_000_000n,
+    senderAccount: {
+      exists: true,
+      balanceYocto: 2_000_000_000_000_000_000_000_000n,
+      storageUsageBytes: 182n,
+    },
+  });
+  assert.equal(maxNativeTopup, 7_020_000_000_000_000_000_000n); // 0.00702 NEAR
+  assert.ok(maxNativeTopup <= MAX_SINGLE_GAS_TOPUP_YOCTO);
+
+  // Borsh Transfer & storage_deposit builders serialize cleanly
+  const pubKey = Buffer.alloc(32, 7);
+  const blockHash = "11111111111111111111111111111111";
+  const topupTx = buildSponsorGasTopupTransactionBytes({
+    signerId: "02e683a4da211743b6759d85a37e8ebe8d2ab22a22746d0c8c38f34395a0ae0c",
+    publicKeyBytes: pubKey,
+    nonce: 42n,
+    receiverId: "alice.near",
+    blockHashBase58: blockHash,
+    amountYocto: 5_000_000_000_000_000_000_000n,
+  });
+  assert.ok(topupTx.txBytes.length > 64);
+  assert.ok(topupTx.txHash.length > 20);
+
+  const storageTx = buildSponsorStorageDepositTransactionBytes({
+    signerId: "02e683a4da211743b6759d85a37e8ebe8d2ab22a22746d0c8c38f34395a0ae0c",
+    publicKeyBytes: pubKey,
+    nonce: 43n,
+    tokenContractId: "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+    accountToRegister: "bob.near",
+    blockHashBase58: blockHash,
+    depositYocto: 1_250_000_000_000_000_000_000n,
+  });
+  assert.ok(storageTx.txBytes.length > 100);
+  assert.match(storageTx.argsJson, /"registration_only":true/);
 });

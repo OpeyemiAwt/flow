@@ -746,7 +746,9 @@ export function checkNetworkGasBalance(params: {
   sourceStandard: string;
   requestedAmountAtomic: bigint;
   nativeBalanceAtomic: bigint;
+  gasSponsored?: boolean;
 }): NetworkGasCheckResult {
+  if (params.gasSponsored) return { ok: true };
   const reserve = NETWORK_GAS_RESERVES[params.networkKey];
   if (!reserve) return { ok: true };
 
@@ -788,8 +790,9 @@ export function computeMaxSendableAtomic(params: {
   networkKey: string;
   sourceStandard: string;
   balanceAtomic: bigint;
+  gasSponsored?: boolean;
 }): bigint {
-  if (params.sourceStandard !== "NATIVE") {
+  if (params.gasSponsored || params.sourceStandard !== "NATIVE") {
     return params.balanceAtomic > 0n ? params.balanceAtomic : 0n;
   }
   const reserve = NETWORK_GAS_RESERVES[params.networkKey];

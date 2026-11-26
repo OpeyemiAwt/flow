@@ -30,6 +30,7 @@ import {
 } from "../../domain/earn.ts";
 import {
   EARN_DEPOSIT_FEE_BPS,
+  isNearToNearFlow,
   resolveFeeTreasuryAccount,
   splitPlatformFee,
 } from "../../domain/platform-fees.ts";
@@ -41,7 +42,10 @@ import {
 import { FlowError } from "../../foundation/errors.ts";
 import { log } from "../../foundation/logger.ts";
 import type { FlowDb } from "../../foundation/prisma.ts";
-import type { WalletConfig } from "../../foundation/wallet-environment.ts";
+import type {
+  PolicySponsorConfig,
+  WalletConfig,
+} from "../../foundation/wallet-environment.ts";
 import { reconcileWalletBalances } from "../assets/connectors/multi-chain-reconciler.ts";
 import { callJsonRpc } from "../assets/connectors/rpc-client.ts";
 import { SOLANA_PROGRAMS } from "../assets/connectors/solana-connector.ts";
@@ -53,6 +57,10 @@ import {
   submitOneClickDepositTx,
 } from "../providers/one-click-adapter.ts";
 import { DEFAULT_RPC_ENDPOINTS } from "./blockchain-connectivity.ts";
+import {
+  sponsorNearSenderGas,
+  sponsorNearStorageDeposit,
+} from "./near-gas-sponsor.ts";
 import type { OutLayerAdapter } from "./outlayer-adapter.ts";
 
 const ERC20_TRANSFER_ABI = parseAbi([
@@ -1128,6 +1136,7 @@ async function executeNearTransfer(
   outlayer: OutLayerAdapter,
   targetAddress: string,
   markSigningStarted: () => Promise<void>,
+  sponsorConfig?: PolicySponsorConfig,
 ): Promise<{ txHash: string; requestId: string; feeAtomic: string }> {
   if (job.job_kind === "SEND" && isEarnMemo(job.provider_deposit_memo)) {
     return executeNearEarnJob(
@@ -1139,8 +1148,21 @@ async function executeNearTransfer(
       markSigningStarted,
     );
   }
+
+  const isNearGasless =
+    job.wallet_environment === "mainnet" &&
+    isNearToNearFlow(job.source_network, job.destination_network);
   const isNative = job.source_asset_id.toLowerCase() === "native";
   if (isNative) {
+    if (isNearGasless && sponsorConfig?.enabled) {
+      await sponsorNearSenderGas({
+        sponsorConfig,
+        senderAddress: job.source_address,
+        isNativeTransfer: true,
+        transferAmountYocto: BigInt(job.source_atomic_amount),
+        jobId: job.id,
+      });
+    }
     await markSigningStarted();
     const res = await outlayer.transferNearNative(apiKey, {
       chain: "near",
@@ -1179,19 +1201,42 @@ async function executeNearTransfer(
       {},
     );
     const storageDepositAmount = bounds?.min ?? "1250000000000000000000";
-    const depRes = await outlayer.callNearContract(apiKey, {
-      receiverId: tokenContract,
-      methodName: "storage_deposit",
-      args: { account_id: targetAddress, registration_only: true },
-      gas: "30000000000000",
-      deposit: storageDepositAmount,
+    let sponsoredStorage = false;
+    if (isNearGasless && sponsorConfig?.enabled) {
+      const storageSponsorRes = await sponsorNearStorageDeposit({
+        sponsorConfig,
+        tokenContractId: tokenContract,
+        accountToRegister: targetAddress,
+        depositYocto: BigInt(storageDepositAmount),
+        jobId: job.id,
+      });
+      sponsoredStorage = storageSponsorRes.sponsored;
+    }
+    if (!sponsoredStorage) {
+      const depRes = await outlayer.callNearContract(apiKey, {
+        receiverId: tokenContract,
+        methodName: "storage_deposit",
+        args: { account_id: targetAddress, registration_only: true },
+        gas: "30000000000000",
+        deposit: storageDepositAmount,
+      });
+      await pollOutLayerRequestForTxHash(
+        outlayer,
+        apiKey,
+        depRes.request_id,
+        depRes.tx_hash,
+      );
+    }
+  }
+
+  if (isNearGasless && sponsorConfig?.enabled) {
+    await sponsorNearSenderGas({
+      sponsorConfig,
+      senderAddress: job.source_address,
+      isNativeTransfer: false,
+      transferAmountYocto: 0n,
+      jobId: job.id,
     });
-    await pollOutLayerRequestForTxHash(
-      outlayer,
-      apiKey,
-      depRes.request_id,
-      depRes.tx_hash,
-    );
   }
 
   const ftRes = await outlayer.callNearContract(apiKey, {
@@ -1223,6 +1268,7 @@ export async function processNextQueuedOutgoingJob(
     readonly fallbackEncryptionKey?: string;
   },
   workerId: string,
+  sponsorConfig?: PolicySponsorConfig,
 ): Promise<boolean> {
   const claimed = await db.$queryRaw<ClaimedOutgoingCustodyJob[]>`
     SELECT * FROM flow.claim_outgoing_transfer_for_custody(
@@ -1303,6 +1349,7 @@ export async function processNextQueuedOutgoingJob(
         outlayer,
         targetAddress,
         markSigningStarted,
+        sponsorConfig,
       );
     } else {
       throw new FlowError(
@@ -1651,9 +1698,16 @@ export async function processOutgoingTransferCycle(
     readonly fallbackEncryptionKey?: string;
   },
   workerId: string,
+  sponsorConfig?: PolicySponsorConfig,
 ): Promise<void> {
   if (!isFinancialExecutionDisabled()) {
-    await processNextQueuedOutgoingJob(db, outlayer, walletConfig, workerId);
+    await processNextQueuedOutgoingJob(
+      db,
+      outlayer,
+      walletConfig,
+      workerId,
+      sponsorConfig,
+    );
   }
   await processOutgoingConfirmations(db, workerId);
 }

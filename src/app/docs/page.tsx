@@ -463,7 +463,19 @@ export default function DocsPage() {
               <tbody className="divide-y divide-[#e4e6e9] dark:divide-white/[0.06]">
                 <tr>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
-                    Direct sends (same asset)
+                    NEAR-to-NEAR Send &amp; Convert
+                  </td>
+                  <td className="px-4 py-3 font-medium text-[#2e7d53] dark:text-emerald-400">
+                    0% + Gas Sponsored
+                  </td>
+                  <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
+                    FLOW pays NEAR gas and token storage deposits when both
+                    source and destination are on NEAR Mainnet.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
+                    Direct sends (same asset, other chains)
                   </td>
                   <td className="px-4 py-3 font-medium text-[#2e7d53] dark:text-emerald-400">
                     0%
@@ -474,14 +486,14 @@ export default function DocsPage() {
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
-                    Cross-asset sends
+                    Cross-chain sends
                   </td>
                   <td className="px-4 py-3 font-medium text-[#0b0c0e] dark:text-white">
                     0.3%
                   </td>
                   <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
-                    Charged from wallet balance when sending one asset and
-                    settling another; shown in the live quote.
+                    Charged from wallet balance when sending across chains;
+                    shown in the live quote.
                   </td>
                 </tr>
                 <tr>

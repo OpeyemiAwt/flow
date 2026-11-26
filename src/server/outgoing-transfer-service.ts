@@ -30,10 +30,10 @@ import { getAccountFlowId, resolveFlowIdForSend } from "./flow-id-service.ts";
 import { ApiFailure, input, reply } from "./http.ts";
 import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import {
-  getConvertBridgeAppFees,
-  getCrossAssetSendAppFees,
+  getOperationAppFees,
   getOperationPlatformFeeBps,
   grossUpForPlatformFee,
+  isNearToNearFlow,
 } from "../domain/platform-fees.ts";
 import { fetchOneClickCommittedQuote } from "./providers/one-click-adapter.ts";
 
@@ -172,6 +172,7 @@ async function computeAvailableBalanceForDeployment(
   token: string,
   deploymentId: string,
   requestedAmountAtomic: bigint,
+  options?: { readonly gasSponsored?: boolean },
 ) {
   const deployment = MAINNET_SUPPORTED_DEPLOYMENTS.find(
     (d) => d.id === deploymentId,
@@ -298,6 +299,7 @@ async function computeAvailableBalanceForDeployment(
     sourceStandard: deployment.standard,
     requestedAmountAtomic,
     nativeBalanceAtomic,
+    gasSponsored: options?.gasSponsored,
   });
   if (!gasCheck.ok) {
     throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
@@ -387,7 +389,24 @@ export async function executeSendTransfer(
     throw new ApiFailure(400, "INVALID_RECIPIENT_ADDRESS");
   }
 
-  const sendFeeBps = getOperationPlatformFeeBps("SEND", !isCrossChainSend);
+  const sendFeeRoute = {
+    sourceNetwork: sourceDeployment.networkKey,
+    destinationNetwork: destDeployment.networkKey,
+  };
+  const isNearGasless = isNearToNearFlow(
+    sourceDeployment.networkKey,
+    destDeployment.networkKey,
+  );
+  const sendFeeBps = getOperationPlatformFeeBps(
+    "SEND",
+    !isCrossChainSend,
+    sendFeeRoute,
+  );
+  const sendAppFees = getOperationAppFees(
+    "SEND",
+    !isCrossChainSend,
+    sendFeeRoute,
+  );
   const { feeAtomic: sendPlatformFeeAtomic, grossAtomic: sendTotalDebitAtomic } =
     grossUpForPlatformFee(amountAtomic, sendFeeBps);
 
@@ -397,6 +416,7 @@ export async function executeSendTransfer(
       token,
       sourceDeployment.id,
       sendTotalDebitAtomic,
+      { gasSponsored: isNearGasless },
     );
   const wallet = portfolio.wallet;
   const walletId = wallet?.id;
@@ -435,7 +455,7 @@ export async function executeSendTransfer(
       swapType: "EXACT_INPUT",
       recipient: trimmedRecipient,
       refundTo: ownSourceAddress,
-      appFees: getCrossAssetSendAppFees(),
+      ...(sendAppFees.length > 0 ? { appFees: sendAppFees } : {}),
     });
     if (
       !committed.ok ||
@@ -608,7 +628,24 @@ export async function executeConvertTransfer(
     throw new ApiFailure(400, "INVALID_AMOUNT");
   }
 
-  const convertFeeBps = getOperationPlatformFeeBps("CONVERT", false);
+  const convertFeeRoute = {
+    sourceNetwork: sourceDeployment.networkKey,
+    destinationNetwork: destinationDeployment.networkKey,
+  };
+  const isNearGasless = isNearToNearFlow(
+    sourceDeployment.networkKey,
+    destinationDeployment.networkKey,
+  );
+  const convertFeeBps = getOperationPlatformFeeBps(
+    "CONVERT",
+    false,
+    convertFeeRoute,
+  );
+  const convertAppFees = getOperationAppFees(
+    "CONVERT",
+    false,
+    convertFeeRoute,
+  );
   const {
     feeAtomic: convertPlatformFeeAtomic,
     grossAtomic: convertTotalDebitAtomic,
@@ -620,6 +657,7 @@ export async function executeConvertTransfer(
       token,
       sourceDeployment.id,
       convertTotalDebitAtomic,
+      { gasSponsored: isNearGasless },
     );
   const wallet = portfolio.wallet;
   if (!wallet) {
@@ -645,7 +683,7 @@ export async function executeConvertTransfer(
     swapType: "EXACT_INPUT",
     recipient: ownDestinationAddress,
     refundTo: ownSourceAddress,
-    appFees: getConvertBridgeAppFees(),
+    ...(convertAppFees.length > 0 ? { appFees: convertAppFees } : {}),
   });
 
   if (
