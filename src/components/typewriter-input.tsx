@@ -115,6 +115,7 @@ function computeNextDiffState(
 function deriveWrapperLayoutClasses(
   inputClassName: string,
   explicitWrapperClassName?: string,
+  isHero = false,
 ): string {
   if (explicitWrapperClassName) {
     return `relative inline-grid align-middle ${explicitWrapperClassName}`;
@@ -141,7 +142,7 @@ function deriveWrapperLayoutClasses(
       picked.push(token);
     }
   }
-  if (!hasFlex1 && !hasWidth) {
+  if (!isHero && !hasFlex1 && !hasWidth) {
     picked.push("w-full");
   }
   return Array.from(new Set(picked)).join(" ");
@@ -217,8 +218,9 @@ export function TypewriterInput({
       : String(value)
     : uncontrolledValue;
 
-  const staggerMs = variant === "hero" ? 26 : 14;
-  const maxDelayMs = variant === "hero" ? 160 : 140;
+  const isHero = variant === "hero";
+  const staggerMs = isHero ? 26 : 14;
+  const maxDelayMs = isHero ? 160 : 140;
 
   const [diffState, setDiffState] = useState<DiffState>(() =>
     buildInitialState(strValue),
@@ -283,10 +285,13 @@ export function TypewriterInput({
   const computedWrapperClass = deriveWrapperLayoutClasses(
     className,
     wrapperClassName,
+    isHero,
   );
   const innerClassName = stripContainerSizingClasses(className);
-  const charAnimClass =
-    variant === "hero" ? "flow-type-char-hero" : "flow-type-char-field";
+  const isCentered = innerClassName.split(/\s+/).includes("text-center");
+  const charAnimClass = isHero
+    ? "flow-type-char-hero"
+    : "flow-type-char-field";
 
   const inputStyle: CSSProperties = {
     ...style,
@@ -308,6 +313,17 @@ export function TypewriterInput({
 
   return (
     <span className={computedWrapperClass} style={wrapperStyle}>
+      {/* Intrinsic width sizer for hero inputs — measures in the EXACT hero font size */}
+      {isHero && (
+        <span
+          aria-hidden="true"
+          className={`${innerClassName} col-start-1 row-start-1 invisible pointer-events-none select-none whitespace-pre min-w-[1.6ch]`}
+          style={mirrorStyle}
+        >
+          {strValue || rest.placeholder || "0"}
+        </span>
+      )}
+
       <input
         ref={setMergedRef}
         type={type}
@@ -362,7 +378,9 @@ export function TypewriterInput({
         <span
           ref={mirrorRef}
           aria-hidden="true"
-          className={`${innerClassName} col-start-1 row-start-1 block w-full min-w-0 pointer-events-none select-none overflow-hidden whitespace-pre ${
+          className={`${innerClassName} col-start-1 row-start-1 flex items-center ${
+            isCentered ? "justify-center" : "justify-start"
+          } w-full min-w-0 pointer-events-none select-none overflow-hidden whitespace-pre ${
             rest.disabled ? "opacity-50" : ""
           }`}
           style={mirrorStyle}
@@ -370,7 +388,9 @@ export function TypewriterInput({
           {diffState.entries.map((entry) => (
             <span
               key={entry.id}
-              className={entry.animate ? charAnimClass : "inline-block whitespace-pre"}
+              className={
+                entry.animate ? charAnimClass : "inline-block whitespace-pre"
+              }
               style={
                 entry.animate && entry.delayMs > 0
                   ? { animationDelay: `${entry.delayMs}ms` }

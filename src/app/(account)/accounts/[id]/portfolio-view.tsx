@@ -3746,10 +3746,7 @@ export function PortfolioView({
                               sendSourcePriceUsd,
                             ) ?? "$0.00")
                           : `${sendSourceBalance ? truncateDisplayFloor(sendSourceBalance, 4) : "0"} ${sendSource?.deployment.symbol ?? ""}`;
-                      const inputChWidth = Math.min(
-                        12,
-                        Math.max(1, (activeInputValue || "0").length) + 0.6,
-                      );
+                      const hasTypedAmount = activeInputValue.trim().length > 0;
 
                       return (
                         <div className="py-3 sm:py-5 flex flex-col items-center text-center space-y-6">
@@ -3765,7 +3762,9 @@ export function PortfolioView({
                                     ? `Switch to ${sendSource?.deployment.symbol ?? "asset"} input`
                                     : "Switch to USD input"
                                 }
-                                className="h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.08] flex items-center justify-center shrink-0 text-neutral-900 dark:text-white cursor-pointer disabled:cursor-default transition-colors hover:bg-neutral-200/80 dark:hover:bg-white/[0.12]"
+                                className={`h-10 w-10 rounded-full bg-neutral-100 dark:bg-white/[0.08] flex items-center justify-center shrink-0 text-neutral-900 dark:text-white cursor-pointer disabled:cursor-default transition-all duration-200 hover:bg-neutral-200/80 dark:hover:bg-white/[0.12] ${
+                                  hasTypedAmount ? "opacity-100" : "opacity-50"
+                                }`}
                               >
                                 {sendInputMode === "USD" ? (
                                   <span className="text-lg font-medium leading-none">
@@ -3791,8 +3790,7 @@ export function PortfolioView({
                                     : "Send amount"
                                 }
                                 value={activeInputValue}
-                                wrapperStyle={{ width: `${inputChWidth}ch` }}
-                                wrapperClassName="max-w-[70%] transition-[width] duration-150 ease-out"
+                                wrapperClassName="max-w-[72%]"
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
@@ -3812,7 +3810,7 @@ export function PortfolioView({
                                   }
                                 }}
                                 placeholder="0"
-                                className="w-full py-1 text-5xl sm:text-6xl font-medium tracking-tight bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-950 dark:placeholder:text-white focus:outline-hidden text-center tabular-nums"
+                                className="w-full px-2 py-1 text-5xl sm:text-6xl font-medium tracking-tight bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-950/25 dark:placeholder:text-white/25 focus:outline-hidden text-center tabular-nums"
                               />
 
                               <button
@@ -3831,7 +3829,9 @@ export function PortfolioView({
                                       ? `Enter in ${sendSource?.deployment.symbol ?? "asset"}`
                                       : "Enter in USD"
                                 }
-                                className="inline-flex items-center justify-center p-1 text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed shrink-0"
+                                className={`inline-flex items-center justify-center p-1 text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-all duration-200 cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed shrink-0 ${
+                                  hasTypedAmount ? "opacity-100" : "opacity-45"
+                                }`}
                               >
                                 <svg
                                   width="18"
@@ -3856,7 +3856,9 @@ export function PortfolioView({
                               type="button"
                               disabled={!sendSourcePriceUsd}
                               onClick={toggleSendInputMode}
-                              className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors cursor-pointer disabled:cursor-default tabular-nums"
+                              className={`text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-all duration-200 cursor-pointer disabled:cursor-default tabular-nums ${
+                                hasTypedAmount ? "opacity-100" : "opacity-45"
+                              }`}
                             >
                               {secondaryConversionText}
                             </button>

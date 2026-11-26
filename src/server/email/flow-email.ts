@@ -592,6 +592,7 @@ async function deliverViaResend(params: {
   subject: string;
   html: string;
   text: string;
+  replyTo?: string | null;
   unsubscribeUrl?: string | null;
 }): Promise<{ ok: boolean; providerMessageId?: string }> {
   const cfg = resolveMailerConfig();
@@ -606,7 +607,7 @@ async function deliverViaResend(params: {
     const body: Record<string, unknown> = {
       from: cfg.from,
       to: [params.to],
-      reply_to: SUPPORT_EMAIL,
+      reply_to: params.replyTo?.trim() || SUPPORT_EMAIL,
       subject: params.subject,
       html: params.html,
       text: params.text,
@@ -964,4 +965,102 @@ export async function dispatchBlogNewsletterToSubscribers(
   }
 
   return { postSlug: post.slug, attempted: subscribers.length, sent };
+}
+
+export async function sendDisputeSupportEmail(params: {
+  readonly referenceCode: string;
+  readonly subject: string;
+  readonly category: string;
+  readonly message: string;
+  readonly transactionRef?: string | null;
+  readonly userEmail: string;
+  readonly userName?: string | null;
+  readonly accountId: string;
+  readonly flowId?: string | null;
+}): Promise<{ ok: boolean; supportEmail: string }> {
+  const cleanSubject = params.subject.trim().slice(0, 140) || "User Dispute";
+  const cleanCategory = params.category.trim().slice(0, 60) || "General Dispute";
+  const cleanMessage = params.message.trim().slice(0, 3000);
+  const cleanTxRef = params.transactionRef?.trim().slice(0, 140) || null;
+  const senderLabel = params.userName?.trim()
+    ? `${params.userName.trim()} (${params.userEmail})`
+    : params.userEmail;
+
+  const emailSubject = `[FLOW Dispute · ${params.referenceCode}] ${cleanSubject}`;
+
+  const detailRow = (label: string, value: string, mono = false) => `
+    <tr>
+      <td style="padding:11px 0;border-bottom:1px solid #ECEAE4;font-size:13px;color:#6B7280;width:34%;vertical-align:top;">${escapeHtml(label)}</td>
+      <td style="padding:11px 0;border-bottom:1px solid #ECEAE4;font-size:13.5px;font-weight:600;color:#0B0C0E;text-align:right;word-break:break-word;${mono ? "font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12.5px;" : ""}">${escapeHtml(value)}</td>
+    </tr>
+  `;
+
+  const bodyHtml = `
+    <p style="margin:0 0 8px;font-size:11.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#FF1A1A;">Dispute Submitted via Flow AI</p>
+    <h1 class="flow-h1" style="margin:0 0 18px;font-size:25px;font-weight:600;letter-spacing:-0.02em;line-height:1.22;color:#0B0C0E;">
+      ${escapeHtml(cleanSubject)}
+    </h1>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;border-top:1px solid #ECEAE4;">
+      ${detailRow("Reference", params.referenceCode, true)}
+      ${detailRow("Category", cleanCategory)}
+      ${detailRow("From", senderLabel)}
+      ${params.flowId ? detailRow("FLOW ID", params.flowId, true) : ""}
+      ${detailRow("Account ID", params.accountId, true)}
+      ${cleanTxRef ? detailRow("Transaction / Link Ref", cleanTxRef, true) : ""}
+    </table>
+
+    <p style="margin:0 0 8px;font-size:11.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">User Message</p>
+    <div style="margin:0 0 24px;padding:18px 20px;background-color:#FAF8F5;border:1px solid #ECEAE4;border-radius:14px;font-size:14.5px;line-height:1.65;color:#111827;white-space:pre-wrap;">${escapeHtml(cleanMessage)}</div>
+
+    <p style="margin:0;font-size:12.5px;line-height:1.6;color:#6B7280;">
+      Reply directly to this email to respond to <strong style="color:#0B0C0E;">${escapeHtml(params.userEmail)}</strong>.
+    </p>
+  `;
+
+  const html = wrapFlowEmailShell({
+    preheader: `Dispute ${params.referenceCode}: ${cleanSubject}`,
+    headerBadge: "Dispute",
+    bodyHtml,
+  });
+
+  const text = [
+    `FLOW Dispute (${params.referenceCode})`,
+    `Subject: ${cleanSubject}`,
+    `Category: ${cleanCategory}`,
+    `From: ${senderLabel}`,
+    params.flowId ? `FLOW ID: ${params.flowId}` : null,
+    `Account ID: ${params.accountId}`,
+    cleanTxRef ? `Transaction / Link Ref: ${cleanTxRef}` : null,
+    "",
+    "User Message:",
+    cleanMessage,
+    "",
+    `Reply directly to this email to answer ${params.userEmail}.`,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+
+  const delivered = await deliverViaResend({
+    to: SUPPORT_EMAIL,
+    replyTo: params.userEmail,
+    subject: emailSubject,
+    html,
+    text,
+  });
+
+  if (delivered.ok) {
+    log("info", "flow_dispute_email_sent", {
+      referenceCode: params.referenceCode,
+      accountId: params.accountId,
+      providerMessageId: delivered.providerMessageId ?? null,
+    });
+  } else {
+    log("error", "flow_dispute_email_failed", {
+      referenceCode: params.referenceCode,
+      accountId: params.accountId,
+    });
+  }
+
+  return { ok: delivered.ok, supportEmail: SUPPORT_EMAIL };
 }
