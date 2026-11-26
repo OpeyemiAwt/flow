@@ -3003,6 +3003,7 @@ export function PortfolioView({
     router.prefetch(`/assistant?account=${accountId}`);
     router.prefetch(`/notifications?account=${accountId}`);
     router.prefetch("/insights");
+    router.prefetch("/agents");
     router.prefetch("/security");
   }, [accountId, router]);
 

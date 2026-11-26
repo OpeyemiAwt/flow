@@ -26,7 +26,11 @@ export function startRouteTransition(targetHref: string) {
 
 function renderSkeletonForPath(path: string) {
   if (path.startsWith("/assistant")) return <AssistantPageSkeleton />;
-  if (path.startsWith("/insights") || path.startsWith("/analytics")) {
+  if (
+    path.startsWith("/insights") ||
+    path.startsWith("/analytics") ||
+    path.startsWith("/agents")
+  ) {
     return <InsightsPageSkeleton />;
   }
   if (
