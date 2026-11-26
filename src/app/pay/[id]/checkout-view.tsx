@@ -29,6 +29,7 @@ import {
   supportsQuoteAddress,
   validateQuoteAddress,
 } from "../../../domain/quote-addresses.ts";
+import { InfoTooltip } from "../../../components/info-tooltip.tsx";
 
 function formatNetworkDisplay(network: string | null | undefined): string {
   const norm = (network ?? "").toLowerCase().trim();
@@ -45,6 +46,70 @@ function formatNetworkDisplay(network: string | null | undefined): string {
     return norm.includes("sepolia") ? "Ethereum Sepolia" : "Ethereum Mainnet";
   }
   return network || "Supported Network";
+}
+
+function formatCheckoutAmount(
+  raw: string | null | undefined,
+  maxDecimals = 4,
+): string {
+  if (!raw) return "—";
+  const cleaned = raw.trim().replace(/,/g, "");
+  if (!cleaned) return "—";
+  const parsed = Number.parseFloat(cleaned);
+  if (!Number.isFinite(parsed)) return raw;
+  if (parsed === 0) return "0";
+  const effectiveDecimals =
+    parsed > 0 && parsed < 0.01 ? Math.max(maxDecimals, 6) : maxDecimals;
+  if (/^\d+(\.\d+)?$/.test(cleaned)) {
+    const [intPart, fracPart = ""] = cleaned.split(".");
+    if (!fracPart) return intPart || "0";
+    const truncated = fracPart.slice(0, effectiveDecimals).replace(/0+$/, "");
+    if (!truncated) {
+      if ((intPart === "0" || intPart === "") && /[1-9]/.test(fracPart)) {
+        return `<0.${"0".repeat(effectiveDecimals - 1)}1`;
+      }
+      return intPart || "0";
+    }
+    return `${intPart || "0"}.${truncated}`;
+  }
+  const factor = 10 ** effectiveDecimals;
+  const floored = Math.floor(parsed * factor) / factor;
+  if (floored === 0 && parsed > 0) {
+    return `<0.${"0".repeat(effectiveDecimals - 1)}1`;
+  }
+  return floored.toFixed(effectiveDecimals).replace(/\.?0+$/, "");
+}
+
+function buildCheckoutFeeTooltip(quote: IndicativeQuote) {
+  const items: string[] = [];
+  if (
+    quote.fees.withdrawFeeDisplay !== null &&
+    quote.fees.withdrawFeeDisplay !== undefined
+  ) {
+    items.push(
+      `Withdrawal fee: ${formatCheckoutAmount(quote.fees.withdrawFeeDisplay)} ${quote.fees.withdrawFeeAssetSymbol ?? quote.destinationAssetSymbol}`,
+    );
+  }
+  if (
+    quote.fees.refundFeeDisplay !== null &&
+    quote.fees.refundFeeDisplay !== undefined
+  ) {
+    items.push(
+      `Refund fee (if refunded): ${formatCheckoutAmount(quote.fees.refundFeeDisplay)} ${quote.fees.refundFeeAssetSymbol ?? quote.sourceAssetSymbol}`,
+    );
+  }
+  return (
+    <div className="space-y-1">
+      <p>Network and solver fees are included in the quoted output.</p>
+      {items.length > 0 && (
+        <ul className="space-y-0.5 text-neutral-300">
+          {items.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 import {
   MAINNET_SUPPORTED_DEPLOYMENTS,
@@ -536,7 +601,7 @@ export function CheckoutView({
   const quotedSendAmount = quote?.sourceDisplayAmount ?? directDisplay;
   const displaySource =
     quotedSendAmount && selectedSource
-      ? quotedSendAmount + " " + selectedSource.symbol
+      ? `${formatCheckoutAmount(quotedSendAmount)} ${selectedSource.symbol}`
       : "—";
   const flowFee = quote?.fees.appFeeBps === 0 ? "0" : "Unavailable";
   const routeUnavailable = Boolean(
@@ -836,10 +901,12 @@ export function CheckoutView({
                 <span className="text-neutral-500 dark:text-neutral-400">
                   Settled Amount
                 </span>
-                <span className="font-display text-base font-bold text-neutral-950 dark:text-white">
-                  {instructions?.destinationDisplayAmount ??
-                    request.displayAmount ??
-                    "1.00"}{" "}
+                <span className="font-display text-base font-bold text-neutral-950 dark:text-white tabular-nums">
+                  {formatCheckoutAmount(
+                    instructions?.destinationDisplayAmount ??
+                      request.displayAmount ??
+                      "1.00",
+                  )}{" "}
                   {instructions?.destinationAssetSymbol ??
                     request.destinationAssetSymbol ??
                     "USDC"}
@@ -1102,9 +1169,13 @@ export function CheckoutView({
                         {request.recipientName}
                       </strong>{" "}
                       • Due:{" "}
-                      <strong className="text-neutral-950 dark:text-white">
-                        {request.displayAmount} {request.destinationAssetSymbol}{" "}
-                        on {request.destinationNetwork}
+                      <strong className="text-neutral-950 dark:text-white tabular-nums">
+                        {formatCheckoutAmount(
+                          request.displayAmount ??
+                            instructions.destinationDisplayAmount,
+                        )}{" "}
+                        {request.destinationAssetSymbol} on{" "}
+                        {formatNetworkDisplay(request.destinationNetwork)}
                       </strong>
                     </p>
                   </div>
@@ -1161,8 +1232,8 @@ export function CheckoutView({
                             <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block">
                               Exact Amount to Send
                             </span>
-                            <div className="flex items-center justify-between gap-2 mt-0.5">
-                              <span className="font-display text-2xl font-bold text-neutral-950 dark:text-white">
+                            <div className="flex items-start justify-between gap-2 mt-0.5">
+                              <span className="min-w-0 break-all font-display text-xl sm:text-2xl font-bold text-neutral-950 dark:text-white tabular-nums">
                                 {instructions.requiredDisplayAmount}{" "}
                                 <span className="text-[#FF1A1A]">
                                   {instructions.sourceAssetSymbol}
@@ -1172,7 +1243,7 @@ export function CheckoutView({
                                 type="button"
                                 onClick={handleCopyAmount}
                                 disabled={isDepositExpired}
-                                className="flow-liquid-btn rounded-full px-2.5 py-1 text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 disabled:opacity-40 cursor-pointer"
+                                className="shrink-0 flow-liquid-btn rounded-full px-2.5 py-1 text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 disabled:opacity-40 cursor-pointer"
                               >
                                 {copiedAmount ? "Copied" : "Copy Amount"}
                               </button>
@@ -1180,7 +1251,7 @@ export function CheckoutView({
                             <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
                               Source Network:{" "}
                               <strong className="text-neutral-900 dark:text-white">
-                                {instructions.sourceNetwork}
+                                {formatNetworkDisplay(instructions.sourceNetwork)}
                               </strong>
                             </p>
                           </div>
@@ -1315,8 +1386,10 @@ export function CheckoutView({
                       <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
                         Send only{" "}
                         <strong>{instructions.sourceAssetSymbol}</strong> on{" "}
-                        <strong>{instructions.sourceNetwork}</strong>. Other
-                        assets or networks cannot be recovered.
+                        <strong>
+                          {formatNetworkDisplay(instructions.sourceNetwork)}
+                        </strong>
+                        . Other assets or networks cannot be recovered.
                       </p>
                       <p className="text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300">
                         This deposit address is valid for{" "}
@@ -1583,7 +1656,9 @@ export function CheckoutView({
                           inputMode="decimal"
                           value={
                             request.amountMode === "FIXED"
-                              ? (quotedSendAmount ?? "")
+                              ? quotedSendAmount
+                                ? formatCheckoutAmount(quotedSendAmount, 6)
+                                : ""
                               : customAmount
                           }
                           onKeyDown={(event) => {
@@ -1636,12 +1711,14 @@ export function CheckoutView({
                           ? "Personal wallet refund address required for exchange withdrawals"
                           : "Payer refund address"}
                       </label>
-                      <span
-                        className="text-[11px] text-neutral-400 dark:text-neutral-500"
-                        title="Personal wallet address used for refunds"
-                      >
-                        ⓘ
-                      </span>
+                      <InfoTooltip
+                        label="About payer refund address"
+                        content={
+                          payerMode === "EXCHANGE"
+                            ? "Enter a personal wallet address you control on the source network. Never use an exchange deposit address for refunds."
+                            : "Personal wallet address on the source network used automatically if this payment needs to be refunded."
+                        }
+                      />
                     </div>
                     <div className="relative flex items-center">
                       <input
@@ -1738,17 +1815,32 @@ export function CheckoutView({
                           {flowFee}
                         </dd>
                       </div>
-                      <div className="flex justify-between gap-3">
-                        <dt className="shrink-0 max-w-[40%]">
-                          Network &amp; route fee
-                        </dt>
-                        <dd className="text-right font-semibold text-neutral-950 dark:text-white">
-                          {request.feePayer === "MERCHANT"
-                            ? "Routing fee covered by recipient (deducted from settlement)."
-                            : (quote?.fees.description ??
-                              (directDisplay
-                                ? "Network fee unavailable until broadcast."
-                                : "Unavailable"))}
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="shrink-0">Network &amp; route fee</dt>
+                        <dd className="inline-flex items-center justify-end gap-1.5 text-right font-semibold text-neutral-950 dark:text-white">
+                          <span>
+                            {request.feePayer === "MERCHANT"
+                              ? "Covered by recipient"
+                              : quote
+                                ? "Included in quote"
+                                : directDisplay
+                                  ? "Network gas only"
+                                  : "Unavailable"}
+                          </span>
+                          {(request.feePayer === "MERCHANT" ||
+                            quote ||
+                            directDisplay) && (
+                            <InfoTooltip
+                              label="Fee breakdown"
+                              content={
+                                request.feePayer === "MERCHANT"
+                                  ? "Routing fees are covered by the recipient and deducted from final settlement."
+                                  : quote
+                                    ? buildCheckoutFeeTooltip(quote)
+                                    : "Standard network gas is paid directly from your wallet when you broadcast the transfer."
+                              }
+                            />
+                          )}
                         </dd>
                       </div>
                       <div className="flex justify-between gap-3 border-t border-neutral-200 dark:border-white/[0.08] pt-2">
@@ -1829,14 +1921,15 @@ export function CheckoutView({
                   </div>
 
                   {/* Amount Due */}
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 block">
                       Amount due
                     </span>
-                    <p className="mt-1 font-display text-3xl font-extrabold text-neutral-950 dark:text-white">
-                      {request.displayAmount ??
-                        quote?.destinationDisplayAmount ??
-                        "—"}{" "}
+                    <p className="mt-1 min-w-0 break-words font-display text-3xl font-extrabold text-neutral-950 dark:text-white tabular-nums">
+                      {formatCheckoutAmount(
+                        request.displayAmount ??
+                          quote?.destinationDisplayAmount,
+                      )}{" "}
                       {request.destinationAssetSymbol}
                     </p>
                   </div>
@@ -1846,14 +1939,17 @@ export function CheckoutView({
                     <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 block mb-1.5">
                       Recipient receives
                     </span>
-                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A]">
+                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] min-w-0">
                       <AssetAvatar
                         symbol={request.destinationAssetSymbol}
                         size={24}
                       />
-                      <span className="font-display font-bold text-xs text-neutral-950 dark:text-white">
-                        {request.displayAmount} {request.destinationAssetSymbol}{" "}
-                        on {request.destinationNetwork}
+                      <span className="min-w-0 truncate font-display font-bold text-xs text-neutral-950 dark:text-white tabular-nums">
+                        {request.displayAmount
+                          ? `${formatCheckoutAmount(request.displayAmount)} `
+                          : ""}
+                        {request.destinationAssetSymbol} on{" "}
+                        {formatNetworkDisplay(request.destinationNetwork)}
                       </span>
                     </div>
                   </div>
@@ -1864,33 +1960,37 @@ export function CheckoutView({
                       Route
                     </span>
                     <div className="p-3.5 rounded-2xl border border-neutral-200/80 dark:border-white/[0.08] bg-neutral-50/70 dark:bg-[#1A1A1A] space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <AssetAvatar
                             symbol={selectedSource?.symbol ?? ""}
                             size={22}
                           />
-                          <span className="font-bold text-xs text-neutral-950 dark:text-white">
-                            {selectedSource?.symbol}
-                          </span>
-                          <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                            {selectedSource?.networkName}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-neutral-950 dark:text-white block leading-tight">
+                              {selectedSource?.symbol}
+                            </span>
+                            <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block truncate leading-tight">
+                              {selectedSource?.networkName}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-neutral-400 font-bold">
+                        <span className="shrink-0 text-neutral-400 font-bold text-xs">
                           ······&gt;
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <AssetAvatar
                             symbol={request.destinationAssetSymbol}
                             size={22}
                           />
-                          <span className="font-bold text-xs text-neutral-950 dark:text-white">
-                            {request.destinationAssetSymbol}
-                          </span>
-                          <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                            {request.destinationNetwork}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-neutral-950 dark:text-white block leading-tight">
+                              {request.destinationAssetSymbol}
+                            </span>
+                            <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block truncate leading-tight">
+                              {formatNetworkDisplay(request.destinationNetwork)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                       <div className="pt-1 flex justify-center">
@@ -1912,31 +2012,32 @@ export function CheckoutView({
 
                   {/* You'll send (exact) summary box */}
                   <div className="p-4 rounded-2xl bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                    <div className="min-w-0 flex-[1_1_12rem]">
+                    <div className="min-w-0 flex-[1_1_10rem]">
                       <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 block">
                         You’ll send (estimated)
                       </span>
-                      <p className="mt-0.5 break-all font-display text-2xl font-extrabold text-neutral-950 dark:text-white">
-                        {quotedSendAmount ?? "—"}{" "}
+                      <p className="mt-0.5 break-words font-display text-2xl font-extrabold text-neutral-950 dark:text-white tabular-nums">
+                        {formatCheckoutAmount(quotedSendAmount)}{" "}
                         <span className="inline-block text-sm font-bold text-neutral-700 dark:text-neutral-300">
                           {selectedSource?.symbol}
                         </span>
                       </p>
                     </div>
-                    <div className="text-right text-xs space-y-1">
+                    <div className="text-right text-xs space-y-1 min-w-0">
                       <div>
                         <span className="text-neutral-500 dark:text-neutral-400">
                           Flow fee {flowFee}
                         </span>
                       </div>
-                      <div>
+                      <div className="tabular-nums">
                         <span className="text-neutral-500 dark:text-neutral-400">
                           Recipient receives{" "}
                         </span>
                         <span className="font-bold text-neutral-950 dark:text-white">
-                          {quote?.destinationDisplayAmount ??
-                            request.displayAmount ??
-                            "—"}{" "}
+                          {formatCheckoutAmount(
+                            quote?.destinationDisplayAmount ??
+                              request.displayAmount,
+                          )}{" "}
                           {request.destinationAssetSymbol}
                         </span>
                       </div>
@@ -1959,7 +2060,7 @@ export function CheckoutView({
                           Direct {request.destinationAssetSymbol} Payment
                         </span>
                         <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
-                          {request.destinationNetwork}
+                          {formatNetworkDisplay(request.destinationNetwork)}
                         </span>
                       </div>
                       <div className="flex justify-center py-2">
@@ -1983,9 +2084,10 @@ export function CheckoutView({
                         </button>
                       </div>
                       <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
-                        Send exactly {quotedSendAmount ?? "—"}{" "}
-                        {selectedSource?.symbol} on {request.destinationNetwork}
-                        . Deposits to this verified address settle directly into
+                        Send exactly {formatCheckoutAmount(quotedSendAmount, 6)}{" "}
+                        {selectedSource?.symbol} on{" "}
+                        {formatNetworkDisplay(request.destinationNetwork)}.
+                        Deposits to this verified address settle directly into
                         the recipient’s wallet.
                       </p>
                     </div>

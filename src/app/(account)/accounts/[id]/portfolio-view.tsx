@@ -38,6 +38,7 @@ import {
 import { UnifiedAssetSelectorModal } from "../../../../components/unified-asset-selector-modal.tsx";
 import type { DiscoveredToken } from "../../../../server/providers/near-intents-discovery.ts";
 import { QrCode } from "../../../../components/qr-code.tsx";
+import { InfoTooltip } from "../../../../components/info-tooltip.tsx";
 import {
   AssetAvatar,
   ChainBadge,
@@ -4063,9 +4064,17 @@ export function PortfolioView({
                             </p>
                           )
                         ) : (
-                          <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                            ⓘ Enter a {sendDestDeployment.networkName} ({sendDestDeployment.symbol}) address or a recipient&apos;s <span className="font-mono">@flow</span> ID.
-                          </p>
+                          <div className="flex items-start gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+                            <InfoTooltip
+                              size={13}
+                              className="mt-0.5"
+                              label="About recipient formats"
+                              content="Send directly to a wallet address on the selected network or enter another user's @flow ID."
+                            />
+                            <span>
+                              Enter a {sendDestDeployment.networkName} ({sendDestDeployment.symbol}) address or a recipient&apos;s <span className="font-mono">@flow</span> ID.
+                            </span>
+                          </div>
                         )}
                       </div>
 
@@ -4499,14 +4508,22 @@ export function PortfolioView({
                       selectedId={convertDestDeployment.id}
                       onSelect={(dep) => setConvertDestDeploymentId(dep.id)}
                     />
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 pt-1 font-mono">
-                      ⓘ Auto-deposits into your registered{" "}
-                      {convertDestDeployment.networkName} wallet:{" "}
-                      <span className="font-bold text-neutral-800 dark:text-neutral-200">
-                        {truncateMiddle(convertDestAddress, 8, 6) ||
-                          "Wallet address unavailable"}
+                    <div className="flex items-start gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400 pt-1 font-mono">
+                      <InfoTooltip
+                        size={13}
+                        className="mt-0.5 font-sans"
+                        label="About auto-deposit"
+                        content="Converted funds settle automatically into your own Flow wallet address on the destination network."
+                      />
+                      <span>
+                        Auto-deposits into your registered{" "}
+                        {convertDestDeployment.networkName} wallet:{" "}
+                        <span className="font-bold text-neutral-800 dark:text-neutral-200">
+                          {truncateMiddle(convertDestAddress, 8, 6) ||
+                            "Wallet address unavailable"}
+                        </span>
                       </span>
-                    </p>
+                    </div>
                   </div>
 
                   <OutgoingQuoteDetails
@@ -4774,10 +4791,18 @@ export function PortfolioView({
                     </div>
                   </div>
 
-                  <div className="pt-2 text-[11px] text-neutral-500 dark:text-neutral-400">
-                    ⓘ Minimum deposit: Any positive {depositDeployment.symbol}{" "}
-                    transfer on {depositDeployment.networkName} (plus network
-                    gas).
+                  <div className="flex items-start gap-1.5 pt-2 text-[11px] text-neutral-500 dark:text-neutral-400">
+                    <InfoTooltip
+                      size={13}
+                      className="mt-0.5"
+                      label="About minimum deposit"
+                      content="Any positive deposit on this network credits directly to your Flow wallet. Network gas is paid by the sending wallet."
+                    />
+                    <span>
+                      Minimum deposit: Any positive {depositDeployment.symbol}{" "}
+                      transfer on {depositDeployment.networkName} (plus network
+                      gas).
+                    </span>
                   </div>
                 </div>
 
@@ -5003,26 +5028,34 @@ export function PortfolioView({
                     </p>
                   </div>
 
-                  <div className="pt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
-                    {crossChainQuote?.minimumRecipientDisplayAmount ? (
-                      <>
-                        ⓘ Minimum for{" "}
-                        {crossChainSourceToken?.symbol ?? "selected token"} →
-                        NEAR:{" "}
-                        <span className="font-semibold text-neutral-700 dark:text-neutral-300">
-                          {formatApproxDisplay(
-                            crossChainQuote.minimumRecipientDisplayAmount,
-                          )}{" "}
-                          NEAR
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        ⓘ Enter an amount to quote the live{" "}
-                        {crossChainSourceToken?.symbol ?? "selected token"} →
-                        NEAR minimum.
-                      </>
-                    )}
+                  <div className="flex items-start gap-1.5 pt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                    <InfoTooltip
+                      size={13}
+                      className="mt-0.5"
+                      label="About cross-chain minimum"
+                      content="Cross-chain deposits require a minimum settlement output to cover solver routing and destination network delivery."
+                    />
+                    <span>
+                      {crossChainQuote?.minimumRecipientDisplayAmount ? (
+                        <>
+                          Minimum for{" "}
+                          {crossChainSourceToken?.symbol ?? "selected token"} →
+                          NEAR:{" "}
+                          <span className="font-semibold text-neutral-700 dark:text-neutral-300">
+                            {formatApproxDisplay(
+                              crossChainQuote.minimumRecipientDisplayAmount,
+                            )}{" "}
+                            NEAR
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          Enter an amount to quote the live{" "}
+                          {crossChainSourceToken?.symbol ?? "selected token"} →
+                          NEAR minimum.
+                        </>
+                      )}
+                    </span>
                   </div>
                 </div>
 
@@ -5833,10 +5866,18 @@ export function PortfolioView({
                   )}
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                      ⓘ Payer source options (tokens and networks) are chosen
-                      later at guest checkout.
-                    </p>
+                    <div className="flex items-start gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <InfoTooltip
+                        size={13}
+                        className="mt-0.5"
+                        label="About payer options"
+                        content="Payers can choose any supported token and network at checkout, and Flow automatically converts and settles into your chosen asset."
+                      />
+                      <span>
+                        Payer source options (tokens and networks) are chosen
+                        later at guest checkout.
+                      </span>
+                    </div>
 
                     <button
                       type="button"

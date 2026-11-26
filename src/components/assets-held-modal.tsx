@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CatalogTokenDeployment } from "../domain/supported-assets-catalog.ts";
 import type { SerializedWalletBalanceRecord } from "../server/portfolio.ts";
 import { AssetAvatar, ChainBadge } from "./icons.tsx";
+import { InfoTooltip } from "./info-tooltip.tsx";
 
 function formatApproxDisplay(
   raw: string | null | undefined,
@@ -221,8 +222,12 @@ export function AssetsHeldModal({
 
           {/* Footer Note */}
           <div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between text-[11px] text-neutral-400">
-            <span className="flex items-center gap-1">
-              <span>ⓘ</span>
+            <span className="inline-flex items-center gap-1.5">
+              <InfoTooltip
+                size={13}
+                label="About displayed assets"
+                content="Only native and canonical tokens supported by Flow are shown here. Wrapped or synthetic token variants are hidden."
+              />
               <span>Wrapped assets are not shown.</span>
             </span>
             <span className="font-semibold text-neutral-600 dark:text-neutral-300">
