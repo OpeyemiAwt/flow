@@ -887,3 +887,54 @@ export async function readPublicPaymentRequest(
     ...(activeAttempt ? { activeAttempt } : {}),
   });
 }
+
+export interface PublicPaymentRequestMeta {
+  readonly publicId: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly recipientName: string;
+  readonly amountMode: "FIXED" | "OPTIONAL";
+  readonly displayAmount: string | null;
+  readonly destinationAssetSymbol: string;
+  readonly destinationNetwork: string;
+  readonly status: string;
+  readonly isDeleted: boolean;
+}
+
+export async function readPublicPaymentRequestMeta(
+  publicId: string,
+): Promise<PublicPaymentRequestMeta | null> {
+  if (!isValidPublicPaymentId(publicId)) {
+    return null;
+  }
+  const { db } = runtime();
+  const rows = await db.$queryRaw<Array<PublicPaymentRequestDbRow>>`
+    SELECT *
+    FROM flow.get_public_payment_request(${publicId})
+  `;
+  if (rows.length === 0) {
+    return null;
+  }
+  const row = rows[0]!;
+  const isDeleted = await readPaymentRequestDeleted(publicId).catch(
+    () => false,
+  );
+  const serialized = serializePublicPaymentRequest(
+    row,
+    "https://flow.devhub.forum",
+    null,
+    { maxPayments: null, paidCount: 0, isDeleted },
+  );
+  return {
+    publicId: serialized.publicId,
+    title: serialized.title,
+    description: serialized.description,
+    recipientName: serialized.recipientName,
+    amountMode: serialized.amountMode,
+    displayAmount: serialized.displayAmount,
+    destinationAssetSymbol: serialized.destinationAssetSymbol,
+    destinationNetwork: serialized.destinationNetwork,
+    status: serialized.status,
+    isDeleted,
+  };
+}

@@ -296,12 +296,6 @@ export function SignIn({
             <FlowLogo className="h-8 w-auto sm:h-9" />
           </Link>
 
-          {pendingSendTo && (
-            <p className="mt-4 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-              Sending to <strong className="font-mono">{pendingSendTo}</strong>
-            </p>
-          )}
-
           {showEmailSignIn ? (
             <>
               <button

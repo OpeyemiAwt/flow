@@ -5,8 +5,34 @@ import { LanguageProvider } from "../components/language-provider.tsx";
 import { RouteSkeletonTransition } from "../components/route-skeleton-transition.tsx";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://flow.devhub.forum"),
   title: "FLOW",
-  description: "The FLOW multi-chain payment foundation.",
+  description:
+    "Multi-chain money without the friction wall. Send, receive, convert, and get paid across NEAR, Solana, Base, and Ethereum.",
+  openGraph: {
+    title: "FLOW",
+    description:
+      "Multi-chain money without the friction wall. Send, receive, convert, and get paid across NEAR, Solana, Base, and Ethereum.",
+    url: "https://flow.devhub.forum",
+    siteName: "FLOW",
+    type: "website",
+    images: [
+      {
+        url: "https://flow.devhub.forum/api/og/site",
+        width: 1200,
+        height: 630,
+        type: "image/png",
+        alt: "FLOW · Multi-chain money without the friction wall",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "FLOW",
+    description:
+      "Multi-chain money without the friction wall. Send, receive, convert, and get paid across NEAR, Solana, Base, and Ethereum.",
+    images: ["https://flow.devhub.forum/api/og/site"],
+  },
 };
 
 export const viewport: Viewport = {

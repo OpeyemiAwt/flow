@@ -25,9 +25,18 @@ export async function generateMetadata({
   if (!parsedFlowId) {
     return { title: "Not found · FLOW" };
   }
+  const db = runtime().db;
+  const profile = await lookupPublicFlowIdProfile(db, parsedFlowId).catch(
+    () => null,
+  );
+  const displayName = profile?.accountName?.trim() || parsedFlowId;
   const canonical = buildDirectFlowLink(parsedFlowId);
-  const title = `Pay ${parsedFlowId} · FLOW`;
-  const description = `Send crypto directly to ${parsedFlowId} with FLOW or any external wallet.`;
+  const title =
+    displayName.toLowerCase() !== parsedFlowId.toLowerCase()
+      ? `Pay ${displayName} (${parsedFlowId}) · FLOW`
+      : `Pay ${parsedFlowId} · FLOW`;
+  const description = `Send crypto directly to ${displayName} (${parsedFlowId}) with FLOW or any external wallet. Settles on NEAR Mainnet.`;
+  const ogImageUrl = `https://flow.devhub.forum/api/og/flow-id/${encodeURIComponent(parsedFlowId)}`;
   return {
     title,
     description,
@@ -36,12 +45,14 @@ export async function generateMetadata({
       title,
       description,
       url: canonical,
+      siteName: "FLOW",
       type: "website",
       images: [
         {
-          url: "https://flow.devhub.forum/assets/blog/send-anywhere-and-flow-id.png",
+          url: ogImageUrl,
           width: 1200,
           height: 630,
+          type: "image/png",
           alt: title,
         },
       ],
@@ -50,9 +61,7 @@ export async function generateMetadata({
       card: "summary_large_image",
       title,
       description,
-      images: [
-        "https://flow.devhub.forum/assets/blog/send-anywhere-and-flow-id.png",
-      ],
+      images: [ogImageUrl],
     },
   };
 }

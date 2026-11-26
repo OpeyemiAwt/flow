@@ -1788,14 +1788,53 @@ export function CheckoutView({
                       <h3 className="text-xs font-bold text-neutral-900 dark:text-white">
                         Quote Summary
                       </h3>
-                      {quote && (
-                        <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
-                          Live quote · {quoteSecondsRemaining}s
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {quote && (
+                          <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                            Live quote · {quoteSecondsRemaining}s
+                          </span>
+                        )}
+                        {isCrossChain &&
+                          !isReadOnly &&
+                          (quote ||
+                            loadingQuote ||
+                            Boolean(quoteKey) ||
+                            quoteError === "The quote has expired.") && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setRefreshTrigger((value) => value + 1)
+                              }
+                              disabled={loadingQuote}
+                              aria-label="Refresh quote"
+                              title="Refresh quote"
+                              className={`shrink-0 inline-flex items-center justify-center p-1.5 rounded-full border bg-white dark:bg-[#141414] disabled:opacity-40 transition-colors cursor-pointer ${
+                                quoteError === "The quote has expired."
+                                  ? "border-[#FF1A1A]/50 text-[#FF1A1A] hover:bg-red-50 dark:hover:bg-red-950/30"
+                                  : "border-neutral-200/80 dark:border-white/[0.08] text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white"
+                              }`}
+                            >
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={loadingQuote ? "animate-spin" : ""}
+                                aria-hidden="true"
+                              >
+                                <polyline points="23 4 23 10 17 10" />
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                              </svg>
+                            </button>
+                          )}
+                      </div>
                     </div>
                     <dl className="space-y-2 text-xs text-neutral-600 dark:text-neutral-400">
-                      <div className="flex justify-between gap-3">
+                      <div className="flex items-center justify-between gap-3">
                         <dt>
                           You send
                           {selectedSource &&
@@ -1805,13 +1844,13 @@ export function CheckoutView({
                               selectedSource.networkName +
                               ")"}
                         </dt>
-                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950 dark:text-white">
+                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950 dark:text-white tabular-nums">
                           {displaySource}
                         </dd>
                       </div>
-                      <div className="flex justify-between gap-3">
+                      <div className="flex items-center justify-between gap-3">
                         <dt>Flow platform fee</dt>
-                        <dd className="font-semibold text-neutral-950 dark:text-white">
+                        <dd className="font-semibold text-neutral-950 dark:text-white tabular-nums">
                           {flowFee}
                         </dd>
                       </div>
@@ -1843,11 +1882,11 @@ export function CheckoutView({
                           )}
                         </dd>
                       </div>
-                      <div className="flex justify-between gap-3 border-t border-neutral-200 dark:border-white/[0.08] pt-2">
+                      <div className="flex items-center justify-between gap-3 border-t border-neutral-200 dark:border-white/[0.08] pt-2">
                         <dt className="font-bold text-neutral-950 dark:text-white">
                           Total
                         </dt>
-                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950 dark:text-white">
+                        <dd className="min-w-0 break-all text-right font-semibold text-neutral-950 dark:text-white tabular-nums">
                           {displaySource}
                         </dd>
                       </div>
@@ -1870,17 +1909,6 @@ export function CheckoutView({
                               refundValidationMessage ??
                               "Choose a source asset and enter the required details."}
                           </p>
-                        )}
-                        {quoteError === "The quote has expired." && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setRefreshTrigger((value) => value + 1)
-                            }
-                            className="mt-1 font-semibold text-neutral-950 dark:text-white underline cursor-pointer"
-                          >
-                            Refresh quote
-                          </button>
                         )}
                       </div>
                     )}
@@ -2010,9 +2038,9 @@ export function CheckoutView({
                     </div>
                   </div>
 
-                  {/* You'll send (exact) summary box */}
-                  <div className="p-4 rounded-2xl bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                    <div className="min-w-0 flex-[1_1_10rem]">
+                  {/* You'll send (estimated) summary box */}
+                  <div className="p-4 rounded-2xl bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 space-y-3">
+                    <div className="min-w-0">
                       <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 block">
                         You’ll send (estimated)
                       </span>
@@ -2023,17 +2051,20 @@ export function CheckoutView({
                         </span>
                       </p>
                     </div>
-                    <div className="text-right text-xs space-y-1 min-w-0">
-                      <div>
+                    <div className="pt-2.5 border-t border-red-200/60 dark:border-red-900/30 space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between gap-3">
                         <span className="text-neutral-500 dark:text-neutral-400">
-                          Flow fee {flowFee}
+                          Flow fee
+                        </span>
+                        <span className="font-semibold text-neutral-950 dark:text-white tabular-nums">
+                          {flowFee}
                         </span>
                       </div>
-                      <div className="tabular-nums">
+                      <div className="flex items-center justify-between gap-3">
                         <span className="text-neutral-500 dark:text-neutral-400">
-                          Recipient receives{" "}
+                          Recipient receives
                         </span>
-                        <span className="font-bold text-neutral-950 dark:text-white">
+                        <span className="font-bold text-neutral-950 dark:text-white tabular-nums text-right">
                           {formatCheckoutAmount(
                             quote?.destinationDisplayAmount ??
                               request.displayAmount,
