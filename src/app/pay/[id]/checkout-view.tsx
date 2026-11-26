@@ -654,17 +654,29 @@ export function CheckoutView({
   useEffect(() => {
     if (!quoteDeadline) return;
     const deadline = Date.parse(quoteDeadline);
-    const update = () =>
-      setQuoteSecondsRemaining(
-        Math.max(0, Math.ceil((deadline - Date.now()) / 1000)),
-      );
+    let refreshedOnExpiry = false;
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setQuoteSecondsRemaining(remaining);
+      if (
+        remaining === 0 &&
+        !refreshedOnExpiry &&
+        !instructions &&
+        !isReadOnly &&
+        (typeof document === "undefined" ||
+          document.visibilityState === "visible")
+      ) {
+        refreshedOnExpiry = true;
+        setRefreshTrigger((value) => value + 1);
+      }
+    };
     const initial = window.setTimeout(update, 0);
     const interval = window.setInterval(update, 1000);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(interval);
     };
-  }, [quoteDeadline]);
+  }, [quoteDeadline, instructions, isReadOnly]);
 
   useEffect(() => {
     if (typeof document === "undefined" || instructions || isReadOnly) return;

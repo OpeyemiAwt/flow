@@ -143,6 +143,7 @@ export function SecurityPanel({
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState("");
   const [flowIdCopied, setFlowIdCopied] = useState(false);
+  const [accountIdCopied, setAccountIdCopied] = useState(false);
   const walletStatusInfo = (() => {
     switch (primaryAccount?.walletStatus) {
       case "active":
@@ -689,33 +690,101 @@ export function SecurityPanel({
                 </div>
 
                 {/* Account Details */}
-                <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 text-xs space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Account Type</span>
-                    <span className="font-semibold text-neutral-900 dark:text-white uppercase tracking-wider text-[11px]">
+                <div className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 text-xs space-y-2.5">
+                  <div className="flex justify-between items-center gap-4">
+                    <span className="shrink-0 whitespace-nowrap text-neutral-500">
+                      Account Type
+                    </span>
+                    <span className="font-semibold text-neutral-900 dark:text-white uppercase tracking-wider text-[11px] text-right">
                       {primaryAccount?.kind ?? "PERSONAL"}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Account ID</span>
-                    <span className="font-mono text-neutral-700 dark:text-neutral-300 text-[11px]">
-                      {primaryAccount?.id ?? "acc_default"}
+                  <div className="flex justify-between items-center gap-4">
+                    <span className="shrink-0 whitespace-nowrap text-neutral-500">
+                      Account ID
                     </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Wallet Status</span>
-                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-900 dark:text-white">
+                    <div className="min-w-0 flex items-center justify-end gap-1.5">
                       <span
-                        className={`h-2 w-2 rounded-full ${walletStatusInfo.dot}`}
+                        title={primaryAccount?.id ?? "acc_default"}
+                        className="font-mono text-neutral-700 dark:text-neutral-300 text-[11px] truncate text-right"
+                      >
+                        {primaryAccount?.id ?? "acc_default"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const idToCopy = primaryAccount?.id ?? "acc_default";
+                          void navigator.clipboard
+                            ?.writeText(idToCopy)
+                            .then(() => {
+                              setAccountIdCopied(true);
+                              window.setTimeout(
+                                () => setAccountIdCopied(false),
+                                1800,
+                              );
+                            });
+                        }}
+                        aria-label="Copy Account ID"
+                        title={accountIdCopied ? "Copied" : "Copy Account ID"}
+                        className="shrink-0 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors cursor-pointer"
+                      >
+                        {accountIdCopied ? (
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="text-emerald-500"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : (
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect
+                              x="9"
+                              y="9"
+                              width="13"
+                              height="13"
+                              rx="2"
+                              ry="2"
+                            />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center gap-4">
+                    <span className="shrink-0 whitespace-nowrap text-neutral-500">
+                      Wallet Status
+                    </span>
+                    <span className="inline-flex items-center justify-end gap-2 text-xs font-semibold text-neutral-900 dark:text-white text-right">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${walletStatusInfo.dot}`}
                         aria-hidden="true"
                       />
                       <span>{walletStatusInfo.label}</span>
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-500">Verification</span>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <div className="flex justify-between items-center gap-4">
+                    <span className="shrink-0 whitespace-nowrap text-neutral-500">
+                      Verification
+                    </span>
+                    <span className="inline-flex items-center justify-end gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 text-right">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
                       Verified Owner
                     </span>
                   </div>
@@ -786,7 +855,7 @@ export function SecurityPanel({
                   {/* Email Preferences Divider */}
                   <div className="pt-5 pb-3 border-t border-neutral-100 dark:border-neutral-800 mt-5">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-                      Email &amp; Newsletter ({email})
+                      Email &amp; Newsletter
                     </p>
                   </div>
 

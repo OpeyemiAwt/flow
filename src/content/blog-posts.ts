@@ -44,6 +44,79 @@ export interface BlogPost {
 
 export const BLOG_POSTS: readonly BlogPost[] = [
   {
+    slug: "zero-dollar-fees-gasless-near-payments",
+    title:
+      "$0 Fees on NEAR: Gasless Payments, Transfers, and Conversions Inside FLOW",
+    summary:
+      "Every payment, send, and conversion on NEAR inside FLOW now costs $0 in gas and 0% in FLOW platform fees. FLOW sponsors your NEAR network gas automatically so moving NEAR, USDC, and USDT on NEAR feels effortless.",
+    category: "Shipping",
+    publishedAt: "2026-11-26",
+    readTime: "5 min read",
+    author: { name: "FLOW Team", role: "Product & Engineering" },
+    featured: true,
+    ogImage: "/assets/blog/zero-dollar-fees-gasless-near-payments.png",
+    accent: "from-[#FF1A1A]/14 via-emerald-500/8 to-transparent",
+    highlights: [
+      { label: "FLOW fee on NEAR", value: "0%" },
+      { label: "NEAR network gas", value: "$0 (Sponsored by FLOW)" },
+      { label: "Gas balance needed", value: "None" },
+    ],
+    tags: ["0% Fee", "Gasless", "NEAR", "Payments", "Shipping"],
+    sections: [
+      {
+        heading: "Why paying gas to move your own money never made sense",
+        paragraphs: [
+          "Sending digital dollars to a friend or paying for a service should feel as simple as sending a text message. Yet for years, on-chain wallets have forced everyday users to keep spare native gas tokens sitting in their wallet just to authorize a simple USDC transfer.",
+          "If your wallet held 50 USDC on NEAR and zero native NEAR, your payment stalled before it even left your screen. Even when you did hold gas, watching fees chip away at routine transfers broke the promise of fast, borderless payments.",
+          "Starting today, that friction is gone on NEAR inside FLOW. Every NEAR payment, transfer, and conversion on NEAR runs with $0 network gas and a 0% FLOW platform fee.",
+        ],
+      },
+      {
+        heading: "What is completely $0 inside FLOW right now",
+        paragraphs: [
+          "Gasless NEAR sponsorship is live across your entire FLOW workspace automatically, with no settings to toggle and no special tiers to unlock:",
+        ],
+        bullets: [
+          "Send on NEAR at $0 cost: Send NEAR, USDC, USDT, or any supported NEAR asset to a @flow ID or NEAR address with 0% FLOW fee and $0 gas deducted from your balance.",
+          "Convert on NEAR at $0 cost: Swap between assets on NEAR (such as NEAR to USDC or USDT to NEAR) with 0% FLOW fee and gas sponsored automatically by FLOW.",
+          "Zero native NEAR required to start: Hold only USDC or USDT on NEAR and still send immediately. FLOW covers your network gas so you never hit an insufficient gas blocker.",
+          "No daily user caps: Send once a week or dozens of times a day without running into per-user sponsorship limits.",
+        ],
+      },
+      {
+        heading: "How FLOW sponsors NEAR gas behind the scenes",
+        paragraphs: [
+          "Under the hood, FLOW keeps your wallet strictly non-custodial through OutLayer MPC while routing your NEAR transactions through FLOW's dedicated gas sponsor relay on NEAR Mainnet.",
+          "When you authorize a NEAR send or conversion, your wallet signs the transaction intent while FLOW's sponsor treasury pays the network execution gas directly on-chain. Your keys remain yours, your addresses remain dedicated to your account, and your balances reconcile in real time on mainnet.",
+        ],
+        callout: {
+          title: "100% of your NEAR payment arrives intact",
+          body: "Whether you send 25 NEAR or 15 USDC to alex@flow on NEAR Mainnet, FLOW covers the network gas and takes 0% platform fee, so every cent you intend to send reaches its destination.",
+        },
+      },
+      {
+        heading: "Even faster with @flow IDs and Flow AI Voice Notes",
+        paragraphs: [
+          "Zero-dollar NEAR payments pair naturally with the rest of FLOW's everyday tools. Share your personal direct link at flow.devhub.forum/name@flow so anyone can pay you by handle instead of copying a long address.",
+          "Prefer not to type at all? Open Flow AI, tap the microphone, and speak naturally, for example: \"Send 15 USDC on NEAR to alex@flow.\" Flow AI transcribes your voice note, prepares the gasless NEAR route showing Free (0%) fee and Free (Sponsored by FLOW) gas, and settles on NEAR Mainnet as soon as you tap Confirm & Send.",
+        ],
+      },
+      {
+        heading: "Start sending gasless on NEAR today",
+        paragraphs: [
+          "Gasless NEAR payments are already live for every new and existing FLOW account on mainnet. Open Send, Convert, or Flow AI inside FLOW and watch both FLOW fee and Network gas drop to Free automatically whenever you transact on NEAR.",
+        ],
+      },
+    ],
+    cta: {
+      title: "Send on NEAR with $0 fees",
+      description:
+        "Open FLOW and try gasless, zero-fee NEAR transfers and conversions live on mainnet today.",
+      href: "/sign-in",
+      label: "Try gasless NEAR",
+    },
+  },
+  {
     slug: "direct-flow-id-payment-links",
     title:
       "Direct @flow Links: Get Paid With a Single URL Like flow.devhub.forum/name@flow",
@@ -53,7 +126,6 @@ export const BLOG_POSTS: readonly BlogPost[] = [
     publishedAt: "2026-11-24",
     readTime: "6 min read",
     author: { name: "FLOW Team", role: "Product & Engineering" },
-    featured: true,
     ogImage: "/assets/blog/direct-flow-id-payment-links.png",
     accent: "from-emerald-500/14 via-teal-500/6 to-transparent",
     highlights: [

@@ -796,6 +796,67 @@ function useOutgoingPreview(input: {
   };
 }
 
+function useLiveQuoteCountdown({
+  quoteIdentityKey,
+  expiresAt,
+  durationSeconds,
+  enabled = true,
+  onExpire,
+}: {
+  quoteIdentityKey: string | null;
+  expiresAt: string | null | undefined;
+  durationSeconds?: number | null;
+  enabled?: boolean;
+  onExpire?: () => void;
+}): number | null {
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
+
+  useEffect(() => {
+    if (!quoteIdentityKey || !expiresAt) {
+      setSecondsLeft(null);
+      return;
+    }
+    const expiresAtMs = Date.parse(expiresAt);
+    const now = Date.now();
+    const validExpirySec = Number.isFinite(expiresAtMs)
+      ? Math.max(1, Math.ceil((expiresAtMs - now) / 1000))
+      : 30;
+    const windowSec =
+      typeof durationSeconds === "number" &&
+      Number.isFinite(durationSeconds) &&
+      durationSeconds > 0
+        ? Math.min(Math.round(durationSeconds), validExpirySec)
+        : Math.min(30, validExpirySec);
+    const targetMs = now + windowSec * 1000;
+    let expiredTriggered = false;
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining === 0 && !expiredTriggered) {
+        expiredTriggered = true;
+        if (
+          enabled &&
+          (typeof document === "undefined" ||
+            document.visibilityState === "visible")
+        ) {
+          onExpireRef.current?.();
+        }
+      }
+    };
+
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [quoteIdentityKey, expiresAt, durationSeconds, enabled]);
+
+  return secondsLeft;
+}
+
 function OutgoingQuoteDetails({
   preview,
   symbol,
@@ -822,8 +883,16 @@ function OutgoingQuoteDetails({
     feeBps,
     platformFeeDisplay,
     gasSponsored,
-    feeDeductedFromAmount,
   } = preview;
+  const quoteCountdownSeconds = useLiveQuoteCountdown({
+    quoteIdentityKey: quote
+      ? `${quote.identity.timestamp}:${quote.identity.expiresAt}:${quote.amountOutAtomic}`
+      : null,
+    expiresAt: quote?.identity.expiresAt,
+    durationSeconds: quote?.estimatedTimeSeconds ?? 30,
+    enabled: canReview && !loading,
+    onExpire: review,
+  });
   const quoteReceiveUsd = quote
     ? computeDisplayUsd(
         quote.recipientDisplayAmount,
@@ -900,8 +969,7 @@ function OutgoingQuoteDetails({
             <>
               <div className="flex items-start justify-between gap-3 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px]">
                 <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
-                  Platform fee ({Number((effectiveFeeBps / 100).toFixed(2))}%
-                  {feeDeductedFromAmount ? " · from amount" : ""})
+                  Platform fee ({Number((effectiveFeeBps / 100).toFixed(2))}%)
                 </span>
                 <div className="text-right min-w-0">
                   <div className="font-mono font-medium text-neutral-800 dark:text-neutral-200 tabular-nums whitespace-nowrap">
@@ -949,8 +1017,21 @@ function OutgoingQuoteDetails({
                   {symbol}
                 </span>
               )}
-              {quote.estimatedTimeSeconds !== null && (
-                <span>~{quote.estimatedTimeSeconds}s</span>
+              {quoteCountdownSeconds !== null && (
+                <span
+                  className="inline-flex items-center gap-1 tabular-nums font-medium text-neutral-600 dark:text-neutral-300"
+                  title="Quote refreshes automatically"
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      quoteCountdownSeconds <= 5
+                        ? "bg-amber-500 animate-pulse"
+                        : "bg-emerald-500"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span>~{quoteCountdownSeconds}s</span>
+                </span>
               )}
             </div>
           </div>
@@ -2459,7 +2540,7 @@ export function PortfolioView({
     [accountId],
   );
 
-  const handleReviewCrossChainQuote = () => {
+  const handleReviewCrossChainQuote = useCallback(() => {
     if (!addMoneyBody || !crossChainSourceToken || !crossChainAmountAtomic) return;
     const params = {
       accountId,
@@ -2473,7 +2554,25 @@ export function PortfolioView({
     void loadCrossChainQuote((signal) =>
       fetchVerifiedAddMoneyPreview({ ...params, signal }),
     );
-  };
+  }, [
+    accountId,
+    addMoneyBody,
+    crossChainAmountAtomic,
+    crossChainRefundAddress,
+    crossChainSourceToken,
+    loadCrossChainQuote,
+    nearAddr,
+  ]);
+
+  const addMoneyCountdownSeconds = useLiveQuoteCountdown({
+    quoteIdentityKey: crossChainQuote
+      ? `${crossChainQuote.identity.timestamp}:${crossChainQuote.identity.expiresAt}:${crossChainQuote.amountOutAtomic}`
+      : null,
+    expiresAt: crossChainQuote?.identity.expiresAt,
+    durationSeconds: crossChainQuote?.estimatedTimeSeconds ?? 30,
+    enabled: Boolean(addMoneyKey) && !crossChainQuoteLoading,
+    onExpire: handleReviewCrossChainQuote,
+  });
 
   useEffect(() => {
     if (!addMoneyKey || !addMoneyBody || !crossChainSourceToken || !crossChainAmountAtomic) {
@@ -4306,7 +4405,7 @@ export function PortfolioView({
                                 <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
                                   Platform fee
                                   {!isSameAsset && sendFeeBps > 0
-                                    ? ` (${Number((sendFeeBps / 100).toFixed(2))}%${sendPreview.feeDeductedFromAmount ? " · from amount" : ""})`
+                                    ? ` (${Number((sendFeeBps / 100).toFixed(2))}%)`
                                     : ""}
                                 </span>
                                 {isSameAsset || sendFeeBps === 0 ? (
@@ -5259,12 +5358,24 @@ export function PortfolioView({
                     )}
                     <div className="flex justify-between gap-4">
                       <dt className="text-neutral-500 dark:text-neutral-400">
-                        Est. arrival
+                        Quote refreshes
                       </dt>
-                      <dd className="font-semibold text-neutral-950 dark:text-white">
-                        {crossChainQuote?.estimatedTimeSeconds == null
-                          ? "—"
-                          : `~${crossChainQuote.estimatedTimeSeconds}s`}
+                      <dd className="font-semibold text-neutral-950 dark:text-white tabular-nums">
+                        {addMoneyCountdownSeconds == null ? (
+                          "—"
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                addMoneyCountdownSeconds <= 5
+                                  ? "bg-amber-500 animate-pulse"
+                                  : "bg-emerald-500"
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span>~{addMoneyCountdownSeconds}s</span>
+                          </span>
+                        )}
                       </dd>
                     </div>
                     <div className="flex justify-between gap-4 border-t border-neutral-100 dark:border-white/[0.06] pt-3">
