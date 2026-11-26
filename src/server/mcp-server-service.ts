@@ -15,12 +15,12 @@ import {
   computeTransferUsdCents,
   evaluateMcpSpendGuard,
   formatUsdCentsLabel,
-  hashMcpToken,
   isValidMcpTokenFormat,
   normalizeAllowedNetworks,
   resolveMcpDeployment,
   type McpAgentKeyStatus,
 } from "../domain/mcp-agents.ts";
+import { hashMcpToken } from "./mcp-token-crypto.ts";
 import {
   getOperationAppFees,
   getOperationPlatformFeeBps,

@@ -3,13 +3,13 @@ import { z } from "zod";
 import {
   ALL_MCP_NETWORKS,
   centsToUsd,
-  generateMcpToken,
   normalizeAllowedNetworks,
   normalizeRecipientAllowlist,
   usdToCents,
   type McpAgentKeyStatus,
   type McpNetworkKey,
 } from "../domain/mcp-agents.ts";
+import { generateMcpToken } from "./mcp-token-crypto.ts";
 import { type FlowDb } from "../foundation/prisma.ts";
 
 export interface SerializedMcpSpendEvent {

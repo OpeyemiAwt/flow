@@ -6,12 +6,11 @@ import {
   computeTransferUsdCents,
   evaluateMcpSpendGuard,
   formatUsdCentsLabel,
-  generateMcpToken,
-  hashMcpToken,
   isValidMcpTokenFormat,
   resolveMcpDeployment,
   usdToCents,
 } from "../src/domain/mcp-agents.ts";
+import { generateMcpToken, hashMcpToken } from "../src/server/mcp-token-crypto.ts";
 
 test("generateMcpToken produces high-entropy flw_mcp_ tokens and deterministic SHA-256 hashes", () => {
   const a = generateMcpToken();
