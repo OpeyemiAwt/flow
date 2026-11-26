@@ -886,6 +886,7 @@ export function SecurityPanel({
                 accountId={primaryAccount?.id ?? null}
                 appBaseUrl={appBaseUrl}
                 initialKeys={initialMcpKeys}
+                showIssuedPasses={false}
               />
 
               <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-6">

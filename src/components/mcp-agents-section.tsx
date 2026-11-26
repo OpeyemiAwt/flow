@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -27,6 +28,7 @@ interface McpAgentsSectionProps {
   readonly accountId: string | null;
   readonly appBaseUrl: string;
   readonly initialKeys: readonly SerializedMcpAgentKey[];
+  readonly showIssuedPasses?: boolean;
 }
 
 const NETWORK_SHORT: Record<McpNetworkKey, string> = {
@@ -183,6 +185,7 @@ export function McpAgentsSection({
   accountId,
   appBaseUrl,
   initialKeys,
+  showIssuedPasses = true,
 }: McpAgentsSectionProps) {
   const [mounted, setMounted] = useState(false);
   const [keys, setKeys] = useState<SerializedMcpAgentKey[]>([...initialKeys]);
@@ -1121,9 +1124,21 @@ export function McpAgentsSection({
     <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-5">
       {/* Small, calm header matching Settings */}
       <div className="space-y-1">
-        <h2 className="text-[15px] font-semibold tracking-tight text-neutral-950 dark:text-white">
-          AI Agents &amp; MCP
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[15px] font-semibold tracking-tight text-neutral-950 dark:text-white">
+            AI Agents &amp; MCP
+          </h2>
+          {!showIssuedPasses && (
+            <Link
+              href="/agents"
+              className="shrink-0 text-xs font-medium text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white transition-colors"
+            >
+              {keys.length > 0
+                ? `Issued passes (${keys.length}) →`
+                : "Manage passes →"}
+            </Link>
+          )}
+        </div>
         <p className="text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
           Let Claude, Codex, Antigravity, Grok, or any MCP assistant check
           balances, send direct or cross-chain NEAR Intents payments, and swap
@@ -1163,8 +1178,8 @@ export function McpAgentsSection({
         </p>
       )}
 
-      {/* Issued Passes List */}
-      {keys.length > 0 && (
+      {/* Issued Passes List (shown only on the dedicated /agents MCP page) */}
+      {showIssuedPasses && (
         <div className="pt-4 border-t border-neutral-100 dark:border-neutral-800 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
@@ -1172,7 +1187,13 @@ export function McpAgentsSection({
             </p>
           </div>
 
-          <div className="space-y-3">
+          {keys.length === 0 ? (
+            <p className="py-2 text-xs text-neutral-500 dark:text-neutral-400">
+              No passes issued yet. Click Issue pass above to connect an AI
+              assistant.
+            </p>
+          ) : (
+            <div className="space-y-3">
             {keys.map((k) => {
               const effectiveStatus = k.isExpired ? "EXPIRED" : k.status;
               const spendPct =
@@ -1346,7 +1367,8 @@ export function McpAgentsSection({
                 </div>
               );
             })}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
