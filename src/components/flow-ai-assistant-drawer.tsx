@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AssistantMessage } from "../server/ai-assistant-service.ts";
 import { FlowAiMascot } from "./icons.tsx";
+import { TypewriterInput } from "./typewriter-input.tsx";
 
 export interface FlowAIAssistantDrawerProps {
   isOpen: boolean;
@@ -354,7 +355,7 @@ export function FlowAIAssistantDrawer({
             }}
             className="p-4 border-t border-neutral-100 dark:border-neutral-800 flex items-center gap-2"
           >
-            <input
+            <TypewriterInput
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}

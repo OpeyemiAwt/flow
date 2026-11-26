@@ -30,6 +30,7 @@ import {
   validateQuoteAddress,
 } from "../../../domain/quote-addresses.ts";
 import { InfoTooltip } from "../../../components/info-tooltip.tsx";
+import { TypewriterInput } from "../../../components/typewriter-input.tsx";
 
 function formatNetworkDisplay(network: string | null | undefined): string {
   const norm = (network ?? "").toLowerCase().trim();
@@ -1738,7 +1739,7 @@ export function CheckoutView({
                           : "Amount to send"}
                       </label>
                       <div className="flex items-center justify-between p-3 rounded-2xl border border-neutral-200 dark:border-white/[0.08] bg-white dark:bg-[#1A1A1A] shadow-2xs">
-                        <input
+                        <TypewriterInput
                           id="checkout-amount"
                           type="text"
                           inputMode="decimal"
@@ -1779,7 +1780,7 @@ export function CheckoutView({
                               ? "—"
                               : "Enter amount"
                           }
-                          className="w-full font-display text-xl font-bold text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden bg-transparent"
+                          className="w-full py-0.5 font-display text-xl font-bold text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden bg-transparent tabular-nums"
                         />
                         <span className="font-bold text-xs text-neutral-500 dark:text-neutral-400 pl-2">
                           {selectedSource?.symbol}
@@ -1809,7 +1810,7 @@ export function CheckoutView({
                       />
                     </div>
                     <div className="relative flex items-center">
-                      <input
+                      <TypewriterInput
                         id="checkout-refund"
                         type="text"
                         value={refundAddress}

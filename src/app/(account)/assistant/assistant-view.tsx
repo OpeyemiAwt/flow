@@ -10,6 +10,7 @@ import {
   type TrackedTransfer,
 } from "../../../components/payment-timeline-tracker.tsx";
 import { UserAvatar } from "../../../components/user-avatar.tsx";
+import { TypewriterInput } from "../../../components/typewriter-input.tsx";
 import type { AssistantMessage } from "../../../server/ai-assistant-service.ts";
 
 interface AssistantViewProps {
@@ -853,12 +854,12 @@ export function AssistantView({
             }}
             className="flex items-center gap-2 rounded-full bg-white dark:bg-[#141414] border border-neutral-200/80 dark:border-white/[0.1] shadow-[0_4px_24px_rgba(0,0,0,0.05)] pl-5 pr-2 py-2"
           >
-            <input
+            <TypewriterInput
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask anything"
-              className="flex-1 bg-transparent text-sm text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
+              className="flex-1 py-1 bg-transparent text-sm text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-hidden"
             />
             <button
               type="submit"

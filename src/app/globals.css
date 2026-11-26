@@ -666,3 +666,75 @@ html.dark .flow-liquid-btn-primary::before {
 .flow-anim-icon-pop {
   animation: flowNavIconPop 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* Typewriter / texting input micro-animations */
+@keyframes flowTypeCharField {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 7px, 0) scale(0.9);
+  }
+  65% {
+    opacity: 1;
+    transform: translate3d(0, -1px, 0) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes flowTypeCharHero {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.82);
+  }
+  62% {
+    opacity: 1;
+    transform: translate3d(0, -2.5px, 0) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.flow-type-char-field {
+  display: inline-block;
+  white-space: pre;
+  animation: flowTypeCharField 165ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.flow-type-char-hero {
+  display: inline-block;
+  white-space: pre;
+  animation: flowTypeCharHero 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+input:not([type]),
+textarea {
+  caret-color: #ff1a1a;
+}
+
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="search"],
+.dark input[type="url"],
+.dark input[type="tel"],
+.dark input:not([type]),
+.dark textarea {
+  caret-color: #ff4d4d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-type-char-field,
+  .flow-type-char-hero {
+    animation: none !important;
+  }
+}

@@ -4,6 +4,7 @@
 import { useEffect, useState, useRef, type FormEvent } from "react";
 import Link from "next/link";
 import { FlowLogo } from "../../components/flow-logo.tsx";
+import { TypewriterInput } from "../../components/typewriter-input.tsx";
 import { triggerHaptic } from "../../components/haptics.ts";
 import { persistPendingSendFlowId } from "../[flowId]/flow-id-landing-client.tsx";
 import {
@@ -466,7 +467,7 @@ export function SignIn({
                   Email address
                 </label>
                 <div className="relative mt-1.5">
-                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-[#666666] dark:text-neutral-400">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-4 text-[#666666] dark:text-neutral-400">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -478,7 +479,7 @@ export function SignIn({
                       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                     </svg>
                   </span>
-                  <input
+                  <TypewriterInput
                     id="email-input"
                     ref={emailInputRef}
                     type="email"
@@ -488,7 +489,7 @@ export function SignIn({
                     required
                     maxLength={254}
                     placeholder="Enter your email address"
-                    className="h-12 sm:h-13 w-full rounded-2xl border border-[#E2E2E2] dark:border-white/[0.1] bg-white dark:bg-[#161616] pl-11 pr-4 text-[14px] sm:text-[15px] text-[#0B0B0B] dark:text-white placeholder:text-[#888888] dark:placeholder:text-neutral-500 focus:border-[#0B0B0B] dark:focus:border-white/40 focus:outline-none"
+                    className="h-12 sm:h-13 w-full rounded-2xl border border-[#E2E2E2] dark:border-white/[0.1] bg-white dark:bg-[#161616] pl-11 pr-4 py-3 text-[14px] sm:text-[15px] text-[#0B0B0B] dark:text-white placeholder:text-[#888888] dark:placeholder:text-neutral-500 focus:border-[#0B0B0B] dark:focus:border-white/40 focus:outline-none"
                   />
                 </div>
 

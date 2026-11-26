@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { TypewriterInput } from "../../components/typewriter-input.tsx";
 import {
   BLOG_CATEGORIES,
   formatBlogDate,
@@ -140,18 +141,18 @@ export function BlogIndexClient({ posts }: { posts: readonly BlogPost[] }) {
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6b6f76] dark:text-neutral-400"
+            className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[#6b6f76] dark:text-neutral-400"
           >
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
           </svg>
-          <input
+          <TypewriterInput
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter articles..."
             aria-label="Filter blog posts"
-            className="h-9 w-full rounded-xl border border-transparent bg-[#f3f4f5] dark:bg-white/[0.06] pl-8 pr-3 text-[13px] text-[#0b0c0e] dark:text-white placeholder:text-[#6b6f76] dark:placeholder:text-neutral-400 focus:border-[#cfd2d6] dark:focus:border-white/20 focus:bg-white dark:focus:bg-[#141518] focus:outline-hidden transition-colors"
+            className="h-9 w-full rounded-xl border border-transparent bg-[#f3f4f5] dark:bg-white/[0.06] pl-8 pr-3 py-1.5 text-[13px] text-[#0b0c0e] dark:text-white placeholder:text-[#6b6f76] dark:placeholder:text-neutral-400 focus:border-[#cfd2d6] dark:focus:border-white/20 focus:bg-white dark:focus:bg-[#141518] focus:outline-hidden transition-colors"
           />
         </div>
       </section>

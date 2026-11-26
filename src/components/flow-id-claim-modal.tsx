@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { validateFlowIdHandle } from "../domain/flow-id.ts";
+import { TypewriterInput } from "./typewriter-input.tsx";
 
 export function FlowIdPickerForm({
   accountId,
@@ -113,7 +114,7 @@ export function FlowIdPickerForm({
           Choose your unique Flow ID
         </label>
         <div className="flex items-center rounded-2xl border border-neutral-200 dark:border-white/[0.12] bg-[#FAF8F5] dark:bg-[#1A1A1C] px-4 py-3 focus-within:border-neutral-950 dark:focus-within:border-white transition-colors">
-          <input
+          <TypewriterInput
             type="text"
             value={handle}
             onChange={(e) => {

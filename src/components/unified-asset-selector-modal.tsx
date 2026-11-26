@@ -7,6 +7,7 @@ import type {
   TokenCapability,
 } from "../server/providers/near-intents-discovery.ts";
 import { AssetAvatar, ChainBadge, NearIntentsBadge } from "./icons.tsx";
+import { TypewriterInput } from "./typewriter-input.tsx";
 
 export interface UnifiedAssetSelectorModalProps {
   isOpen: boolean;
@@ -183,7 +184,7 @@ export function UnifiedAssetSelectorModal({
           {/* Search bar */}
           <div className="my-4">
             <div className="relative">
-              <input
+              <TypewriterInput
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

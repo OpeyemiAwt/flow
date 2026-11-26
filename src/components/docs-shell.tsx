@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BLOG_POSTS } from "../content/blog-posts.ts";
 import { FlowLogo } from "./flow-logo.tsx";
+import { TypewriterInput } from "./typewriter-input.tsx";
 import {
   THEME_CHANGE_EVENT,
   applyDarkTheme,
@@ -734,13 +735,13 @@ export function DocsShell({
                 <circle cx="11" cy="11" r="8" />
                 <path d="m21 21-4.3-4.3" />
               </svg>
-              <input
+              <TypewriterInput
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search docs, whitepaper & blog..."
-                className="w-full bg-transparent text-[15px] text-[#0b0c0e] dark:text-white placeholder:text-[#6b6f76] focus:outline-hidden"
+                className="w-full py-0.5 bg-transparent text-[15px] text-[#0b0c0e] dark:text-white placeholder:text-[#6b6f76] focus:outline-hidden"
               />
               <button
                 type="button"

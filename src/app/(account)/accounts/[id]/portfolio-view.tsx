@@ -39,6 +39,7 @@ import { UnifiedAssetSelectorModal } from "../../../../components/unified-asset-
 import type { DiscoveredToken } from "../../../../server/providers/near-intents-discovery.ts";
 import { QrCode } from "../../../../components/qr-code.tsx";
 import { InfoTooltip } from "../../../../components/info-tooltip.tsx";
+import { TypewriterInput } from "../../../../components/typewriter-input.tsx";
 import {
   AssetAvatar,
   ChainBadge,
@@ -3778,7 +3779,8 @@ export function PortfolioView({
                                 ) : null}
                               </button>
 
-                              <input
+                              <TypewriterInput
+                                variant="hero"
                                 type="text"
                                 inputMode="decimal"
                                 autoComplete="off"
@@ -3789,7 +3791,8 @@ export function PortfolioView({
                                     : "Send amount"
                                 }
                                 value={activeInputValue}
-                                style={{ width: `${inputChWidth}ch` }}
+                                wrapperStyle={{ width: `${inputChWidth}ch` }}
+                                wrapperClassName="max-w-[70%] transition-[width] duration-150 ease-out"
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
@@ -3809,7 +3812,7 @@ export function PortfolioView({
                                   }
                                 }}
                                 placeholder="0"
-                                className="max-w-[70%] text-5xl sm:text-6xl font-medium tracking-tight bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-950 dark:placeholder:text-white focus:outline-hidden text-center tabular-nums"
+                                className="w-full py-1 text-5xl sm:text-6xl font-medium tracking-tight bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-950 dark:placeholder:text-white focus:outline-hidden text-center tabular-nums"
                               />
 
                               <button
@@ -4013,7 +4016,7 @@ export function PortfolioView({
                           Recipient {sendDestDeployment.networkName} address
                         </label>
                         <div className="relative flex items-center">
-                          <input
+                          <TypewriterInput
                             id="recipient-address-input"
                             type="text"
                             value={sendRecipientAddress}
@@ -4085,7 +4088,7 @@ export function PortfolioView({
                         >
                           Memo / What is this payment for? (Optional)
                         </label>
-                        <input
+                        <TypewriterInput
                           id="send-memo-input"
                           type="text"
                           maxLength={140}
@@ -4459,7 +4462,7 @@ export function PortfolioView({
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                      <input
+                      <TypewriterInput
                         type="text"
                         inputMode="decimal"
                         autoComplete="off"
@@ -4472,7 +4475,7 @@ export function PortfolioView({
                           )
                         }
                         placeholder="1.00"
-                        className="min-w-0 flex-1 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden"
+                        className="min-w-0 flex-1 py-1 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden tabular-nums"
                       />
                       <div className="shrink-0 max-w-[55%]">
                         <select
@@ -4945,7 +4948,7 @@ export function PortfolioView({
                     <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                       Deposit amount
                     </label>
-                    <input
+                    <TypewriterInput
                       type="text"
                       inputMode="decimal"
                       autoComplete="off"
@@ -4971,7 +4974,7 @@ export function PortfolioView({
                       </span>
                     </div>
                     <div className="relative flex items-center">
-                      <input
+                      <TypewriterInput
                         type="text"
                         value={crossChainRefundAddress}
                         onChange={(e) =>
@@ -5663,7 +5666,7 @@ export function PortfolioView({
                       <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                         Title
                       </label>
-                      <input
+                      <TypewriterInput
                         type="text"
                         value={prTitle}
                         onChange={(e) => setPrTitle(e.target.value)}
@@ -5677,7 +5680,7 @@ export function PortfolioView({
                         Amount
                       </label>
                       <div className="flex gap-2">
-                        <input
+                        <TypewriterInput
                           type="text"
                           inputMode="decimal"
                           autoComplete="off"
@@ -5709,7 +5712,7 @@ export function PortfolioView({
                       <label className="block text-xs font-semibold text-neutral-800 dark:text-neutral-200 mb-1.5">
                         Description (Optional)
                       </label>
-                      <input
+                      <TypewriterInput
                         type="text"
                         value={prDescription}
                         onChange={(e) => setPrDescription(e.target.value)}
@@ -5723,7 +5726,7 @@ export function PortfolioView({
                         Max payers
                       </label>
                       <div className="flex gap-2">
-                        <input
+                        <TypewriterInput
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"

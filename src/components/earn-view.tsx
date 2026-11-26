@@ -23,6 +23,7 @@ import {
 import type { CatalogTokenDeployment } from "../domain/supported-assets-catalog.ts";
 import type { NavTabId } from "./floating-nav.tsx";
 import { PaymentTimelineTracker } from "./payment-timeline-tracker.tsx";
+import { TypewriterInput } from "./typewriter-input.tsx";
 
 export interface EarnViewProps {
   accountId: string;
@@ -1053,7 +1054,7 @@ export function EarnView({
                   </div>
 
                   <div className="flex items-center rounded-2xl bg-neutral-50 dark:bg-[#1A1A1A] border border-neutral-200 dark:border-white/[0.08] px-4 py-3 focus-within:border-neutral-900 dark:focus-within:border-white/30 transition-colors">
-                    <input
+                    <TypewriterInput
                       type="text"
                       inputMode="decimal"
                       autoComplete="off"
@@ -1071,7 +1072,7 @@ export function EarnView({
                         setAmountInput(cleaned);
                       }}
                       placeholder="0.00"
-                      className="w-full text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden font-mono"
+                      className="w-full py-0.5 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden font-mono tabular-nums"
                       autoFocus
                     />
                     <span className="text-xs font-bold text-neutral-700 dark:text-neutral-300 shrink-0 pl-3 border-l border-neutral-200 dark:border-white/10">

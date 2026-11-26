@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describe, Feedback, send } from "../../controls.tsx";
+import { TypewriterInput } from "../../../components/typewriter-input.tsx";
 
 export function RefreshSession() {
   const path = usePathname();
@@ -60,13 +61,14 @@ export function AccountNameForm({
     <form className="space-y-4" onSubmit={submit}>
       <label className="block text-sm font-semibold text-[var(--text-primary)]">
         {account ? "Account name" : "Business name"}
-        <input
+        <TypewriterInput
           value={name}
           onChange={(event) => setName(event.target.value)}
           maxLength={80}
           required
           placeholder={account ? "Workspace name" : "Acme Treasury LLC"}
-          className="flow-input mt-1.5 w-full px-3.5 py-2.5 text-sm font-normal"
+          wrapperClassName="mt-1.5 w-full"
+          className="flow-input w-full px-3.5 py-2.5 text-sm font-normal"
         />
       </label>
       <div>

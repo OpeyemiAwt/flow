@@ -8,6 +8,7 @@ import {
   IconUsers,
 } from "../../../../../components/icons.tsx";
 import { Feedback, FreshProof, send } from "../../../../controls.tsx";
+import { TypewriterInput } from "../../../../../components/typewriter-input.tsx";
 
 type Role = "OWNER" | "ADMIN" | "MEMBER";
 type Change = {
@@ -86,14 +87,15 @@ export function TeamManager({
             <form className="space-y-4" onSubmit={prepareInvite}>
               <label className="block text-xs font-semibold text-[var(--text-primary)]">
                 Teammate email
-                <input
+                <TypewriterInput
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   maxLength={254}
                   required
                   placeholder="colleague@company.com"
-                  className="flow-input mt-1.5 w-full px-3.5 py-2.5 text-sm font-normal"
+                  wrapperClassName="mt-1.5 w-full"
+                  className="flow-input w-full px-3.5 py-2.5 text-sm font-normal"
                 />
               </label>
 

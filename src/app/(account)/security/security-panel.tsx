@@ -7,6 +7,7 @@ import { FloatingNav } from "../../../components/floating-nav.tsx";
 import { FlowIdClaimModal } from "../../../components/flow-id-claim-modal.tsx";
 import { useTranslation } from "../../../components/language-provider.tsx";
 import { UserAvatar } from "../../../components/user-avatar.tsx";
+import { TypewriterInput } from "../../../components/typewriter-input.tsx";
 import {
   LOCALE_META,
   SUPPORTED_LOCALES,
@@ -548,7 +549,7 @@ export function SecurityPanel({
                       >
                         Display Name
                       </label>
-                      <input
+                      <TypewriterInput
                         id="display-name-input"
                         type="text"
                         maxLength={100}
@@ -1272,7 +1273,7 @@ export function SecurityPanel({
                 Type <span className="font-mono text-red-600">DELETE</span> to
                 confirm
               </label>
-              <input
+              <TypewriterInput
                 id="delete-account-confirm-input"
                 type="text"
                 value={deleteConfirmText}

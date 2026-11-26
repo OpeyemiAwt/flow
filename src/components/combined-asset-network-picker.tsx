@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AssetAvatar, ChainBadge } from "./icons.tsx";
+import { TypewriterInput } from "./typewriter-input.tsx";
 import {
   type CatalogTokenDeployment,
   MAINNET_SUPPORTED_DEPLOYMENTS,
@@ -176,12 +177,12 @@ export function CombinedAssetNetworkPicker({
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="absolute left-3 text-neutral-400"
+                  className="pointer-events-none absolute left-3 z-10 text-neutral-400"
                 >
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
-                <input
+                <TypewriterInput
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
