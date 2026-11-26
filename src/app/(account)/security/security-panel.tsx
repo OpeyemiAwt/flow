@@ -8,6 +8,8 @@ import { FlowIdClaimModal } from "../../../components/flow-id-claim-modal.tsx";
 import { useTranslation } from "../../../components/language-provider.tsx";
 import { UserAvatar } from "../../../components/user-avatar.tsx";
 import { TypewriterInput } from "../../../components/typewriter-input.tsx";
+import { McpAgentsSection } from "../../../components/mcp-agents-section.tsx";
+import type { SerializedMcpAgentKey } from "../../../server/mcp-agent-keys-service.ts";
 import {
   LOCALE_META,
   SUPPORTED_LOCALES,
@@ -60,6 +62,8 @@ export interface SecurityPanelProps {
     readonly emailNewsletter: boolean;
   };
   readonly initialFlowId?: string | null;
+  readonly initialMcpKeys?: readonly SerializedMcpAgentKey[];
+  readonly appBaseUrl?: string;
 }
 
 type SecurityAction =
@@ -115,6 +119,8 @@ export function SecurityPanel({
   initialProfilePreference,
   initialNotificationPreferences,
   initialFlowId,
+  initialMcpKeys = [],
+  appBaseUrl = "https://flow.devhub.forum",
 }: SecurityPanelProps) {
   const { locale, setLocale, t } = useTranslation();
   const [notificationPreferences, setNotificationPreferences] = useState({
@@ -922,6 +928,12 @@ export function SecurityPanel({
                   </div>
                 </div>
               </div>
+
+              <McpAgentsSection
+                accountId={primaryAccount?.id ?? null}
+                appBaseUrl={appBaseUrl}
+                initialKeys={initialMcpKeys}
+              />
 
               <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-sm space-y-6">
                 <div>

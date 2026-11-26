@@ -9,6 +9,7 @@ import {
   getUserProfilePreference,
 } from "../../../server/preferences-service.ts";
 import { getAccountFlowId } from "../../../server/flow-id-service.ts";
+import { listAccountMcpAgentKeys } from "../../../server/mcp-agent-keys-service.ts";
 import { SecurityPanel } from "./security-panel.tsx";
 
 export default async function SecurityPage() {
@@ -22,7 +23,12 @@ export default async function SecurityPage() {
   const primaryAccountId =
     accounts.find((a) => a.kind === "PERSONAL")?.id ?? accounts[0]?.id ?? null;
   const token = actor.session.token;
-  const [initialProfilePreference, initialNotificationPreferences, initialFlowId] = token
+  const [
+    initialProfilePreference,
+    initialNotificationPreferences,
+    initialFlowId,
+    initialMcpKeys,
+  ] = token
     ? await pageData(() =>
         db.$transaction(async (tx) => {
           await tx.$executeRaw`SELECT set_config('flow.current_session_token', ${token}, true)`;
@@ -40,14 +46,24 @@ export default async function SecurityPage() {
           const flowId = primaryAccountId
             ? await getAccountFlowId(tx, primaryAccountId)
             : null;
-          return [profile, notifPrefs, flowId] as const;
+          const mcpKeys = primaryAccountId
+            ? await listAccountMcpAgentKeys(tx, primaryAccountId).catch(
+                () => [],
+              )
+            : [];
+          return [profile, notifPrefs, flowId, mcpKeys] as const;
         }),
       )
     : [
         { displayName: null, avatarDataUrl: null },
         DEFAULT_NOTIFICATION_PREFERENCES,
         null,
+        [],
       ];
+
+  const appBaseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "") ||
+    "https://flow.devhub.forum";
 
   return (
     <main>
@@ -58,6 +74,8 @@ export default async function SecurityPage() {
         initialProfilePreference={initialProfilePreference}
         initialNotificationPreferences={initialNotificationPreferences}
         initialFlowId={initialFlowId}
+        initialMcpKeys={initialMcpKeys}
+        appBaseUrl={appBaseUrl}
       />
     </main>
   );
