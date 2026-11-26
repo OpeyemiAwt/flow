@@ -126,6 +126,30 @@ type PayerMode = "WALLET" | "EXCHANGE";
 
 type SourceAssetSelection = CatalogTokenDeployment | DiscoveredToken;
 
+function isAttemptExpiredOrFailed(
+  attempt: PaymentDepositInstructions | null | undefined,
+): boolean {
+  if (!attempt) return false;
+  const fundedOrTracked =
+    attempt.status === "DETECTED" ||
+    attempt.status === "SETTLING" ||
+    attempt.status === "SETTLED" ||
+    attempt.status === "EXCEPTION_REFUND_REQUIRED" ||
+    attempt.status === "RECONCILIATION_REQUIRED" ||
+    Boolean(attempt.sourceTxHash);
+  if (fundedOrTracked) return false;
+  return (
+    attempt.status === "EXPIRED" ||
+    attempt.status === "FAILED" ||
+    attempt.status === "QUOTE_EXPIRED" ||
+    attempt.status === "QUOTE_CANCELLED" ||
+    (attempt.status === "DEPOSIT_COMMITTED" &&
+      (!attempt.depositAddress ||
+        !attempt.depositDeadline ||
+        Date.parse(attempt.depositDeadline) <= Date.now()))
+  );
+}
+
 export function CheckoutView({
   request,
   executionDisabled = false,
@@ -174,11 +198,15 @@ export function CheckoutView({
 
   // Deposit Instructions & Settlement Lifecycle State
   const [instructions, setInstructions] =
-    useState<PaymentDepositInstructions | null>(request.activeAttempt ?? null);
+    useState<PaymentDepositInstructions | null>(() =>
+      request.activeAttempt && !isAttemptExpiredOrFailed(request.activeAttempt)
+        ? request.activeAttempt
+        : null,
+    );
   const [attemptInitiatedAt] = useState<string>(() => new Date().toISOString());
   const attemptStorageKey = `flow-checkout-attempt:${request.publicId}`;
 
-  // Persist active deposit attempt across reloads & restore on mount
+  // Persist active deposit attempt across reloads & clean stale ?attempt= params
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (instructions?.attemptPublicId) {
@@ -196,6 +224,18 @@ export function CheckoutView({
         window.history.replaceState(null, "", url.toString());
       }
       return;
+    }
+
+    // If the link was opened with an already-expired ?attempt= query param, strip it cleanly
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("attempt")) {
+      url.searchParams.delete("attempt");
+      window.history.replaceState(null, "", url.toString());
+      try {
+        window.localStorage.removeItem(attemptStorageKey);
+      } catch {
+        // ignore storage errors
+      }
     }
   }, [attemptStorageKey, instructions?.attemptPublicId]);
 
@@ -215,19 +255,41 @@ export function CheckoutView({
           `/api/pay/${request.publicId}/attempt/${savedAttemptId}`,
           { cache: "no-store" },
         );
-        if (!res.ok || cancelled) return;
+        if (!res.ok || cancelled) {
+          if (res.status === 404) {
+            try {
+              window.localStorage.removeItem(attemptStorageKey);
+            } catch {
+              // ignore
+            }
+          }
+          return;
+        }
         const latest = (await res.json()) as PaymentDepositInstructions;
+        const isReusableLink =
+          request.publicId.startsWith("pr_flw_") ||
+          request.maxPayments === null ||
+          request.maxPayments > 1;
         const isStillRelevant =
-          latest.status === "DETECTED" ||
-          latest.status === "SETTLING" ||
-          latest.status === "SETTLED" ||
-          latest.status === "EXCEPTION_REFUND_REQUIRED" ||
-          latest.status === "RECONCILIATION_REQUIRED" ||
-          Boolean(latest.sourceTxHash) ||
-          (latest.status === "DEPOSIT_COMMITTED" &&
-            Date.parse(latest.depositDeadline) > Date.now());
+          !isAttemptExpiredOrFailed(latest) &&
+          (latest.status === "DETECTED" ||
+            latest.status === "SETTLING" ||
+            (latest.status === "SETTLED" && !isReusableLink) ||
+            latest.status === "EXCEPTION_REFUND_REQUIRED" ||
+            latest.status === "RECONCILIATION_REQUIRED" ||
+            (Boolean(latest.sourceTxHash) &&
+              !(latest.status === "SETTLED" && isReusableLink)) ||
+            (latest.status === "DEPOSIT_COMMITTED" &&
+              Boolean(latest.depositAddress) &&
+              Date.parse(latest.depositDeadline) > Date.now()));
         if (isStillRelevant && !cancelled) {
           setInstructions(latest);
+        } else if (!cancelled) {
+          try {
+            window.localStorage.removeItem(attemptStorageKey);
+          } catch {
+            // ignore
+          }
         }
       } catch {
         // ignore restore errors
@@ -236,14 +298,25 @@ export function CheckoutView({
     return () => {
       cancelled = true;
     };
-  }, [attemptStorageKey, instructions, isReadOnly, request.publicId]);
+  }, [
+    attemptStorageKey,
+    instructions,
+    isReadOnly,
+    request.maxPayments,
+    request.publicId,
+  ]);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [directVisible, setDirectVisible] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState<boolean>(false);
   const [copiedMemo, setCopiedMemo] = useState<boolean>(false);
   const [depositSecondsRemaining, setDepositSecondsRemaining] =
-    useState<number>(900);
+    useState<number>(() => {
+      const deadline = request.activeAttempt?.depositDeadline;
+      if (!deadline) return 900;
+      const ms = Date.parse(deadline) - Date.now();
+      return Number.isFinite(ms) ? Math.max(0, Math.floor(ms / 1000)) : 0;
+    });
 
   // Copy Feedback State
   const [copiedRecipientAddress, setCopiedRecipientAddress] = useState(false);
@@ -591,6 +664,21 @@ export function CheckoutView({
       window.clearInterval(interval);
     };
   }, [quoteDeadline]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || instructions || isReadOnly) return;
+    const handleVisibility = () => {
+      if (
+        document.visibilityState === "visible" &&
+        quoteError === "The quote has expired."
+      ) {
+        setRefreshTrigger((value) => value + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibility);
+  }, [instructions, isReadOnly, quoteError]);
 
   const directDisplay =
     isDirect && payerMode === "WALLET" && amountAtomic && amountAtomic !== "0"

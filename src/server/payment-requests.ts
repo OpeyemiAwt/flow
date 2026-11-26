@@ -865,11 +865,39 @@ export async function readPublicPaymentRequest(
             canonicalizeNetworkId(rowAddress.chain_id) ===
             row.destination_network,
         )?.address ?? null;
-      activeAttempt = await readPaymentAttempt(
-        publicId,
-        new URL(request.url).searchParams.get("attempt"),
-        recipientWalletRows,
+      const requestedAttemptId = new URL(request.url).searchParams.get(
+        "attempt",
       );
+      const isSharedDirectFlowLink = publicId.startsWith("pr_flw_");
+      if (!isSharedDirectFlowLink || requestedAttemptId) {
+        const candidateAttempt = await readPaymentAttempt(
+          publicId,
+          requestedAttemptId,
+          recipientWalletRows,
+        );
+        if (candidateAttempt) {
+          const isFundedOrTracked =
+            candidateAttempt.status === "DETECTED" ||
+            candidateAttempt.status === "SETTLING" ||
+            candidateAttempt.status === "SETTLED" ||
+            candidateAttempt.status === "EXCEPTION_REFUND_REQUIRED" ||
+            candidateAttempt.status === "RECONCILIATION_REQUIRED" ||
+            Boolean(candidateAttempt.sourceTxHash);
+          const isUnfundedExpiredOrFailed =
+            !isFundedOrTracked &&
+            (candidateAttempt.status === "EXPIRED" ||
+              candidateAttempt.status === "FAILED" ||
+              candidateAttempt.status === "QUOTE_EXPIRED" ||
+              candidateAttempt.status === "QUOTE_CANCELLED" ||
+              (candidateAttempt.status === "DEPOSIT_COMMITTED" &&
+                (!candidateAttempt.depositAddress ||
+                  !candidateAttempt.depositDeadline ||
+                  Date.parse(candidateAttempt.depositDeadline) <= Date.now())));
+          if (!isUnfundedExpiredOrFailed) {
+            activeAttempt = candidateAttempt;
+          }
+        }
+      }
     } catch {
       // Non-fatal if worker DB is unavailable in unit context
     }
