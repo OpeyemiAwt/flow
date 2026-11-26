@@ -495,8 +495,34 @@ export function AssistantView({
     return () => cleanupVoiceResources();
   }, [cleanupVoiceResources]);
 
+  const stripMarkdownForCopy = (content: string) =>
+    content
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .trim();
+
   const copyText = (key: string, value: string) => {
-    navigator.clipboard?.writeText(value).catch(() => {});
+    const fallbackCopy = () => {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = value;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        // ignore
+      }
+    };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(value).catch(fallbackCopy);
+    } else {
+      fallbackCopy();
+    }
     setCopiedKey(key);
     window.setTimeout(() => {
       setCopiedKey((prev) => (prev === key ? null : prev));
@@ -1394,14 +1420,73 @@ export function AssistantView({
                       )}
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     </div>
-                    {msg.timestamp && (
-                      <span className="text-[10px] text-neutral-400 mt-1 px-1 tabular-nums">
-                        {new Date(msg.timestamp).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    )}
+                    <div className="mt-1 flex items-center justify-end gap-2 px-1">
+                      {msg.timestamp && (
+                        <span className="text-[10px] text-neutral-400 tabular-nums">
+                          {new Date(msg.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => copyText(`msg-${msgKey}`, msg.content)}
+                        aria-label={
+                          copiedKey === `msg-${msgKey}`
+                            ? "Copied message"
+                            : "Copy message"
+                        }
+                        title={
+                          copiedKey === `msg-${msgKey}` ? "Copied" : "Copy text"
+                        }
+                        className="inline-flex items-center gap-1 rounded-md p-1 text-[11px] font-medium text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-200 transition-colors cursor-pointer"
+                      >
+                        {copiedKey === `msg-${msgKey}` ? (
+                          <>
+                            <svg
+                              width="13"
+                              height="13"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="text-emerald-600 dark:text-emerald-400"
+                              aria-hidden="true"
+                            >
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
+                              Copied
+                            </span>
+                          </>
+                        ) : (
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <rect
+                              width="14"
+                              height="14"
+                              x="8"
+                              y="8"
+                              rx="2"
+                              ry="2"
+                            />
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 );
               }
@@ -1971,14 +2056,79 @@ export function AssistantView({
                       )}
                     </div>
 
-                    {msg.timestamp && (
-                      <span className="block text-[10px] text-neutral-400 px-1 tabular-nums">
-                        {new Date(msg.timestamp).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 px-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyText(
+                            `msg-${msgKey}`,
+                            stripMarkdownForCopy(msg.content),
+                          )
+                        }
+                        aria-label={
+                          copiedKey === `msg-${msgKey}`
+                            ? "Copied response"
+                            : "Copy response"
+                        }
+                        title={
+                          copiedKey === `msg-${msgKey}` ? "Copied" : "Copy text"
+                        }
+                        className="inline-flex items-center gap-1 rounded-md p-1 text-[11px] font-medium text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-200 transition-colors cursor-pointer"
+                      >
+                        {copiedKey === `msg-${msgKey}` ? (
+                          <>
+                            <svg
+                              width="13"
+                              height="13"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="text-emerald-600 dark:text-emerald-400"
+                              aria-hidden="true"
+                            >
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
+                              Copied
+                            </span>
+                          </>
+                        ) : (
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <rect
+                              width="14"
+                              height="14"
+                              x="8"
+                              y="8"
+                              rx="2"
+                              ry="2"
+                            />
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                          </svg>
+                        )}
+                      </button>
+
+                      {msg.timestamp && (
+                        <span className="text-[10px] text-neutral-400 tabular-nums">
+                          {new Date(msg.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

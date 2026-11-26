@@ -45,6 +45,141 @@ export interface AssistantMessage {
 const SUPPORT_EMAIL =
   process.env.FLOW_SUPPORT_EMAIL?.trim() || "flow@devhub.forum";
 
+const FLOW_PRODUCT_KNOWLEDGE = [
+  "FLOW Product Knowledge Base (always answer FLOW questions accurately from these facts):",
+  "- What FLOW is: FLOW (https://flow.devhub.forum) is a non-custodial multi-chain payments and money app that lets users send, receive, convert, request payments, and earn native yield across 4 mainnets (NEAR Mainnet, Solana Mainnet, Base Mainnet, and Ethereum Mainnet) from a single account, with no seed phrases and no manual network switching.",
+  "- Onboarding & Custody: Users sign in with Google or an email one-time code (OTP). FLOW automatically provisions real non-custodial mainnet wallet addresses on NEAR, Solana, Base, and Ethereum backed by OutLayer MPC key management and on-chain wallet policies. Supports both Personal and Business/Team accounts (with team invites and role-based access).",
+  "- @flow ID & Direct Links: Users can claim a human-readable handle like name@flow (e.g. flow.devhub.forum/name@flow). Sharing a direct @flow link opens a receipt-style landing page where anyone can either Pay with FLOW (lands directly in Send pre-filled with that @flow ID) or Pay with external wallet (opens an open-amount checkout page where they can pay in any supported token or chain via NEAR Intents and it settles on NEAR into the recipient's FLOW wallet).",
+  "- Send: Send supported assets to a @flow ID or a raw blockchain address (NEAR .near/implicit, Solana, Base/Ethereum 0x...). Same-asset direct sends have a 0% FLOW platform fee (network gas only). Cross-asset sends (sending one asset while the recipient receives another) route via NEAR Intents (1Click) with a 0.3% FLOW platform fee charged from the sender's wallet balance, with live estimated output shown before confirming.",
+  "- Receive & Payment Links: Users can receive directly to their NEAR, Solana, Base, or Ethereum addresses (or QR codes), or create shareable Payment Links (Request tab -> New request). Payers do not need a FLOW account and can pay from any of 200+ supported tokens across chains via NEAR Intents. Payment Links support fixed or open amounts, choice of who pays routing fees (payer or creator), optional max payer limits, auto-refreshing quotes when expired links are reopened, and pause/delete controls. FLOW platform fee on Payment Links is 0%.",
+  "- Convert & Bridge: Swap or bridge between assets across the user's own FLOW wallets (e.g., SOL on Solana to USDC on Base or NEAR on NEAR Mainnet) using live NEAR Intents (1Click) quotes. FLOW platform fee is 1.5% charged from wallet balance, shown up front before confirming.",
+  "- Earn (Native Yield on NEAR): Users can earn yield directly from their own non-custodial NEAR wallet via LiNEAR Protocol (liquid stake NEAR for $LiNEAR with auto-compounding staking rewards; standard unstaking takes ~48 hours / ~4 NEAR epochs before claiming) and Burrow Finance (supply USDC on NEAR Mainnet for variable lending yield). FLOW charges a one-shot 0.3% deposit fee on Earn deposits and 0% on withdrawals and claims.",
+  "- Flow AI Assistant: Built right into FLOW. Can answer any question about FLOW, check live portfolio balances and USD values, draft and confirm sends to @flow IDs or raw addresses, preview and run cross-chain conversions, draft and publish payment links, share deposit addresses, check settlement status, take voice notes (tap the mic, including spoken 'name at flow' handles), sync conversation history across devices (History button), and draft/send support dispute emails straight to flow@devhub.forum. Every fund-moving action or dispute email always requires the user's explicit tap to confirm.",
+  "- App Sections & Tools: Home/Portfolio (balances, Send, Receive, Convert, Request, Earn, Activity), Flow AI Assistant (/assistant), Activity timeline with tx hashes, Analytics (/analytics), Market Insights (/insights), Notifications (/notifications), Security & Settings (/security: profile, @flow ID, active sessions & device revocation, Google sign-in, light/dark mode, language selector, account deletion), plus public Docs (/docs), Whitepaper (/whitepaper), Blog (/blog), Terms (/terms), Privacy (/privacy), and Support (flow@devhub.forum).",
+  "- Fee Summary: Direct same-asset send = 0% | Cross-asset send = 0.3% | Payment Link checkout = 0% | Convert & Bridge = 1.5% | Earn deposit = 0.3% | Earn withdraw/claim = 0%.",
+].join("\n");
+
+function answerFlowProductQuestion(
+  prompt: string,
+  userFlowId: string | null,
+): string | null {
+  const p = prompt.trim().toLowerCase();
+
+  // Simple greetings
+  if (/^(hi|hey|hello|yo|gm|good morning|good afternoon|good evening|sup)[!?. ]*$/i.test(p)) {
+    return "Hey! I'm Flow AI. I can answer anything about FLOW, check your live balances, send to @flow IDs or addresses, convert across chains, create payment links, or send a dispute to support. How can I help?";
+  }
+
+  // What is FLOW / What can I do with FLOW / Capabilities
+  if (
+    /\b(what is flow|what'?s flow|about flow|explain flow|tell me about flow|what can i do (with|on|in) flow|what does flow do|flow features|how does flow work|why flow)\b/i.test(
+      p,
+    )
+  ) {
+    return [
+      "**FLOW** is a non-custodial multi-chain payments wallet across **NEAR, Solana, Base, and Ethereum** with no seed phrases or manual chain switching.",
+      "",
+      "Here is what you can do with FLOW:",
+      "- **Send & @flow ID:** Send to human-readable handles (`name@flow`) or wallet addresses. Direct same-asset sends have a 0% FLOW fee; cross-asset sends route via NEAR Intents (0.3% fee).",
+      "- **Shareable Direct Links & Payment Links:** Share your `flow.devhub.forum/name@flow` link or create fixed/open payment links. Payers can pay with FLOW or from any external wallet across 200+ tokens (0% FLOW fee).",
+      "- **Convert & Bridge:** Swap assets across your own NEAR, Solana, Base, and Ethereum wallets with live quotes (1.5% FLOW fee).",
+      "- **Earn Native Yield:** Stake NEAR via **LiNEAR** or supply USDC via **Burrow Finance** straight from your own NEAR wallet (0.3% deposit fee, 0% withdrawal fee).",
+      "- **Flow AI & Voice Notes:** Ask questions, speak commands via voice notes, check synced conversation history, inspect Analytics/Insights, or send support disputes to `flow@devhub.forum`.",
+    ].join("\n");
+  }
+
+  // What can Flow AI do
+  if (
+    /\b(what can you do|who are you|how can you help|help me|your capabilities)\b/i.test(
+      p,
+    )
+  ) {
+    return [
+      "I'm **Flow AI**, your built-in assistant for FLOW. Here is how I can help:",
+      "- **Answer FLOW questions:** Fees, @flow IDs, Earn yield, security, payment links, and supported chains.",
+      "- **Check balances & activity:** View formatted live holdings, USD totals, deposit addresses, and recent settlements.",
+      "- **Prepare transactions:** Send to `@flow` IDs or addresses, preview cross-chain conversions, or draft payment links (always asking you to tap confirm first).",
+      "- **Voice notes & synced history:** Tap the mic to speak any command, and open the History icon to access past chats across devices.",
+      "- **Support disputes:** Tell me about any payment issue and I'll draft an email directly to `flow@devhub.forum`.",
+    ].join("\n");
+  }
+
+  // Fees & pricing
+  if (
+    /\b(fee|fees|pricing|cost|charge|commission)\b/i.test(p) &&
+    !/\b(dispute|refund|missing)\b/i.test(p)
+  ) {
+    return [
+      "Here is the **FLOW fee schedule** (shown up front before you confirm):",
+      "- **Direct sends (same asset):** 0% FLOW fee (network gas only)",
+      "- **Cross-asset sends:** 0.3% FLOW fee (charged from wallet balance via NEAR Intents)",
+      "- **Payment Link checkouts:** 0% FLOW fee (creator chooses whether payer or creator covers routing fees)",
+      "- **Convert & Bridge:** 1.5% FLOW fee (charged from wallet balance)",
+      "- **Earn deposits (LiNEAR / Burrow):** 0.3% one-shot FLOW deposit fee",
+      "- **Earn withdrawals & claims:** 0% FLOW fee",
+    ].join("\n");
+  }
+
+  // Earn / Yield / Staking / LiNEAR / Burrow
+  if (/\b(earn|yield|stake|staking|linear|burrow|apy|interest)\b/i.test(p)) {
+    return [
+      "In the **Earn** tab, you can put idle NEAR ecosystem assets to work directly from your own non-custodial NEAR wallet:",
+      "- **LiNEAR liquid staking:** Deposit NEAR to receive `$LiNEAR` and earn auto-compounding staking rewards. Standard unstaking has NEAR's ~48-hour (~4 epoch) cooldown before you tap **Claim**.",
+      "- **Burrow Finance:** Supply USDC on NEAR Mainnet to earn variable lending yield.",
+      "- **Fees:** 0.3% one-shot FLOW deposit fee and **0% fee on withdrawals and claims**.",
+    ].join("\n");
+  }
+
+  // @flow ID & direct pay link / external wallet
+  if (
+    /\b(@flow|flow id|direct link|external wallet|handle)\b/i.test(p) &&
+    /\b(how|what|explain|work|works|tell me|what'?s)\b/i.test(p) &&
+    !/\b(send\s+\d|pay\s+\d|transfer\s+\d)\b/i.test(p)
+  ) {
+    const ownLine = userFlowId
+      ? `Your current FLOW ID is **${userFlowId}** (\`flow.devhub.forum/${userFlowId}\`).`
+      : "You can claim your own `@flow` ID in **Settings** or from the home header.";
+    return [
+      `A **@flow ID** is your human-readable FLOW payment handle (like \`name@flow\`). ${ownLine}`,
+      "- Anyone opening `flow.devhub.forum/name@flow` sees a clean receipt screen where they can tap **Pay with FLOW** (goes straight to Send pre-filled with your handle) or **Pay with external wallet**.",
+      "- External wallet payments open an open-amount checkout where payers can send any supported token across chains via NEAR Intents, settling directly onto NEAR in your FLOW wallet.",
+    ].join("\n");
+  }
+
+  // Security / Custody / Non-custodial / MPC / OutLayer / Seed phrase
+  if (
+    /\b(safe|safety|secure|security|custody|non-custodial|custodial|seed phrase|private key|outlayer|mpc|delete account|sessions)\b/i.test(
+      p,
+    )
+  ) {
+    return [
+      "**FLOW is non-custodial.** When you sign in with Google or an email one-time code, **OutLayer MPC** provisions real mainnet wallet addresses you control on NEAR, Solana, Base, and Ethereum without requiring you to manage a seed phrase.",
+      "- On-chain wallet policies protect signing, and Flow AI never moves funds or emails support without your explicit tap to confirm.",
+      "- In **Settings** (`/security`), you can review active sessions, revoke other devices, manage Google sign-in, or permanently delete your account.",
+    ].join("\n");
+  }
+
+  // NEAR Intents / 1Click / Cross-chain mechanics
+  if (/\b(near intents|1click|one click|cross-chain|bridge|solver)\b/i.test(p) && /\b(how|what|explain|work|works)\b/i.test(p)) {
+    return "FLOW routes cross-chain sends, Convert & Bridge swaps, and multi-chain payment links through **NEAR Intents (1Click)**. Solvers provide live signed quotes showing exact estimated receive amounts and costs before you confirm, letting payers settle from 200+ tokens across chains without manual bridging.";
+  }
+
+  // How Payment Links work (informational question, not creating one)
+  if (
+    /\b(payment link|payment links|checkout|request)\b/i.test(p) &&
+    /\b(how|what|explain|work|works)\b/i.test(p)
+  ) {
+    return [
+      "**Payment Links** let you get paid from any supported chain or token without the payer needing a FLOW account:",
+      "- Open **Request -> New request** (or ask me to draft one) and choose a fixed or open amount.",
+      "- On fixed-amount links, decide whether your payer covers routing fees or you absorb them, and optionally set a max payer limit.",
+      "- Reopening an expired link automatically starts fresh with a live quote, and FLOW charges a **0% platform fee** on Payment Link checkouts.",
+    ].join("\n");
+  }
+
+  return null;
+}
+
 export function formatAiNetworkName(network: string | null | undefined): string {
   const norm = (network ?? "").toLowerCase().trim();
   if (norm.startsWith("near")) {
@@ -330,8 +465,9 @@ async function tryLlmAssistantReply(params: {
       : "No recent transactions yet";
 
   const systemPrompt = [
-    "You are Flow AI, the conversational assistant inside FLOW (a non-custodial multi-chain payments wallet across NEAR, Solana, Base, and Ethereum).",
-    "Style rules: Be clear, warm, concise, and direct. Never dump raw 18-digit decimals (always use clean formatted numbers like 6.5587 NEAR or $20.14). Never use em dashes. Never invent balances, addresses, or transaction hashes.",
+    "You are Flow AI, the conversational assistant and product expert inside FLOW.",
+    "Style rules: Be clear, warm, concise, and genuinely helpful. Answer general conversations and any question about FLOW (what FLOW is, what users can do with FLOW, how features work, fees, security/custody, @flow IDs, direct links, external wallet checkout, Earn, Convert, Payment Links, voice notes, disputes, etc.) accurately using the FLOW Product Knowledge Base below. For conversational or informational questions (like 'what can I do with flow?' or 'how do fees work?'), give a clear, scannable answer with bullet points where helpful and set card to null. Never dump raw 18-digit decimals (always use clean formatted numbers like 6.5587 NEAR or $20.14). Never use em dashes. Never invent balances, addresses, or transaction hashes.",
+    FLOW_PRODUCT_KNOWLEDGE,
     `User FLOW ID: ${params.userFlowId ?? "Not claimed yet"}.`,
     `Total verified portfolio value: ${params.totalUsdLabel ?? "Unavailable"}.`,
     `Verified balances: ${balancesContext}.`,
@@ -343,7 +479,7 @@ async function tryLlmAssistantReply(params: {
     `Supported mainnet deployments: ${MAINNET_SUPPORTED_DEPLOYMENTS.map((d) => `${d.symbol} on ${d.networkName} (${d.id})`).join(", ")}.`,
     "Return ONLY valid JSON matching this schema:",
     '{ "reply": string, "card": { "type": "BALANCE_SUMMARY" | "SEND_PREVIEW" | "PREVIEW_SWAP" | "DRAFT_PAYMENT_LINK" | "RECEIVE_ADDRESS" | "PAYMENT_STATUS" | "DISPUTE_EMAIL", "title": string, "data": object } | null }',
-    "Card rules:",
+    "Card rules (set card to null unless the user is actively asking to view data or perform one of these actions):",
     "- BALANCE_SUMMARY: Use when the user asks for balances/holdings. Set data to { \"networkFilter\": \"near-mainnet\" | \"base-mainnet\" | \"solana-mainnet\" | \"ethereum-mainnet\" | null }. Server will populate exact verified balances.",
     "- SEND_PREVIEW: Use ONLY when you have amount, assetSymbol, sourceDeploymentId, destinationDeploymentId, and recipientAddress (use the resolved @flow recipientAddress above if user named a @flow ID). Data keys: sourceDeploymentId, destinationDeploymentId, assetSymbol, network, networkName, amount, recipientAddress, recipientFlowId (optional), memo (optional).",
     "- PREVIEW_SWAP: Use when user asks to swap/convert. Data keys: sourceDeploymentId, destinationDeploymentId, fromAsset, toAsset, amount, route, safetyNotice.",
@@ -379,8 +515,8 @@ async function tryLlmAssistantReply(params: {
           body: JSON.stringify({
             model,
             response_format: { type: "json_object" },
-            temperature: 0.25,
-            max_tokens: 1024,
+            temperature: 0.3,
+            max_tokens: 1400,
             messages: [
               { role: "system", content: systemPrompt },
               ...transcript,
@@ -936,6 +1072,16 @@ export async function processAssistantQuery(params: {
         },
         ctaLabel: "Send Dispute",
       },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // Intent 0.5: General FLOW product Q&A / conversational fallback
+  const productAnswer = answerFlowProductQuestion(prompt, userFlowId);
+  if (productAnswer) {
+    return {
+      role: "assistant",
+      content: productAnswer,
       timestamp: new Date().toISOString(),
     };
   }
