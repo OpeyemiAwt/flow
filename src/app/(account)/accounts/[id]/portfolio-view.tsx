@@ -3417,178 +3417,100 @@ export function PortfolioView({
               )}
             </section>
 
-            {/* 2-Column Bottom Grid: Recent Activity & Monthly Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-              {/* Left: Recent Activity Card */}
-              <section
-                aria-label="Recent activity"
-                className="md:col-span-7 rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4 sm:p-6 shadow-xs space-y-3 sm:space-y-4"
-              >
-                <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
-                  <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
-                    Recent activity
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => changeTab("activity")}
-                    className="text-xs font-semibold text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white cursor-pointer"
-                  >
-                    View all →
-                  </button>
-                </div>
+            {/* Full-Width Recent Activity Card */}
+            <section
+              aria-label="Recent activity"
+              className="w-full rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-4 sm:p-6 shadow-xs space-y-3 sm:space-y-4"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
+                <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
+                  Recent activity
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => changeTab("activity")}
+                  className="text-xs font-semibold text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white cursor-pointer"
+                >
+                  View all →
+                </button>
+              </div>
 
-                <div className="space-y-1.5 sm:space-y-2">
-                  {displayActivities.length > 0 ? (
-                    displayActivities.slice(0, 3).map((act) => (
-                      <button
-                        key={act.id}
-                        type="button"
-                        onClick={() => setReceiptActivity(act)}
-                        className="w-full text-left flex items-center justify-between gap-3 px-2 py-2.5 rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                          <div
-                            className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center font-bold text-xs ${
-                              act.direction === "INCOMING"
-                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
-                                : "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400"
-                            }`}
-                          >
-                            {act.direction === "OUTGOING" ? "↑" : "↓"}
+              <div className="space-y-1.5 sm:space-y-2">
+                {displayActivities.length > 0 ? (
+                  displayActivities.slice(0, 5).map((act) => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => setReceiptActivity(act)}
+                      className="w-full text-left flex items-center justify-between gap-3 px-2 py-2.5 rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                        <div
+                          className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center font-bold text-xs ${
+                            act.direction === "INCOMING"
+                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
+                              : "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400"
+                          }`}
+                        >
+                          {act.direction === "OUTGOING" ? "↑" : "↓"}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold text-neutral-950 dark:text-white truncate">
+                            {act.activityType ===
+                              "FLOW_CROSS_CHAIN_SETTLEMENT" &&
+                            act.finality === "FINALIZED"
+                              ? "Payment settled"
+                              : act.activityType === "FLOW_PAYMENT"
+                                ? act.metadata?.executionStatus === "FAILED" ||
+                                  act.metadata?.executionStatus === "REFUNDED" ||
+                                  act.metadata?.executionStatus === "EXPIRED"
+                                  ? "Payment failed"
+                                  : act.finality === "PENDING"
+                                    ? "Payment pending"
+                                    : "Cross-chain payment"
+                                : act.direction === "OUTGOING"
+                                  ? "Transfer sent"
+                                  : "Transfer received"}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-bold text-neutral-950 dark:text-white truncate">
-                              {act.activityType ===
-                                "FLOW_CROSS_CHAIN_SETTLEMENT" &&
-                              act.finality === "FINALIZED"
-                                ? "Payment settled"
-                                : act.activityType === "FLOW_PAYMENT"
-                                  ? act.metadata?.executionStatus === "FAILED" ||
-                                    act.metadata?.executionStatus === "REFUNDED" ||
-                                    act.metadata?.executionStatus === "EXPIRED"
-                                    ? "Payment failed"
-                                    : act.finality === "PENDING"
-                                      ? "Payment pending"
-                                      : "Cross-chain payment"
-                                  : act.direction === "OUTGOING"
-                                    ? "Transfer sent"
-                                    : "Transfer received"}
-                            </div>
-                            <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
-                              {typeof act.metadata?.memo === "string" &&
-                              act.metadata.memo.trim()
-                                ? `${act.metadata.memo.trim()} • `
-                                : ""}
-                              {formatTimestamp(
-                                act.blockTimestamp || act.observedAt,
-                              )}
-                            </div>
+                          <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                            {typeof act.metadata?.memo === "string" &&
+                            act.metadata.memo.trim()
+                              ? `${act.metadata.memo.trim()} • `
+                              : ""}
+                            {formatTimestamp(
+                              act.blockTimestamp || act.observedAt,
+                            )}
                           </div>
                         </div>
+                      </div>
 
-                        <div className="text-right shrink-0">
-                          <span
-                            className={`block text-xs font-bold tabular-nums whitespace-nowrap ${
-                              act.direction === "INCOMING"
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-neutral-950 dark:text-white"
-                            }`}
-                          >
-                            {hideBalance
-                              ? "••••••"
-                              : `${act.direction === "OUTGOING" ? "−" : "+"}${formatCompactActivityAmount(act.displayAmount, 3)} ${act.assetSymbol}`}
-                          </span>
-                          <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold uppercase tracking-wide mt-0.5 whitespace-nowrap">
-                            {act.reorgStatus === "CANONICAL"
-                              ? act.finality
-                              : act.reorgStatus}
-                          </div>
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`block text-xs font-bold tabular-nums whitespace-nowrap ${
+                            act.direction === "INCOMING"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-neutral-950 dark:text-white"
+                          }`}
+                        >
+                          {hideBalance
+                            ? "••••••"
+                            : `${act.direction === "OUTGOING" ? "−" : "+"}${formatCompactActivityAmount(act.displayAmount, 3)} ${act.assetSymbol}`}
+                        </span>
+                        <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold uppercase tracking-wide mt-0.5 whitespace-nowrap">
+                          {act.reorgStatus === "CANONICAL"
+                            ? act.finality
+                            : act.reorgStatus}
                         </div>
-                      </button>
-                    ))
-                  ) : (
-                    <p className="text-xs text-neutral-600 dark:text-neutral-400">
-                      No activity to display.
-                    </p>
-                  )}
-                </div>
-              </section>
-
-              {/* Right: This Month Stat Card */}
-              <section
-                aria-label="Monthly statistics"
-                className="md:col-span-5 rounded-[28px] border border-neutral-200/80 dark:border-white/[0.08] bg-white dark:bg-[#141414] p-6 shadow-xs space-y-4"
-              >
-                <div className="pb-2 border-b border-neutral-100 dark:border-white/[0.06]">
-                  <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
-                    This month
-                  </h3>
-                  <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
-                    Posted payment ledger · UTC
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                    No activity to display.
                   </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <div className="h-7 w-7 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold shrink-0">
-                        ↓
-                      </div>
-                      <span className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
-                        Inflow
-                      </span>
-                    </div>
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 text-right min-w-0 break-words tabular-nums">
-                      {hideBalance
-                        ? "••••••"
-                        : ledgerMovementLabel(
-                            ledgerMovements,
-                            "inflow",
-                            tokenPrices,
-                            displayActivities,
-                          )}
-                    </span>
-                  </div>
-
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <div className="h-7 w-7 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xs font-bold shrink-0">
-                        ↑
-                      </div>
-                      <span className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
-                        Outflow
-                      </span>
-                    </div>
-                    <span className="text-sm font-bold text-neutral-950 dark:text-white text-right min-w-0 break-words tabular-nums">
-                      {hideBalance
-                        ? "••••••"
-                        : ledgerMovementLabel(
-                            ledgerMovements,
-                            "outflow",
-                            tokenPrices,
-                            displayActivities,
-                          )}
-                    </span>
-                  </div>
-
-                  <div className="pt-3 border-t border-neutral-100 dark:border-white/[0.06] flex items-start justify-between gap-3">
-                    <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
-                      Net movement
-                    </span>
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 text-right min-w-0 break-words tabular-nums">
-                      {hideBalance
-                        ? "••••••"
-                        : ledgerMovementLabel(
-                            ledgerMovements,
-                            "net",
-                            tokenPrices,
-                            displayActivities,
-                          )}
-                    </span>
-                  </div>
-                </div>
-              </section>
-            </div>
+                )}
+              </div>
+            </section>
           </MotionTabPanel>
         )}
 

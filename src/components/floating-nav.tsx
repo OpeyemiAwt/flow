@@ -11,14 +11,11 @@ import {
 import Link from "next/link";
 import { FlowLogo } from "./flow-logo.tsx";
 import { triggerHaptic } from "./haptics.ts";
-import { FlowAiMascot, IconMoon, IconSun } from "./icons.tsx";
+import { FlowAiMascot } from "./icons.tsx";
 import { useTranslation } from "./language-provider.tsx";
 import { UserAvatar } from "./user-avatar.tsx";
 import {
   PROFILE_PREFERENCE_EVENT,
-  THEME_CHANGE_EVENT,
-  applyDarkTheme,
-  readIsDarkTheme,
   readProfilePreference,
 } from "./profile-preferences.ts";
 
@@ -158,7 +155,6 @@ export function FloatingNav({
   const [signOutError, setSignOutError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [currentUserName, setCurrentUserName] = useState(effectiveUserName);
-  const [isDark, setIsDark] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const mobileProfileRef = useRef<HTMLDivElement>(null);
 
@@ -270,13 +266,6 @@ export function FloatingNav({
     return () => window.removeEventListener(PROFILE_PREFERENCE_EVENT, sync);
   }, [effectiveUserName, profileId]);
 
-  useEffect(() => {
-    const syncTheme = () => setIsDark(readIsDarkTheme());
-    syncTheme();
-    window.addEventListener(THEME_CHANGE_EVENT, syncTheme);
-    return () => window.removeEventListener(THEME_CHANGE_EVENT, syncTheme);
-  }, []);
-
   const signOut = async () => {
     setSigningOut(true);
     setSignOutError("");
@@ -329,27 +318,6 @@ export function FloatingNav({
       </div>
 
       <div className="space-y-0.5 text-xs font-medium text-neutral-700 dark:text-neutral-200">
-        <Link
-          href="/security?tab=profile"
-          onClick={() => setProfileOpen(false)}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-          <span>Profile</span>
-        </Link>
-
         <button
           type="button"
           onClick={() => {
@@ -396,31 +364,6 @@ export function FloatingNav({
           <span>{t.navInsights}</span>
         </Link>
 
-        <Link
-          href="/agents"
-          onClick={() => setProfileOpen(false)}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 8V4H8" />
-            <rect width="16" height="12" x="4" y="8" rx="2" />
-            <path d="M2 14h2" />
-            <path d="M20 14h2" />
-            <path d="M15 13v2" />
-            <path d="M9 13v2" />
-          </svg>
-          <span>AI Agents (MCP)</span>
-        </Link>
-
         {userEmail?.trim().toLowerCase() ===
           "opeyemimosesawt@gmail.com" && (
           <Link
@@ -444,25 +387,6 @@ export function FloatingNav({
             <span>{t.navAnalytics}</span>
           </Link>
         )}
-
-        <button
-          type="button"
-          onClick={() => {
-            const next = !isDark;
-            setIsDark(next);
-            applyDarkTheme(next);
-          }}
-          aria-label="Toggle appearance theme"
-          className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl hover:bg-neutral-100/90 dark:hover:bg-white/[0.07] transition-colors text-left cursor-pointer"
-        >
-          <span className="flex items-center gap-2.5">
-            {isDark ? <IconSun size={16} /> : <IconMoon size={16} />}
-            <span>Appearance</span>
-          </span>
-          <span className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
-            {isDark ? "Dark" : "Light"}
-          </span>
-        </button>
 
         <Link
           href="/security"
@@ -678,14 +602,15 @@ export function FloatingNav({
             </button>
           ) : null}
 
-          {/* Liquid Glass My Profile Dropdown Button (Desktop top bar; moved to bottom on mobile) */}
+          {/* Liquid Glass Circular Profile Trigger (Desktop top bar; moved to bottom on mobile) */}
           <div className="hidden md:block relative" ref={profileRef}>
             <button
               type="button"
               onClick={() => setProfileOpen((prev) => !prev)}
               aria-label="Account menu"
+              title={currentUserName}
               aria-expanded={profileOpen}
-              className="flow-liquid-btn flex h-12 items-center gap-2.5 pl-1.5 pr-3.5 rounded-full select-none cursor-pointer"
+              className="flow-liquid-btn flex h-12 w-12 items-center justify-center rounded-full select-none cursor-pointer"
             >
               <UserAvatar
                 profileId={profileId}
@@ -693,24 +618,8 @@ export function FloatingNav({
                 email={userEmail}
                 name={currentUserName}
                 alt={currentUserName}
-                size={34}
+                size={38}
               />
-              <span className="hidden sm:inline text-xs font-semibold text-neutral-900 dark:text-white max-w-[130px] truncate">
-                {currentUserName}
-              </span>
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`text-neutral-500 dark:text-neutral-400 transition-transform duration-200 ${profileOpen ? "rotate-180" : ""}`}
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
             </button>
 
             {profileOpen && renderProfileMenu("down")}
@@ -719,7 +628,7 @@ export function FloatingNav({
       </div>
       </header>
 
-      {/* Bottom Floating Profile Pill + Big Liquid Glass Navigation (Mobile) */}
+      {/* Bottom Floating Profile Circle + Big Liquid Glass Navigation (Mobile) */}
       <div className="md:hidden fixed bottom-4 inset-x-0 z-50 flex items-center justify-center gap-2.5 px-3 pointer-events-none">
         {/* Mobile Profile Trigger (Opens Upwards) */}
         <div className="relative pointer-events-auto shrink-0" ref={mobileProfileRef}>
@@ -730,8 +639,9 @@ export function FloatingNav({
               setProfileOpen((prev) => !prev);
             }}
             aria-label="Account menu"
+            title={currentUserName}
             aria-expanded={profileOpen}
-            className="flow-nav-glass shadow-xl flex h-[62px] items-center gap-1.5 pl-2.5 pr-3 rounded-full select-none cursor-pointer"
+            className="flow-nav-glass shadow-xl flex h-[62px] w-[62px] items-center justify-center rounded-full select-none cursor-pointer"
           >
             <UserAvatar
               profileId={profileId}
@@ -739,21 +649,8 @@ export function FloatingNav({
               email={userEmail}
               name={currentUserName}
               alt={currentUserName}
-              size={38}
+              size={42}
             />
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`text-neutral-500 dark:text-neutral-400 transition-transform duration-200 ${profileOpen ? "rotate-180" : ""}`}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
           </button>
 
           {profileOpen && renderProfileMenu("up")}
