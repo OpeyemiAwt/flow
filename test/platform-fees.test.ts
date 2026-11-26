@@ -8,8 +8,10 @@ import {
   getOperationAppFees,
   getOperationPlatformFeeBps,
   grossUpForPlatformFee,
+  isNearSourceGasSponsored,
   isNearToNearFlow,
   maxPrincipalBeforePlatformFee,
+  resolveTransferFeeBreakdown,
   splitPlatformFee,
 } from "../src/domain/platform-fees.ts";
 import {
@@ -256,4 +258,59 @@ test("NEAR gas sponsor top-up calculation and Borsh tx builders enforce safety b
   });
   assert.ok(storageTx.txBytes.length > 100);
   assert.match(storageTx.argsJson, /"registration_only":true/);
+});
+
+test("NEAR-to-other-chain routes sponsor NEAR gas while collecting platform fee, and Max deducts fee from amount sent", () => {
+  assert.equal(isNearSourceGasSponsored("near-mainnet"), true);
+  assert.equal(isNearSourceGasSponsored("base-mainnet"), false);
+  assert.equal(isNearSourceGasSponsored("solana-mainnet"), false);
+
+  const tenNear = 10_000_000_000_000_000_000_000_000n;
+  const fourNear = 4_000_000_000_000_000_000_000_000n;
+
+  // Clicking Max (feeInclusive: true) on 10 NEAR -> Base USDC (1.5% convert fee):
+  // totalDebit stays 10 NEAR, fee (0.15 NEAR) is collected FROM the 10 NEAR, principal = 9.85 NEAR
+  const maxConvert = resolveTransferFeeBreakdown({
+    requestedAmountAtomic: tenNear,
+    maxSpendableAtomic: tenNear,
+    feeBps: CONVERT_BRIDGE_FEE_BPS,
+    feeInclusive: true,
+  });
+  assert.equal(maxConvert.feeDeductedFromAmount, true);
+  assert.equal(maxConvert.totalDebitAtomic, tenNear);
+  assert.equal(maxConvert.feeAtomic, 150_000_000_000_000_000_000_000n); // 0.15 NEAR
+  assert.equal(maxConvert.principalAtomic, 9_850_000_000_000_000_000_000_000n); // 9.85 NEAR
+
+  // Clicking Max (feeInclusive: true) on 10 NEAR -> Base USDC (0.3% send fee):
+  const maxSend = resolveTransferFeeBreakdown({
+    requestedAmountAtomic: tenNear,
+    maxSpendableAtomic: tenNear,
+    feeBps: CROSS_ASSET_SEND_FEE_BPS,
+    feeInclusive: true,
+  });
+  assert.equal(maxSend.feeDeductedFromAmount, true);
+  assert.equal(maxSend.totalDebitAtomic, tenNear);
+  assert.equal(maxSend.feeAtomic, 30_000_000_000_000_000_000_000n); // 0.03 NEAR
+  assert.equal(maxSend.principalAtomic, 9_970_000_000_000_000_000_000_000n); // 9.97 NEAR
+
+  // Manually typing full balance (10 NEAR out of 10 NEAR) without clicking Max also auto-deducts from amount
+  const manualFull = resolveTransferFeeBreakdown({
+    requestedAmountAtomic: tenNear,
+    maxSpendableAtomic: tenNear,
+    feeBps: CROSS_ASSET_SEND_FEE_BPS,
+    feeInclusive: false,
+  });
+  assert.equal(manualFull.feeDeductedFromAmount, true);
+  assert.equal(manualFull.totalDebitAtomic, tenNear);
+
+  // Sending a partial amount (4 NEAR out of 10 NEAR) keeps charging fee on top
+  const partial = resolveTransferFeeBreakdown({
+    requestedAmountAtomic: fourNear,
+    maxSpendableAtomic: tenNear,
+    feeBps: CROSS_ASSET_SEND_FEE_BPS,
+    feeInclusive: false,
+  });
+  assert.equal(partial.feeDeductedFromAmount, false);
+  assert.equal(partial.principalAtomic, fourNear);
+  assert.ok(partial.totalDebitAtomic > fourNear);
 });

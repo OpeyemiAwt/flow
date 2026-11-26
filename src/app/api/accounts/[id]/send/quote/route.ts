@@ -3,7 +3,8 @@ import { parseDisplayToAtomic } from "../../../../../../domain/atomic-amounts.ts
 import {
   getOperationAppFees,
   getOperationPlatformFeeBps,
-  grossUpForPlatformFee,
+  isNearSourceGasSponsored,
+  resolveTransferFeeBreakdown,
 } from "../../../../../../domain/platform-fees.ts";
 import {
   getMainnetWalletAddress,
@@ -11,7 +12,10 @@ import {
   serializePortfolio,
 } from "../../../../../../domain/portfolio.ts";
 import { isBannedIllustrativeAddress } from "../../../../../../domain/quote-discovery.ts";
-import { MAINNET_SUPPORTED_DEPLOYMENTS } from "../../../../../../domain/supported-assets-catalog.ts";
+import {
+  computeMaxSendableAtomic,
+  MAINNET_SUPPORTED_DEPLOYMENTS,
+} from "../../../../../../domain/supported-assets-catalog.ts";
 import { runtime as appRuntime } from "../../../../../../foundation/prisma.ts";
 import {
   access,
@@ -39,6 +43,7 @@ const schema = z.object({
   recipientAddress: z.string().trim().max(128).optional(),
   refundAddress: z.string().trim().max(128).optional(),
   requestVersion: z.string().uuid().optional(),
+  feeInclusive: z.boolean().optional(),
 });
 
 export async function POST(
@@ -132,6 +137,8 @@ export async function POST(
       sourceNetwork: source.networkKey,
       destinationNetwork: destination.networkKey,
     };
+    const gasSponsored =
+      !isAddMoney && isNearSourceGasSponsored(source.networkKey);
     const feeBps = getOperationPlatformFeeBps(
       body.operation,
       isSameAsset,
@@ -142,9 +149,9 @@ export async function POST(
       isSameAsset,
       feeRoute,
     );
-    const { feeAtomic: platformFeeAtomic, grossAtomic: totalDebitAtomic } =
-      grossUpForPlatformFee(amount, feeBps);
 
+    let maxSpendableAtomic: bigint | null = null;
+    let availableBalanceAtomic: bigint | null = null;
     if (sourceDeployment && !isAddMoney) {
       const balance = portfolio.balances.find(
         (record) =>
@@ -158,14 +165,36 @@ export async function POST(
           "No available balance for the selected source asset.",
         );
       }
-      if (totalDebitAtomic > BigInt(balance.atomicBalance)) {
-        throw new ApiFailure(
-          400,
-          feeBps > 0
-            ? "The amount plus platform fee exceeds the available source balance."
-            : "The amount exceeds the available source balance.",
-        );
-      }
+      availableBalanceAtomic = BigInt(balance.atomicBalance);
+      maxSpendableAtomic = computeMaxSendableAtomic({
+        networkKey: sourceDeployment.networkKey,
+        sourceStandard: sourceDeployment.standard,
+        balanceAtomic: availableBalanceAtomic,
+        gasSponsored,
+      });
+    }
+
+    const {
+      principalAtomic,
+      feeAtomic: platformFeeAtomic,
+      totalDebitAtomic,
+    } = resolveTransferFeeBreakdown({
+      requestedAmountAtomic: amount,
+      maxSpendableAtomic,
+      feeBps,
+      feeInclusive: Boolean(body.feeInclusive),
+    });
+
+    if (
+      availableBalanceAtomic !== null &&
+      (principalAtomic <= 0n || totalDebitAtomic > availableBalanceAtomic)
+    ) {
+      throw new ApiFailure(
+        400,
+        feeBps > 0
+          ? "The amount plus platform fee exceeds the available source balance."
+          : "The amount exceeds the available source balance.",
+      );
     }
 
     const result = await quoteOneClickPreview({
@@ -173,7 +202,7 @@ export async function POST(
       destination,
       operationId: body.operation + ":" + id,
       amountAtomic: totalDebitAtomic.toString(),
-      principalAmountAtomic: amount.toString(),
+      principalAmountAtomic: principalAtomic.toString(),
       platformFeeAtomic: platformFeeAtomic.toString(),
       swapType: "EXACT_INPUT",
       recipient,

@@ -47,9 +47,21 @@ export interface FeeRouteContext {
 }
 
 /**
+ * Returns true when the source network is NEAR Mainnet.
+ * Within FLOW, all outgoing NEAR Send, Convert, and Bridge transactions have
+ * their NEAR gas (and token storage_deposit) sponsored by FLOW (Earn stays as-is).
+ */
+export function isNearSourceGasSponsored(
+  sourceNetwork: string | null | undefined,
+): boolean {
+  const src = (sourceNetwork ?? "").trim().toLowerCase();
+  return src === "near-mainnet" || src === "near";
+}
+
+/**
  * Returns true when both the source and destination networks are NEAR Mainnet.
- * Within FLOW, NEAR-to-NEAR Send and Convert transactions are gas-sponsored by
- * FLOW and carry a 0% FLOW platform fee (Earn deposits keep their own fee).
+ * Within FLOW, NEAR-to-NEAR Send and Convert transactions carry a 0% FLOW
+ * platform fee, while cross-chain NEAR routes still collect FLOW platform fees.
  */
 export function isNearToNearFlow(
   sourceNetwork: string | null | undefined,
@@ -174,4 +186,66 @@ export function maxPrincipalBeforePlatformFee(
   if (maxGrossAtomic <= 0n) return 0n;
   if (feeBps <= 0 || feeBps >= 10_000) return maxGrossAtomic;
   return (maxGrossAtomic * BigInt(10_000 - feeBps)) / 10_000n;
+}
+
+export interface TransferFeeBreakdown {
+  /** Net principal routed after FLOW platform fee. */
+  readonly principalAtomic: bigint;
+  /** Platform fee atomic amount collected for FLOW treasury. */
+  readonly feeAtomic: bigint;
+  /** Total atomic amount debited from the user's wallet and sent to 1Click. */
+  readonly totalDebitAtomic: bigint;
+  /** True when the platform fee is deducted from the entered amount (e.g. Max). */
+  readonly feeDeductedFromAmount: boolean;
+}
+
+/**
+ * Resolves the exact principal, platform fee, and total debit for a Send or
+ * Convert/Bridge transfer.
+ *
+ * When `feeInclusive` is true (e.g. the user clicked Max) OR when the user's
+ * entered amount fits within `maxSpendableAtomic` while grossing up the fee on
+ * top would exceed `maxSpendableAtomic`, the platform fee is deducted directly
+ * from the amount they are sending (`totalDebitAtomic === requestedAmountAtomic`).
+ * Otherwise, the platform fee is charged on top from their remaining balance.
+ */
+export function resolveTransferFeeBreakdown(params: {
+  readonly requestedAmountAtomic: bigint;
+  readonly maxSpendableAtomic?: bigint | null;
+  readonly feeBps: number;
+  readonly feeInclusive?: boolean;
+}): TransferFeeBreakdown {
+  const { requestedAmountAtomic, maxSpendableAtomic, feeBps } = params;
+  if (requestedAmountAtomic <= 0n || feeBps <= 0) {
+    return {
+      principalAtomic: requestedAmountAtomic,
+      feeAtomic: 0n,
+      totalDebitAtomic: requestedAmountAtomic,
+      feeDeductedFromAmount: false,
+    };
+  }
+
+  const grossed = grossUpForPlatformFee(requestedAmountAtomic, feeBps);
+  const fitsRequestedButNotGross =
+    maxSpendableAtomic !== undefined &&
+    maxSpendableAtomic !== null &&
+    requestedAmountAtomic <= maxSpendableAtomic &&
+    grossed.grossAtomic > maxSpendableAtomic;
+
+  if (params.feeInclusive || fitsRequestedButNotGross) {
+    const split = splitPlatformFee(requestedAmountAtomic, feeBps);
+    return {
+      principalAtomic: split.netAtomic,
+      feeAtomic: split.feeAtomic,
+      totalDebitAtomic: split.grossAtomic,
+      feeDeductedFromAmount: true,
+    };
+  }
+
+  return {
+    principalAtomic: grossed.principalAtomic,
+    feeAtomic: grossed.feeAtomic,
+    totalDebitAtomic: grossed.grossAtomic,
+    feeDeductedFromAmount: false,
+  };
 }

@@ -19,6 +19,7 @@ import type { NetworkId } from "../domain/providers.ts";
 import { isBannedIllustrativeAddress } from "../domain/quote-discovery.ts";
 import {
   checkNetworkGasBalance,
+  computeMaxSendableAtomic,
   MAINNET_SUPPORTED_DEPLOYMENTS,
 } from "../domain/supported-assets-catalog.ts";
 import { runtime, transaction } from "../foundation/prisma.ts";
@@ -32,8 +33,8 @@ import { resolveQuoteAsset } from "./providers/near-intents-discovery.ts";
 import {
   getOperationAppFees,
   getOperationPlatformFeeBps,
-  grossUpForPlatformFee,
-  isNearToNearFlow,
+  isNearSourceGasSponsored,
+  resolveTransferFeeBreakdown,
 } from "../domain/platform-fees.ts";
 import { fetchOneClickCommittedQuote } from "./providers/one-click-adapter.ts";
 
@@ -44,6 +45,7 @@ const sendExecuteSchema = z.strictObject({
   sourceDisplayAmount: z.string().trim().min(1).max(64),
   memo: z.string().trim().max(140).optional(),
   idempotencyKey: z.string().uuid().optional(),
+  feeInclusive: z.boolean().optional(),
 });
 
 const convertExecuteSchema = z.strictObject({
@@ -51,6 +53,7 @@ const convertExecuteSchema = z.strictObject({
   destinationDeploymentId: z.string().trim().min(1).max(128),
   sourceDisplayAmount: z.string().trim().min(1).max(64),
   idempotencyKey: z.string().uuid().optional(),
+  feeInclusive: z.boolean().optional(),
 });
 
 interface OutgoingTransferRow {
@@ -172,7 +175,11 @@ async function computeAvailableBalanceForDeployment(
   token: string,
   deploymentId: string,
   requestedAmountAtomic: bigint,
-  options?: { readonly gasSponsored?: boolean },
+  options?: {
+    readonly gasSponsored?: boolean;
+    readonly feeBps?: number;
+    readonly feeInclusive?: boolean;
+  },
 ) {
   const deployment = MAINNET_SUPPORTED_DEPLOYMENTS.find(
     (d) => d.id === deploymentId,
@@ -278,8 +285,24 @@ async function computeAvailableBalanceForDeployment(
   });
 
   const reservedAtomic = BigInt(reservedRows[0]?.reserved ?? "0");
-  const spendable = availableAtomic - reservedAtomic;
-  if (requestedAmountAtomic > spendable) {
+  const spendable = availableAtomic > reservedAtomic ? availableAtomic - reservedAtomic : 0n;
+  const maxSpendableAfterGas = computeMaxSendableAtomic({
+    networkKey: deployment.networkKey,
+    sourceStandard: deployment.standard,
+    balanceAtomic: spendable,
+    gasSponsored: options?.gasSponsored,
+  });
+  const feeBreakdown = resolveTransferFeeBreakdown({
+    requestedAmountAtomic,
+    maxSpendableAtomic: maxSpendableAfterGas,
+    feeBps: options?.feeBps ?? 0,
+    feeInclusive: options?.feeInclusive,
+  });
+
+  if (
+    feeBreakdown.principalAtomic <= 0n ||
+    feeBreakdown.totalDebitAtomic > spendable
+  ) {
     throw new ApiFailure(400, "INSUFFICIENT_SPENDABLE_BALANCE");
   }
 
@@ -297,7 +320,7 @@ async function computeAvailableBalanceForDeployment(
   const gasCheck = checkNetworkGasBalance({
     networkKey: deployment.networkKey,
     sourceStandard: deployment.standard,
-    requestedAmountAtomic,
+    requestedAmountAtomic: feeBreakdown.totalDebitAtomic,
     nativeBalanceAtomic,
     gasSponsored: options?.gasSponsored,
   });
@@ -305,7 +328,7 @@ async function computeAvailableBalanceForDeployment(
     throw new ApiFailure(400, "INSUFFICIENT_GAS_BALANCE");
   }
 
-  return { deployment, sourceAssetKey, portfolio };
+  return { deployment, sourceAssetKey, portfolio, feeBreakdown };
 }
 
 export async function executeSendTransfer(
@@ -393,10 +416,7 @@ export async function executeSendTransfer(
     sourceNetwork: sourceDeployment.networkKey,
     destinationNetwork: destDeployment.networkKey,
   };
-  const isNearGasless = isNearToNearFlow(
-    sourceDeployment.networkKey,
-    destDeployment.networkKey,
-  );
+  const isNearGasless = isNearSourceGasSponsored(sourceDeployment.networkKey);
   const sendFeeBps = getOperationPlatformFeeBps(
     "SEND",
     !isCrossChainSend,
@@ -407,17 +427,22 @@ export async function executeSendTransfer(
     !isCrossChainSend,
     sendFeeRoute,
   );
-  const { feeAtomic: sendPlatformFeeAtomic, grossAtomic: sendTotalDebitAtomic } =
-    grossUpForPlatformFee(amountAtomic, sendFeeBps);
 
-  const { sourceAssetKey, portfolio } =
+  const { sourceAssetKey, portfolio, feeBreakdown: sendFeeBreakdown } =
     await computeAvailableBalanceForDeployment(
       id,
       token,
       sourceDeployment.id,
-      sendTotalDebitAtomic,
-      { gasSponsored: isNearGasless },
+      amountAtomic,
+      {
+        gasSponsored: isNearGasless,
+        feeBps: sendFeeBps,
+        feeInclusive: Boolean(body.feeInclusive),
+      },
     );
+  const sendPrincipalAtomic = sendFeeBreakdown.principalAtomic;
+  const sendPlatformFeeAtomic = sendFeeBreakdown.feeAtomic;
+  const sendTotalDebitAtomic = sendFeeBreakdown.totalDebitAtomic;
   const wallet = portfolio.wallet;
   const walletId = wallet?.id;
   if (!wallet || !walletId) {
@@ -492,9 +517,10 @@ export async function executeSendTransfer(
       ...(senderFlowId ? { senderFlowId } : {}),
       ...(sendFeeBps > 0
         ? {
-            principalAtomicAmount: amountAtomic.toString(),
+            principalAtomicAmount: sendPrincipalAtomic.toString(),
             platformFeeAtomic: sendPlatformFeeAtomic.toString(),
             platformFeeBps: sendFeeBps,
+            feeDeductedFromAmount: sendFeeBreakdown.feeDeductedFromAmount,
           }
         : {}),
     });
@@ -632,10 +658,7 @@ export async function executeConvertTransfer(
     sourceNetwork: sourceDeployment.networkKey,
     destinationNetwork: destinationDeployment.networkKey,
   };
-  const isNearGasless = isNearToNearFlow(
-    sourceDeployment.networkKey,
-    destinationDeployment.networkKey,
-  );
+  const isNearGasless = isNearSourceGasSponsored(sourceDeployment.networkKey);
   const convertFeeBps = getOperationPlatformFeeBps(
     "CONVERT",
     false,
@@ -646,19 +669,22 @@ export async function executeConvertTransfer(
     false,
     convertFeeRoute,
   );
-  const {
-    feeAtomic: convertPlatformFeeAtomic,
-    grossAtomic: convertTotalDebitAtomic,
-  } = grossUpForPlatformFee(amountAtomic, convertFeeBps);
 
-  const { sourceAssetKey, portfolio } =
+  const { sourceAssetKey, portfolio, feeBreakdown: convertFeeBreakdown } =
     await computeAvailableBalanceForDeployment(
       id,
       token,
       sourceDeployment.id,
-      convertTotalDebitAtomic,
-      { gasSponsored: isNearGasless },
+      amountAtomic,
+      {
+        gasSponsored: isNearGasless,
+        feeBps: convertFeeBps,
+        feeInclusive: Boolean(body.feeInclusive),
+      },
     );
+  const convertPrincipalAtomic = convertFeeBreakdown.principalAtomic;
+  const convertPlatformFeeAtomic = convertFeeBreakdown.feeAtomic;
+  const convertTotalDebitAtomic = convertFeeBreakdown.totalDebitAtomic;
   const wallet = portfolio.wallet;
   if (!wallet) {
     throw new ApiFailure(409, "ACTIVE_MAINNET_WALLET_REQUIRED");
@@ -704,9 +730,10 @@ export async function executeConvertTransfer(
       : destinationDeployment.contractIdentifier;
   const publicId = `cnv_${randomBytes(10).toString("hex")}`;
   const convertQuotePayloadJson = JSON.stringify({
-    principalAtomicAmount: amountAtomic.toString(),
+    principalAtomicAmount: convertPrincipalAtomic.toString(),
     platformFeeAtomic: convertPlatformFeeAtomic.toString(),
     platformFeeBps: convertFeeBps,
+    feeDeductedFromAmount: convertFeeBreakdown.feeDeductedFromAmount,
   });
 
   const created = await transaction(async (tx) => {

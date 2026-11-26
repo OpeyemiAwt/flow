@@ -469,8 +469,8 @@ export default function DocsPage() {
                     0% + Gas Sponsored
                   </td>
                   <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
-                    FLOW pays NEAR gas and token storage deposits when both
-                    source and destination are on NEAR Mainnet.
+                    FLOW pays NEAR gas and token storage deposits with 0% FLOW
+                    platform fee.
                   </td>
                 </tr>
                 <tr>
@@ -492,8 +492,9 @@ export default function DocsPage() {
                     0.3%
                   </td>
                   <td className="px-4 py-3 text-[#5f636a] dark:text-neutral-400">
-                    Charged from wallet balance when sending across chains;
-                    shown in the live quote.
+                    NEAR gas is still sponsored by FLOW when sending from NEAR;
+                    when tapping Max, the platform fee is deducted from the
+                    amount sent.
                   </td>
                 </tr>
                 <tr>

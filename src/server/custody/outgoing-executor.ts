@@ -30,7 +30,7 @@ import {
 } from "../../domain/earn.ts";
 import {
   EARN_DEPOSIT_FEE_BPS,
-  isNearToNearFlow,
+  isNearSourceGasSponsored,
   resolveFeeTreasuryAccount,
   splitPlatformFee,
 } from "../../domain/platform-fees.ts";
@@ -1151,7 +1151,7 @@ async function executeNearTransfer(
 
   const isNearGasless =
     job.wallet_environment === "mainnet" &&
-    isNearToNearFlow(job.source_network, job.destination_network);
+    isNearSourceGasSponsored(job.source_network);
   const isNative = job.source_asset_id.toLowerCase() === "native";
   if (isNative) {
     if (isNearGasless && sponsorConfig?.enabled) {

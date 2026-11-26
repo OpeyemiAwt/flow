@@ -18,9 +18,8 @@ import {
 } from "../../../[flowId]/flow-id-landing-client.tsx";
 import {
   getOperationPlatformFeeBps,
-  grossUpForPlatformFee,
-  isNearToNearFlow,
-  maxPrincipalBeforePlatformFee,
+  isNearSourceGasSponsored,
+  resolveTransferFeeBreakdown,
 } from "../../../../domain/platform-fees.ts";
 import { useTranslation } from "../../../../components/language-provider.tsx";
 import { TabContentSkeleton } from "../../../../components/page-skeletons.tsx";
@@ -568,6 +567,7 @@ function useOutgoingPreview(input: {
   recipient: string;
   refund: string;
   balances: readonly SerializedWalletBalanceRecord[];
+  feeInclusive?: boolean;
 }) {
   const {
     active,
@@ -579,6 +579,7 @@ function useOutgoingPreview(input: {
     recipient,
     refund,
     balances,
+    feeInclusive = false,
   } = input;
   const sourceDeployment = source?.deployment;
   const amountAtomic = sourceDeployment
@@ -591,7 +592,7 @@ function useOutgoingPreview(input: {
   const gasSponsored = Boolean(
     sourceDeployment &&
       (operation === "SEND" || operation === "CONVERT") &&
-      isNearToNearFlow(sourceDeployment.networkKey, destination.networkKey),
+      isNearSourceGasSponsored(sourceDeployment.networkKey),
   );
   const feeBps = sourceDeployment
     ? getOperationPlatformFeeBps(operation, samePair, {
@@ -599,11 +600,28 @@ function useOutgoingPreview(input: {
         destinationNetwork: destination.networkKey,
       })
     : 0;
+  const maxSpendableAtomic =
+    sourceDeployment && balance
+      ? computeMaxSendableAtomic({
+          networkKey: sourceDeployment.networkKey,
+          sourceStandard: sourceDeployment.standard,
+          balanceAtomic: BigInt(balance.atomicBalance),
+          gasSponsored,
+        })
+      : null;
   const feeBreakdown = amountAtomic
-    ? grossUpForPlatformFee(BigInt(amountAtomic), feeBps)
+    ? resolveTransferFeeBreakdown({
+        requestedAmountAtomic: BigInt(amountAtomic),
+        maxSpendableAtomic,
+        feeBps,
+        feeInclusive,
+      })
     : null;
-  const totalDebitAtomic = feeBreakdown ? feeBreakdown.grossAtomic : null;
+  const totalDebitAtomic = feeBreakdown ? feeBreakdown.totalDebitAtomic : null;
   const platformFeeAtomic = feeBreakdown ? feeBreakdown.feeAtomic : 0n;
+  const feeDeductedFromAmount = feeBreakdown
+    ? feeBreakdown.feeDeductedFromAmount
+    : false;
   const platformFeeDisplay =
     sourceDeployment && platformFeeAtomic > 0n
       ? formatAtomicToDisplay(platformFeeAtomic, sourceDeployment.decimals)
@@ -707,6 +725,7 @@ function useOutgoingPreview(input: {
           destinationDeploymentId: destination.id,
           sourceDisplayAmount: displayAmount,
           recipientAddress: operation === "SEND" ? recipient : undefined,
+          ...(feeInclusive ? { feeInclusive: true } : {}),
         })
       : null;
   const previewKey = body
@@ -773,6 +792,7 @@ function useOutgoingPreview(input: {
     feeBps,
     platformFeeDisplay,
     totalDebitDisplay,
+    feeDeductedFromAmount,
   };
 }
 
@@ -802,6 +822,7 @@ function OutgoingQuoteDetails({
     feeBps,
     platformFeeDisplay,
     gasSponsored,
+    feeDeductedFromAmount,
   } = preview;
   const quoteReceiveUsd = quote
     ? computeDisplayUsd(
@@ -876,23 +897,36 @@ function OutgoingQuoteDetails({
           </div>
 
           {effectiveFeeBps > 0 ? (
-            <div className="flex items-start justify-between gap-3 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px]">
-              <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
-                Platform fee ({Number((effectiveFeeBps / 100).toFixed(2))}%)
-              </span>
-              <div className="text-right min-w-0">
-                <div className="font-mono font-medium text-neutral-800 dark:text-neutral-200 tabular-nums whitespace-nowrap">
-                  {effectiveFeeDisplay
-                    ? `${formatApproxDisplay(effectiveFeeDisplay)} ${effectiveFeeSymbol}`
-                    : `${Number((effectiveFeeBps / 100).toFixed(2))}%`}
-                </div>
-                {effectiveFeeUsd && (
-                  <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
-                    {formatApproxUsdLabel(effectiveFeeUsd)}
+            <>
+              <div className="flex items-start justify-between gap-3 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px]">
+                <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
+                  Platform fee ({Number((effectiveFeeBps / 100).toFixed(2))}%
+                  {feeDeductedFromAmount ? " · from amount" : ""})
+                </span>
+                <div className="text-right min-w-0">
+                  <div className="font-mono font-medium text-neutral-800 dark:text-neutral-200 tabular-nums whitespace-nowrap">
+                    {effectiveFeeDisplay
+                      ? `${formatApproxDisplay(effectiveFeeDisplay)} ${effectiveFeeSymbol}`
+                      : `${Number((effectiveFeeBps / 100).toFixed(2))}%`}
                   </div>
-                )}
+                  {effectiveFeeUsd && (
+                    <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
+                      {formatApproxUsdLabel(effectiveFeeUsd)}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+              {gasSponsored && (
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px]">
+                  <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
+                    NEAR gas
+                  </span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                    Free (Sponsored by FLOW)
+                  </span>
+                </div>
+              )}
+            </>
           ) : gasSponsored ? (
             <div className="flex items-center justify-between gap-3 pt-2 border-t border-neutral-200/60 dark:border-white/[0.06] text-[11px]">
               <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
@@ -1044,6 +1078,7 @@ export function PortfolioView({
 
   const resetConvertFlow = useCallback(() => {
     setConvertAmount("");
+    setConvertUsedMax(false);
     setOutgoingError(null);
     setOutgoingIdempotencyKey(crypto.randomUUID());
     setActiveOutgoingTransfer((prev) =>
@@ -1254,6 +1289,7 @@ export function PortfolioView({
   const [convertDestDeploymentId, setConvertDestDeploymentId] =
     useState<string>("near-mainnet:NEAR");
   const [convertAmount, setConvertAmount] = useState<string>("1.00");
+  const [convertUsedMax, setConvertUsedMax] = useState(false);
 
   // Send state (Matches FLOW Send_ Solana to Base-6.png & media_1794481849794_6d251fd6.jpg)
   const [sendSourceDeploymentId, setSendSourceDeploymentId] =
@@ -1733,7 +1769,6 @@ export function PortfolioView({
 
   const getMaxAtomicForSource = (
     source: typeof sendSource,
-    feeBps = 0,
     gasSponsored = false,
   ): bigint => {
     if (!source) return 0n;
@@ -1744,13 +1779,12 @@ export function PortfolioView({
             source.displayBalance,
             source.deployment.decimals,
           );
-      const afterGas = computeMaxSendableAtomic({
+      return computeMaxSendableAtomic({
         networkKey: source.deployment.networkKey,
         sourceStandard: source.deployment.standard,
         balanceAtomic: atomic,
         gasSponsored,
       });
-      return maxPrincipalBeforePlatformFee(afterGas, feeBps);
     } catch {
       return 0n;
     }
@@ -1758,12 +1792,11 @@ export function PortfolioView({
 
   const getMaxAmountForSource = (
     source: typeof sendSource,
-    feeBps = 0,
     gasSponsored = false,
   ): string => {
     if (!source?.displayBalance) return "";
     try {
-      const maxAtomic = getMaxAtomicForSource(source, feeBps, gasSponsored);
+      const maxAtomic = getMaxAtomicForSource(source, gasSponsored);
       if (maxAtomic <= 0n) return "0";
       const exactMax = formatAtomicToDisplay(
         maxAtomic,
@@ -1803,11 +1836,7 @@ export function PortfolioView({
   );
 
   const sendIsNearGasless = Boolean(
-    sendSource &&
-      isNearToNearFlow(
-        sendSource.deployment.networkKey,
-        sendDestDeployment.networkKey,
-      ),
+    sendSource && isNearSourceGasSponsored(sendSource.deployment.networkKey),
   );
 
   const sendFeeBps = sendSource
@@ -1842,14 +1871,9 @@ export function PortfolioView({
   };
 
   const applySendMaxForFee = (
-    feeBpsOverride: number,
     gasSponsoredOverride = sendIsNearGasless,
   ) => {
-    const maxAsset = getMaxAmountForSource(
-      sendSource,
-      feeBpsOverride,
-      gasSponsoredOverride,
-    );
+    const maxAsset = getMaxAmountForSource(sendSource, gasSponsoredOverride);
     setSendAmount(maxAsset);
     setSendUsedMax(true);
     if (sendInputMode === "USD" && sendSourcePriceUsd) {
@@ -1868,7 +1892,7 @@ export function PortfolioView({
   };
 
   const handleSendMaxClick = () => {
-    applySendMaxForFee(sendFeeBps, sendIsNearGasless);
+    applySendMaxForFee(sendIsNearGasless);
   };
 
   const toggleSendInputMode = () => {
@@ -1916,10 +1940,7 @@ export function PortfolioView({
 
   const convertIsNearGasless = Boolean(
     convertSource &&
-      isNearToNearFlow(
-        convertSource.deployment.networkKey,
-        convertDestDeployment.networkKey,
-      ),
+      isNearSourceGasSponsored(convertSource.deployment.networkKey),
   );
 
   const convertFeeBps = convertSource
@@ -1953,6 +1974,7 @@ export function PortfolioView({
         "")
       : "",
     balances: portfolio.balances,
+    feeInclusive: sendUsedMax,
   });
   const convertPreview = useOutgoingPreview({
     active: activeTab === "convert",
@@ -1967,6 +1989,7 @@ export function PortfolioView({
         "")
       : "",
     balances: portfolio.balances,
+    feeInclusive: convertUsedMax,
   });
 
   const crossChainRefundValidation = crossChainSourceToken
@@ -2804,12 +2827,14 @@ export function PortfolioView({
               recipientAddress: sendRecipientAddress.trim(),
               sourceDisplayAmount: sendAmount,
               ...(sendMemo.trim() ? { memo: sendMemo.trim() } : {}),
+              ...(sendUsedMax ? { feeInclusive: true } : {}),
               idempotencyKey,
             }
           : {
               sourceDeploymentId: convertSource?.deployment.id,
               destinationDeploymentId: convertDestDeployment.id,
               sourceDisplayAmount: convertAmount,
+              ...(convertUsedMax ? { feeInclusive: true } : {}),
               idempotencyKey,
             };
       const res = await fetch(endpoint, {
@@ -3762,7 +3787,6 @@ export function PortfolioView({
                       const isEmptyBalance = sourceBalanceAtomic <= 0n;
                       const maxSendableStep2Atomic = getMaxAtomicForSource(
                         sendSource,
-                        sendFeeBps,
                         sendIsNearGasless,
                       );
                       const amountExceedsBalance = Boolean(
@@ -3992,7 +4016,9 @@ export function PortfolioView({
                                         : sendUsedMax && nativeReserve
                                           ? `${nativeReserve.minDisplay} ${nativeReserve.symbol} reserved for ${nativeReserve.networkLabel} network gas${nativeReserve.networkLabel === "Solana" || nativeReserve.networkLabel === "NEAR" ? " & rent" : ""}.`
                                           : sendIsNearGasless
-                                            ? "Gas sponsored by FLOW · 0% FLOW fee on NEAR."
+                                            ? sendFeeBps === 0
+                                              ? "Gas sponsored by FLOW · 0% FLOW fee on NEAR."
+                                              : "NEAR gas sponsored by FLOW."
                                             : "Type an amount, then press Enter to continue."}
                               </p>
                             );
@@ -4059,19 +4085,11 @@ export function PortfolioView({
                             }
                             setSendDestDeploymentId(dep.id);
                             if (sendUsedMax && sendSource) {
-                              const nextGasSponsored = isNearToNearFlow(
-                                sendSource.deployment.networkKey,
-                                dep.networkKey,
+                              applySendMaxForFee(
+                                isNearSourceGasSponsored(
+                                  sendSource.deployment.networkKey,
+                                ),
                               );
-                              const nextFeeBps = getOperationPlatformFeeBps(
-                                "SEND",
-                                sendSource.deployment.id === dep.id,
-                                {
-                                  sourceNetwork: sendSource.deployment.networkKey,
-                                  destinationNetwork: dep.networkKey,
-                                },
-                              );
-                              applySendMaxForFee(nextFeeBps, nextGasSponsored);
                             }
                           }}
                         />
@@ -4288,7 +4306,7 @@ export function PortfolioView({
                                 <span className="text-neutral-500 dark:text-neutral-400 shrink-0 whitespace-nowrap">
                                   Platform fee
                                   {!isSameAsset && sendFeeBps > 0
-                                    ? ` (${Number((sendFeeBps / 100).toFixed(2))}%)`
+                                    ? ` (${Number((sendFeeBps / 100).toFixed(2))}%${sendPreview.feeDeductedFromAmount ? " · from amount" : ""})`
                                     : ""}
                                 </span>
                                 {isSameAsset || sendFeeBps === 0 ? (
@@ -4526,15 +4544,15 @@ export function PortfolioView({
                         <button
                           type="button"
                           disabled={!convertSourceBalance}
-                          onClick={() =>
+                          onClick={() => {
                             setConvertAmount(
                               getMaxAmountForSource(
                                 convertSource,
-                                convertFeeBps,
                                 convertIsNearGasless,
                               ),
-                            )
-                          }
+                            );
+                            setConvertUsedMax(true);
+                          }}
                           className="text-xs font-bold text-neutral-950 dark:text-white hover:underline cursor-pointer"
                         >
                           Max
@@ -4550,20 +4568,22 @@ export function PortfolioView({
                         aria-label="Convert amount"
                         value={convertAmount}
                         onKeyDown={blockNegativeKey}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setConvertUsedMax(false);
                           setConvertAmount(
                             sanitizeNonNegativeDecimal(e.target.value),
-                          )
-                        }
+                          );
+                        }}
                         placeholder="1.00"
                         className="min-w-0 flex-1 py-1 text-2xl font-bold bg-transparent text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-hidden tabular-nums"
                       />
                       <div className="shrink-0 max-w-[55%]">
                         <select
                           value={convertSource?.deployment.id ?? ""}
-                          onChange={(e) =>
-                            setConvertSourceDeploymentId(e.target.value)
-                          }
+                          onChange={(e) => {
+                            setConvertUsedMax(false);
+                            setConvertSourceDeploymentId(e.target.value);
+                          }}
                           className="w-full max-w-full px-3 py-2.5 rounded-2xl text-xs font-bold bg-white dark:bg-[#141414] border border-neutral-200 dark:border-white/[0.1] text-neutral-900 dark:text-white focus:outline-hidden shadow-2xs cursor-pointer truncate"
                         >
                           {heldAssets.map((h) => (
