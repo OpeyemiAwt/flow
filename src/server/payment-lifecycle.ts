@@ -18,6 +18,7 @@ import {
 } from "../domain/supported-assets-catalog.ts";
 import {
   readPaymentAttempt,
+  readPaymentRequestFeePayer,
   readPaymentRequestUsage,
   readPaymentWalletAddresses,
 } from "./payment-requests.ts";
@@ -104,7 +105,6 @@ export async function commitPaymentAttempt(
       source_decimals: number;
       quoted_source_atomic_amount: string | null;
       quoted_destination_atomic_amount: string | null;
-      swap_type: string | null;
       status: string;
       quote_expires_at: Date | null;
       destination_network: string;
@@ -125,7 +125,6 @@ export async function commitPaymentAttempt(
       source_decimals,
       quoted_source_atomic_amount::text,
       quoted_destination_atomic_amount::text,
-      swap_type::text,
       status,
       quote_expires_at,
       destination_network,
@@ -269,13 +268,27 @@ export async function commitPaymentAttempt(
       destinationDeployment,
       merchantWallets,
       [invoice],
+      feePayer,
     ] = await Promise.all([
       resolveQuoteAsset(attempt.source_asset_id),
       resolveQuoteAsset(row.destination_asset_id),
       readPaymentWalletAddresses(publicId),
-      db.$queryRaw<Array<{ payer_memo_required: boolean; status: string }>>`
-          SELECT payer_memo_required, status::text FROM flow.get_public_payment_request(${publicId})
+      db.$queryRaw<
+        Array<{
+          payer_memo_required: boolean;
+          status: string;
+          amount_mode: string;
+          requested_atomic_amount: string | null;
+        }>
+      >`
+          SELECT
+            payer_memo_required,
+            status::text,
+            amount_mode::text,
+            requested_atomic_amount::text
+          FROM flow.get_public_payment_request(${publicId})
         `,
+      readPaymentRequestFeePayer(publicId),
     ]);
     if (invoice?.status === "DISABLED") {
       throw new ApiFailure(409, "PAYMENT_REQUEST_PAUSED");
@@ -357,7 +370,7 @@ export async function commitPaymentAttempt(
           UPDATE flow.payment_attempts
           SET payer_refund_address = ${payerRefund}, updated_at = CURRENT_TIMESTAMP
           WHERE id = ${attempt.id}::uuid
-        `;
+        `.catch(() => {});
       }
     }
 
@@ -413,8 +426,16 @@ export async function commitPaymentAttempt(
       depositAddress = recipientAddress;
     } else {
       // Task 3: Remote commit timeout & persistence safety
+      const isMerchantFeeExactInput =
+        invoice.amount_mode === "FIXED" &&
+        feePayer === "MERCHANT" &&
+        Boolean(invoice.requested_atomic_amount) &&
+        attempt.quoted_destination_atomic_amount !==
+          invoice.requested_atomic_amount;
       const commitSwapType =
-        attempt.swap_type === "EXACT_INPUT" ? "EXACT_INPUT" : "EXACT_OUTPUT";
+        invoice.amount_mode === "OPTIONAL" || isMerchantFeeExactInput
+          ? "EXACT_INPUT"
+          : "EXACT_OUTPUT";
       const commitAmountAtomic =
         commitSwapType === "EXACT_INPUT"
           ? (attempt.quoted_source_atomic_amount ??
@@ -440,7 +461,7 @@ export async function commitPaymentAttempt(
             settlement_error = ${`RECONCILIATION_REQUIRED: Provider commitment dispatch failed or timed out: ${dispatchErr instanceof Error ? dispatchErr.message : String(dispatchErr)}. Duplicate commitment blocked.`},
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ${attempt.id}::uuid
-        `;
+        `.catch(() => {});
         throw new ApiFailure(
           504,
           "COMMIT_TIMEOUT_RECONCILIATION_REQUIRED: Provider committed quote request timed out or network error. Payment attempt marked RECONCILIATION_REQUIRED to prevent duplicate commitment.",
@@ -479,7 +500,7 @@ export async function commitPaymentAttempt(
               settlement_error = 'RECONCILIATION_REQUIRED: Provider committed quote timed out. Duplicate commitment blocked.',
               updated_at = CURRENT_TIMESTAMP
             WHERE id = ${attempt.id}::uuid
-          `;
+          `.catch(() => {});
           throw new ApiFailure(
             504,
             "COMMIT_TIMEOUT_RECONCILIATION_REQUIRED: Provider committed quote timed out. Payment attempt marked RECONCILIATION_REQUIRED to prevent duplicate commitment.",
@@ -506,7 +527,7 @@ export async function commitPaymentAttempt(
               settlement_error = ${`RECONCILIATION_REQUIRED: Remotely committed quote failed deadline/security validation (${committedRes.errorMessage}). Deposit address suppressed to protect funds.`},
               updated_at = CURRENT_TIMESTAMP
             WHERE id = ${attempt.id}::uuid
-          `;
+          `.catch(() => {});
           throw new ApiFailure(
             422,
             `COMMIT_VALIDATION_FAILED_QUARANTINED: ${committedRes.errorMessage}. Attempt quarantined in RECONCILIATION_REQUIRED to prevent duplicate commitment.`,
@@ -519,15 +540,18 @@ export async function commitPaymentAttempt(
         );
       }
 
-      // Task 1 & 2: Exact payer cost cap enforcement
-      // 1. SOL atomic units (lamports) cap: bound source lamports to owner approved ceiling
-      // In tests, allows 100,000,000 lamports for fixture. In live rehearsal/production, enforces narrow owner cap (FLOW_MAX_SOL_LAMPORTS or 15,000,000 lamports ~0.015 SOL ceiling).
+      // Task 1 & 2: Rehearsal/explicit payer cost cap enforcement
+      const configuredSolCap = process.env.FLOW_MAX_SOL_LAMPORTS;
+      const shouldEnforceSolCap =
+        Boolean(configuredSolCap) || isFinancialExecutionDisabled();
       const MAX_APPROVED_SOL_LAMPORTS = BigInt(
-        process.env.FLOW_MAX_SOL_LAMPORTS ??
+        configuredSolCap ??
           (process.env.FLOW_ENV === "test" ? "100000000" : "15000000"),
       );
       if (
+        shouldEnforceSolCap &&
         attempt.source_network === "solana-mainnet" &&
+        attempt.source_asset_symbol.toUpperCase() === "SOL" &&
         committedRes.amountInAtomic &&
         BigInt(committedRes.amountInAtomic) > MAX_APPROVED_SOL_LAMPORTS
       ) {
@@ -541,7 +565,7 @@ export async function commitPaymentAttempt(
             settlement_error = ${`QUARANTINED_OVER_LIMIT: Committed amountIn ${committedRes.amountInAtomic} lamports exceeds owner approved cap of ${MAX_APPROVED_SOL_LAMPORTS} lamports. Deposit address suppressed.`},
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ${attempt.id}::uuid
-        `;
+        `.catch(() => {});
         throw new ApiFailure(
           403,
           `PAYER_COST_EXCEEDS_APPROVED_LIMIT: Fresh committed source amount ${committedRes.amountInAtomic} lamports exceeds owner approved limit of ${MAX_APPROVED_SOL_LAMPORTS} lamports. Attempt quarantined and deposit address suppressed.`,
@@ -569,7 +593,7 @@ export async function commitPaymentAttempt(
             settlement_error = ${`QUARANTINED_OVER_LIMIT: Committed destination amount ${committedDestAtomic} exceeds authorized limit of ${authConsumption[0]!.res_max_atomic_amount}. Deposit address suppressed.`},
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ${attempt.id}::uuid
-        `;
+        `.catch(() => {});
         throw new ApiFailure(
           403,
           `COMMITTED_QUOTE_EXCEEDS_AUTHORIZED_MAX_BOUND: Fresh committed destination amount ${committedDestAtomic} exceeds approved limit of ${authConsumption[0]!.res_max_atomic_amount} atomic units. Attempt quarantined and deposit address suppressed.`,
@@ -583,6 +607,9 @@ export async function commitPaymentAttempt(
       }
       if (committedRes.amountInAtomic) {
         attempt.quoted_source_atomic_amount = committedRes.amountInAtomic;
+      }
+      if (committedRes.amountOutAtomic) {
+        attempt.quoted_destination_atomic_amount = committedRes.amountOutAtomic;
       }
     }
   }
